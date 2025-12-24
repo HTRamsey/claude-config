@@ -58,14 +58,28 @@
 |---------|-------|
 | Memory leaks, profiling, allocation issues | `memory-management-optimization` |
 
-## Agents (23)
+### Creators
+| Trigger | Skill |
+|---------|-------|
+| Creating hooks | `hook-creator` |
+| Creating agents | `agent-creator` |
+| Creating commands | `command-creator` |
+| Creating skills | `skill-creator` |
+
+## Agents (23 custom + 3 built-in)
+
+### Built-in Agents (no file needed)
+| Trigger | Agent |
+|---------|-------|
+| Codebase exploration | `Explore` |
+| Implementation planning | `Plan` |
+| Claude Code/SDK questions | `claude-code-guide` |
 
 ### Quick Lookups (Haiku)
 | Trigger | Agent |
 |---------|-------|
 | "What is X?", "Where is X defined?" | `quick-lookup` |
 | "What does this error mean?" | `error-explainer` |
-| Claude Code/SDK questions | `claude-code-guide` |
 
 ### Research
 | Trigger | Agent |

@@ -34,7 +34,7 @@ paths: src/api/**/*.ts
 
 Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 
-## Hooks (26) - Event Triggers
+## Hooks (28) - Event Triggers
 
 **Shared Utilities**: `hook_utils.py` provides graceful degradation, JSON logging, session state.
 **Migration Guide**: See `hooks/MIGRATION.md` for patterns.
@@ -75,8 +75,14 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 | `skill_suggester` | UserPromptSubmit | Suggest relevant skills |
 | `suggest_subagent` | UserPromptSubmit | Suggest agent delegation |
 | `smart_permissions` | PermissionRequest | Context-aware auto-approval |
+| `precompact_save` | PreCompact | Save state before compaction |
+| `research_cache` | PreToolUse/PostToolUse | Cache web research results |
+| `subagent_complete` | SubagentStop | Handle subagent completion |
 
-## Agents (23) - Specialized Subagents
+## Agents (23 custom + 3 built-in) - Specialized Subagents
+
+### Built-in (no file needed)
+`Explore` `Plan` `claude-code-guide`
 
 ### Quick Operations (Haiku)
 `quick-lookup` `error-explainer`
@@ -137,7 +143,7 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 ### Specialized
 `memory-management-optimization`
 
-## Scripts (57) - Shell Utilities
+## Scripts (61) - Shell Utilities
 
 ### Search & Compression
 `offload-grep.sh` `offload-find.sh` `compress-diff.sh` `compress-build.sh` `compress-tests.sh` `compress-stacktrace.sh`
@@ -196,7 +202,7 @@ Dependencies: `requirements.txt` (currently: tiktoken)
 |------|---------|
 | `settings.json` | Permissions, allowed tools, model preferences |
 | `requirements.txt` | Python dependencies for hooks |
-| `rules/*.md` | Auto-loaded instructions (5 files, ~350 lines) |
+| `rules/*.md` | Auto-loaded instructions (7 files, ~660 lines) |
 | `data/task-queue.json` | Pending background tasks |
 | `data/token-usage.json` | Daily token tracking |
 | `data/exploration-cache.json` | Cached codebase exploration |

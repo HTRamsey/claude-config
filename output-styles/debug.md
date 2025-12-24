@@ -43,8 +43,36 @@ Fix: [code or steps]
 - Never guess fixes without evidence
 - Show file:line for every code reference
 - Track which hypotheses were eliminated and why
-- If stuck after 3 hypotheses, ask for more context
 - Always verify fix addresses root cause, not symptom
+
+### When Stuck After 3 Hypotheses
+
+1. State what's been ruled out and why
+2. Identify missing information:
+   - Logs/stack traces from failure
+   - Environment details (versions, config)
+   - Steps to reproduce consistently
+   - Recent changes (commits, deploys)
+3. Ask specifically: "To proceed, I need [X]"
+4. If unrecoverable, document findings for escalation
+
+## Edge Cases
+
+### Non-Reproducible Bugs
+- Request: frequency, conditions, error logs, user reports
+- Instrument: add logging at suspected locations
+- Pattern: look for timing, load, sequence dependencies
+- Environment: check for differences (config, versions, data)
+
+### No Stack Trace Available
+- Gather: what changed? when did it start? who reported?
+- Check: system logs, monitoring, recent deploys
+- Isolate: minimal reproduction in clean environment
+
+### Multiple Root Causes
+- Partition: separate into distinct issues
+- Fix: address each independently
+- Verify: confirm each fix in isolation
 
 ## Never
 

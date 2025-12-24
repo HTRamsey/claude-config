@@ -58,6 +58,6 @@ See `04-skills.md` for full agent list.
 - **Auto-compact**: Triggers at ~80% capacity; manual `/compact` preserves more
 
 ## Extended Thinking
-- **Toggle**: **Alt+T** (changed from Tab in v2.0.72)
+- **Toggle**: **Alt+T**
 - **Trigger words**: Prefix with "ultrathink:" for complex architecture
 - **Use for**: Architectural decisions, challenging bugs, multi-step planning

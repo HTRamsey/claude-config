@@ -1,10 +1,12 @@
 #!/home/jonglaser/.claude/venv/bin/python3
-"""Block edits to commonly protected files.
+"""Block access to sensitive files (Read/Write/Edit).
 
-PreToolUse hook for Write/Edit tools.
-Input format: {"tool_name": "Edit", "tool_input": {"file_path": "/path/to/file"}}
+PreToolUse hook for Read, Write, and Edit tools.
+Enforces protection that glob patterns in settings.json can't provide on Linux.
 """
+import fnmatch
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -23,6 +25,74 @@ except ImportError:
         pass
 
 
+# Patterns that block both read and write
+PROTECTED_PATTERNS = [
+    # Environment and secrets
+    ".env",
+    ".env.*",
+    "*/.env",
+    "*/.env.*",
+    "*/secrets/*",
+    "*secrets*",
+    "*credentials*",
+
+    # Private keys and certificates
+    "*.pem",
+    "*.key",
+    "*.p12",
+    "*.pfx",
+    "*id_rsa*",
+
+    # SSH/Cloud config
+    "*/.ssh/*",
+    "*/.aws/*",
+    "*/.config/gcloud/*",
+
+    # Auth tokens and configs
+    "*token*",
+    "*/.npmrc",
+    "*/.pypirc",
+    "*/.netrc",
+    "*/.docker/config.json",
+    "*/.kube/config",
+
+    # Git internals (allow read, block write)
+    # Handled separately below
+]
+
+# Patterns only blocked for write/edit (not read)
+WRITE_ONLY_PATTERNS = [
+    ".git/*",
+    "*/.git/*",
+    "package-lock.json",
+    "*/package-lock.json",
+    "yarn.lock",
+    "*/yarn.lock",
+    "pnpm-lock.yaml",
+    "*/pnpm-lock.yaml",
+]
+
+
+def matches_any(filepath: str, patterns: list) -> str | None:
+    """Check if filepath matches any pattern. Returns matching pattern or None."""
+    # Normalize path
+    filepath = os.path.normpath(filepath)
+    filename = os.path.basename(filepath)
+
+    for pattern in patterns:
+        # Check against full path
+        if fnmatch.fnmatch(filepath, pattern):
+            return pattern
+        # Check against filename only
+        if fnmatch.fnmatch(filename, pattern):
+            return pattern
+        # Check if pattern appears as substring (for simple patterns)
+        if not any(c in pattern for c in '*?['):
+            if pattern in filepath:
+                return pattern
+    return None
+
+
 @graceful_main("file_protection")
 def main():
     try:
@@ -30,32 +100,57 @@ def main():
     except (json.JSONDecodeError, Exception):
         sys.exit(0)
 
-    # Extract file_path from tool_input (PreToolUse format)
+    tool_name = ctx.get("tool_name", "")
     tool_input = ctx.get("tool_input", {})
     file_path = tool_input.get("file_path", "")
 
-    # Generic protected patterns (adjust per project in project's .claude/hooks)
-    protected = [
-        ".git/",
-        "package-lock.json",
-        "yarn.lock",
-        "pnpm-lock.yaml",
-        ".env",
-        "credentials",
-        "secrets",
-    ]
+    if not file_path:
+        sys.exit(0)
 
-    if file_path and any(p in file_path.lower() for p in protected):
-        log_event("file_protection", "blocked", {"file": file_path})
+    # Expand home directory
+    if file_path.startswith("~"):
+        file_path = os.path.expanduser(file_path)
+
+    is_write = tool_name in ("Write", "Edit")
+    is_read = tool_name == "Read"
+
+    # Check protected patterns (block read and write)
+    matched = matches_any(file_path, PROTECTED_PATTERNS)
+    if matched:
+        action = "write to" if is_write else "read"
+        log_event("file_protection", "blocked", {
+            "file": file_path,
+            "pattern": matched,
+            "tool": tool_name
+        })
         result = {
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
                 "permissionDecision": "deny",
-                "permissionDecisionReason": f"Blocked edit to protected file: {file_path}"
+                "permissionDecisionReason": f"Blocked {action} protected file: {file_path} (matches: {matched})"
             }
         }
         print(json.dumps(result))
         sys.exit(0)
+
+    # Check write-only patterns (only block write/edit, allow read)
+    if is_write:
+        matched = matches_any(file_path, WRITE_ONLY_PATTERNS)
+        if matched:
+            log_event("file_protection", "blocked", {
+                "file": file_path,
+                "pattern": matched,
+                "tool": tool_name
+            })
+            result = {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": f"Blocked write to protected file: {file_path} (matches: {matched})"
+                }
+            }
+            print(json.dumps(result))
+            sys.exit(0)
 
     sys.exit(0)
 

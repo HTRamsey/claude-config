@@ -14,6 +14,7 @@ Rigorous code reviewer focusing on correctness, security, and maintainability.
 2. **Security** - OWASP Top 10, input validation, auth/authz
 3. **Performance** - N+1 queries, memory leaks, complexity
 4. **Maintainability** - Readability, testing, future changes
+5. **Style** - Conventions, naming, dead code
 
 ## Output Format
 
@@ -25,7 +26,7 @@ Problem: [one line]
 Fix: [code or suggestion]
 ```
 
-Severity: `🔴 Critical` | `🟠 Warning` | `🟡 Suggestion`
+Severity: `[CRITICAL]` | `[WARNING]` | `[SUGGESTION]`
 
 ### Summary Format
 
@@ -34,6 +35,7 @@ Severity: `🔴 Critical` | `🟠 Warning` | `🟡 Suggestion`
 | Security | n | n | n |
 | Performance | n | n | n |
 | Correctness | n | n | n |
+| Maintainability | n | n | n |
 | Style | n | n | n |
 
 ## Checklists
@@ -50,6 +52,24 @@ Severity: `🔴 Critical` | `🟠 Warning` | `🟡 Suggestion`
 - [ ] Indexes for queried fields
 - [ ] No unbounded loops/recursion
 - [ ] Resources properly closed
+
+### Correctness
+- [ ] Edge cases handled (null, empty, bounds)
+- [ ] Error states handled explicitly
+- [ ] Race conditions addressed
+- [ ] State mutations are intentional
+
+### Maintainability
+- [ ] Code is self-documenting
+- [ ] No magic numbers/strings
+- [ ] Single responsibility per function
+- [ ] Tests cover critical paths
+
+### Style
+- [ ] Follows project conventions
+- [ ] Consistent naming
+- [ ] No dead code
+- [ ] Imports organized
 
 ## Behaviors
 

@@ -1,6 +1,6 @@
 # Context & Configuration
 
-## Hooks (26 active)
+## Hooks (28 active)
 
 ### PreToolUse
 - File protection, Credential scanner (at commit), TDD Guard
@@ -15,9 +15,10 @@
 - Context monitor (40K/80K warning), Session persistence, Uncommitted reminder
 - Start viewer (launches claude-code-viewer if not running)
 - Skill suggester, Suggest subagent, Smart permissions
+- Precompact save, Research cache, Subagent complete
 
-## Commands (20 total)
-`/commit` `/review` `/test` `/refactor` `/summarize` `/worktree` `/docs` `/implement` `/understand` `/tech-debt` `/optimize-context` `/checkpoint` `/deep-review` `/pipeline` `/queue` `/flow` `/ci-fix` `/pr` `/debug` `/security`
+## Commands (14 total)
+`/checkpoint` `/ci-fix` `/commit` `/debug` `/docs` `/flow` `/implement` `/pr` `/queue` `/refactor` `/review` `/tech-debt` `/test` `/worktree`
 
 **Task Queue**: `/queue add "task" --agent TYPE` | `/queue daemon start|stop`
 **Orchestration**: `/flow <workflow> "objective"` (feature, security-review, refactor, quick-review, docs)

@@ -9,16 +9,22 @@ Get productive in 5 minutes.
 | `/review` | Before committing - checks security, performance, quality |
 | `/commit` | Create a well-formatted commit |
 | `/test` | Diagnose test failures |
-| `/understand` | Explore unfamiliar code |
+| `/debug` | Systematic debugging with root cause analysis |
+
+See `05-context.md` for all 14 slash commands.
 
 ## Key Agents (via Task tool)
 
 | Task | Agent | Model |
 |------|-------|-------|
-| Quick lookup | `quick-lookup` | Haiku (cheap) |
-| Explore codebase | `Explore` | Haiku |
+| Quick lookup | `quick-lookup` | Haiku |
+| Explore codebase | `Explore` (built-in) | Haiku |
+| Plan implementation | `Plan` (built-in) | Default |
 | Code review | `code-reviewer` | Opus |
 | Security review | `security-reviewer` | Opus |
+| Claude Code questions | `claude-code-guide` (built-in) | Haiku |
+
+See `04-skills.md` for all 23 custom + 3 built-in agents.
 
 ## Optimization Scripts
 
@@ -39,7 +45,7 @@ Get productive in 5 minutes.
 1. **Read the file first** - Never edit without reading
 2. **Use agents for exploration** - Don't grep inline, use `Task(Explore)`
 3. **Compress output** - Always compress diffs, builds, test output
-4. **Verify before done** - Run tests, show evidence
+4. **Verify before done** - Run tests, show evidence (see `02-security.md`)
 5. **Clear between tasks** - Use `/clear` to reset context
 6. **Name sessions** - Use `/rename` for easy resumption
 
@@ -49,6 +55,7 @@ Get productive in 5 minutes.
 |------|----------|
 | Style rules | `~/.claude/rules/01-style.md` |
 | Security rules | `~/.claude/rules/02-security.md` |
+| Optimization | `~/.claude/rules/03-optimization.md` |
 | All agents | `~/.claude/agents/` |
 | All commands | `~/.claude/commands/` |
 | All scripts | `~/.claude/scripts/` |
