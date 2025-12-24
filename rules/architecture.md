@@ -29,7 +29,7 @@ paths: src/api/**/*.ts
 ---
 # API-Specific Rules
 - All endpoints must validate input
-- Use `api-designer` agent for new endpoints
+- Use `backend-architect` agent for new endpoints
 ```
 
 Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
@@ -143,7 +143,7 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 `offload-grep.sh` `offload-find.sh` `compress-diff.sh` `compress-build.sh` `compress-tests.sh` `compress-stacktrace.sh`
 
 ### Code Analysis
-`extract-signatures.sh` `smart-preview.sh` `summarize-file.sh` `find-related.sh` `project-overview.sh`
+`extract-signatures.sh` `smart-preview.sh` `summarize-file.sh` `find-related.sh` `project-overview.sh` `review-patterns.sh`
 
 ### Modern CLI Wrappers
 `smart-ls.sh` `smart-diff.sh` `smart-cat.sh` `smart-find.sh` `smart-replace.sh`
@@ -156,6 +156,9 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 
 ### Task Queue
 `task-queue.sh` `queue-runner.sh`
+
+### Reporting
+`usage-report.sh`
 
 ## Data Flow
 
@@ -197,3 +200,4 @@ Dependencies: `requirements.txt` (currently: tiktoken)
 | `data/task-queue.json` | Pending background tasks |
 | `data/token-usage.json` | Daily token tracking |
 | `data/exploration-cache.json` | Cached codebase exploration |
+| `data/usage-stats.json` | Agent/skill/command usage tracking |
