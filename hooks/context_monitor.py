@@ -20,8 +20,6 @@ import sys
 from pathlib import Path
 from collections import defaultdict
 
-import tiktoken
-
 # Import shared utilities for backup
 sys.path.insert(0, str(Path(__file__).parent))
 try:
@@ -49,6 +47,7 @@ def get_encoder():
     """Lazy-load encoder to avoid startup cost when not needed."""
     global _encoder
     if _encoder is None:
+        import tiktoken  # Lazy import - only when needed for large transcripts
         _encoder = tiktoken.get_encoding("cl100k_base")
     return _encoder
 
