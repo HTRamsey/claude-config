@@ -25,6 +25,8 @@ Skills, agents, and commands quick reference.
 | Create PR | `/pr` |
 | Fix CI | `/ci-fix` |
 | Track tech debt | `/tech-debt` |
+| Generate changelog | `/changelog` |
+| Quick health check | `/status` |
 | Save checkpoint | `/checkpoint` |
 | Git worktree | `/worktree` |
 | Task queue | `/queue` |
@@ -87,8 +89,7 @@ Skills, agents, and commands quick reference.
 ### Quick Lookups (Haiku)
 | Trigger | Agent |
 |---------|-------|
-| "What is X?", "Where is X defined?" | `quick-lookup` |
-| "What does this error mean?" | `error-explainer` |
+| "What is X?", "Where is X defined?", "What does this error mean?" | `quick-lookup` |
 
 ### Research
 | Trigger | Agent |
@@ -129,14 +130,13 @@ Skills, agents, and commands quick reference.
 | Trigger | Agent |
 |---------|-------|
 | Complex git ops, history, merge conflicts | `git-expert` |
-| C++, Qt (incl. Java/Python bindings), embedded | `cpp-expert` |
+| Modern C++, embedded, performance, CMake | `cpp-expert` |
+| Qt/QML, signals/slots, threading, Model/View | `qt-qml-expert` |
 | Context bloated | `context-optimizer` |
 | Similar changes across 3+ files | `batch-editor` |
 | Test failures, flaky tests, timing issues | `testing-debugger` |
 | Platform-specific bugs | `cross-platform-tester` |
-| Import cleanup, circular deps | `import-optimizer` |
-| Binary protocols, serial, MAVLink | `protocol-analyzer` |
-| Timing, latency, real-time issues | `real-time-systems` |
+| MAVLink, ArduPilot, PX4, QGroundControl | `mavlink-expert` |
 
 ### Meta (Config Management)
 | Trigger | Agent |
