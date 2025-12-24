@@ -1,6 +1,6 @@
 # Context & Configuration
 
-## Hooks (28 active)
+## Hooks (27 active)
 
 ### PreToolUse
 - File protection, Credential scanner (at commit), TDD Guard

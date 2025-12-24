@@ -77,6 +77,79 @@ def prune_cache(cache: dict):
     cache["entries"] = fresh
 
 
+def handle_pre_tool_use(ctx: dict) -> dict | None:
+    """Handler for PreToolUse - check cache."""
+    tool_name = ctx.get("tool_name", "")
+    tool_input = ctx.get("tool_input", {})
+
+    if tool_name != "WebFetch":
+        return None
+
+    url = tool_input.get("url", "")
+    if not url:
+        return None
+
+    cache = get_cache()
+    key = url_key(url)
+    entry = cache.get("entries", {}).get(key)
+
+    if entry and is_fresh(entry):
+        cache["stats"]["hits"] = cache["stats"].get("hits", 0) + 1
+        save_cache(cache)
+        log_event("research_cache", "hit", {"url": url[:80]})
+
+        cached_summary = entry.get("summary", "")[:500]
+        return {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "allow",
+                "permissionDecisionReason": f"[CACHE HIT - {CACHE_TTL_HOURS}h fresh] {url}\n\nCached content:\n{cached_summary}\n\n(Consider skipping fetch if this answers your question)"
+            }
+        }
+    else:
+        cache["stats"]["misses"] = cache["stats"].get("misses", 0) + 1
+        save_cache(cache)
+
+    return None
+
+
+def handle_post_tool_use(ctx: dict) -> dict | None:
+    """Handler for PostToolUse - store in cache."""
+    tool_name = ctx.get("tool_name", "")
+    tool_input = ctx.get("tool_input", {})
+
+    if tool_name != "WebFetch":
+        return None
+
+    url = tool_input.get("url", "")
+    if not url:
+        return None
+
+    cache = get_cache()
+    key = url_key(url)
+
+    tool_result = ctx.get("tool_result", "")
+    content = ""
+
+    if isinstance(tool_result, dict):
+        content = tool_result.get("content", "") or tool_result.get("text", "") or str(tool_result)
+    elif isinstance(tool_result, str):
+        content = tool_result
+
+    if content and len(content) < MAX_CONTENT_SIZE:
+        cache.setdefault("entries", {})[key] = {
+            "url": url,
+            "summary": content[:2000],
+            "cached_at": datetime.now().isoformat()
+        }
+        cache["stats"]["saves"] = cache["stats"].get("saves", 0) + 1
+        prune_cache(cache)
+        save_cache(cache)
+        log_event("research_cache", "save", {"url": url[:80]})
+
+    return None
+
+
 @graceful_main("research_cache")
 def main():
     try:
@@ -84,62 +157,13 @@ def main():
     except json.JSONDecodeError:
         sys.exit(0)
 
-    tool_name = ctx.get("tool_name", "")
-    tool_input = ctx.get("tool_input", {})
-
-    if tool_name != "WebFetch":
-        sys.exit(0)
-
-    url = tool_input.get("url", "")
-    if not url:
-        sys.exit(0)
-
-    cache = get_cache()
-    key = url_key(url)
-
     # Detect Pre vs Post by checking for tool_result
     if "tool_result" in ctx:
-        # PostToolUse - store in cache
-        tool_result = ctx.get("tool_result", "")
-        content = ""
-
-        if isinstance(tool_result, dict):
-            content = tool_result.get("content", "") or tool_result.get("text", "") or str(tool_result)
-        elif isinstance(tool_result, str):
-            content = tool_result
-
-        if content and len(content) < MAX_CONTENT_SIZE:
-            cache.setdefault("entries", {})[key] = {
-                "url": url,
-                "summary": content[:2000],
-                "cached_at": datetime.now().isoformat()
-            }
-            cache["stats"]["saves"] = cache["stats"].get("saves", 0) + 1
-            prune_cache(cache)
-            save_cache(cache)
-            log_event("research_cache", "save", {"url": url[:80]})
-
+        handle_post_tool_use(ctx)
     else:
-        # PreToolUse - check cache
-        entry = cache.get("entries", {}).get(key)
-
-        if entry and is_fresh(entry):
-            cache["stats"]["hits"] = cache["stats"].get("hits", 0) + 1
-            save_cache(cache)
-            log_event("research_cache", "hit", {"url": url[:80]})
-
-            cached_summary = entry.get("summary", "")[:500]
-            result = {
-                "hookSpecificOutput": {
-                    "hookEventName": "PreToolUse",
-                    "permissionDecision": "allow",
-                    "permissionDecisionReason": f"[CACHE HIT - {CACHE_TTL_HOURS}h fresh] {url}\n\nCached content:\n{cached_summary}\n\n(Consider skipping fetch if this answers your question)"
-                }
-            }
+        result = handle_pre_tool_use(ctx)
+        if result:
             print(json.dumps(result))
-        else:
-            cache["stats"]["misses"] = cache["stats"].get("misses", 0) + 1
-            save_cache(cache)
 
     sys.exit(0)
 

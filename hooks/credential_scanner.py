@@ -94,8 +94,15 @@ SENSITIVE_PATTERNS = [
     (r'eyJ[a-zA-Z0-9_-]*\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*', "JWT token"),
 ]
 
-# Pre-compile patterns for performance
-SENSITIVE_COMPILED = [(re.compile(p), n) for p, n in SENSITIVE_PATTERNS]
+# Lazy-compiled patterns (compiled on first use, cached thereafter)
+_COMPILED_CACHE = None
+
+def get_compiled_patterns():
+    """Lazy compile patterns on first use. Beneficial when running in dispatcher."""
+    global _COMPILED_CACHE
+    if _COMPILED_CACHE is None:
+        _COMPILED_CACHE = [(re.compile(p), n) for p, n in SENSITIVE_PATTERNS]
+    return _COMPILED_CACHE
 
 # Files that legitimately contain sensitive-like patterns
 ALLOWLIST_PATTERNS = [
@@ -118,9 +125,10 @@ def is_allowlisted(file_path: str) -> bool:
 def scan_for_sensitive(content: str) -> list:
     """Scan content for potential sensitive data, return list of (pattern_name, match)"""
     findings = []
-    for compiled, name in SENSITIVE_COMPILED:
-        matches = compiled.findall(content)
-        if matches:
+    for compiled, name in get_compiled_patterns():
+        # Use search() first for quick detection, findall() only if match exists
+        if compiled.search(content):
+            matches = compiled.findall(content)
             for match in matches[:3]:  # Limit to 3 per pattern
                 if isinstance(match, tuple):
                     match = match[0]

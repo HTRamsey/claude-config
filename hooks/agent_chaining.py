@@ -115,28 +115,22 @@ def get_source_agent(tool_input: dict) -> str:
     return tool_input.get("subagent_type", "")
 
 
-@graceful_main("agent_chaining")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
+def suggest_chain(ctx: dict) -> dict | None:
+    """Handler function for dispatcher. Returns result dict or None."""
     tool_name = ctx.get("tool_name", "")
     tool_input = ctx.get("tool_input", {})
-    # Try both field names for compatibility
     tool_output = ctx.get("tool_result", ctx.get("tool_response", {}))
 
     # Only process Task tool completions
     if tool_name != "Task":
-        sys.exit(0)
+        return None
 
     # Get the agent that just ran
     source_agent = get_source_agent(tool_input)
 
     # Only chain from analysis/review agents
     if source_agent not in CHAINABLE_AGENTS:
-        sys.exit(0)
+        return None
 
     # Get the output content
     output = ""
@@ -146,7 +140,7 @@ def main():
         output = tool_output
 
     if not output:
-        sys.exit(0)
+        return None
 
     # Check for chain triggers
     recommendations = parse_agent_output(output)
@@ -156,16 +150,29 @@ def main():
 
     if recommendations:
         msg_lines = [f"[Agent Chaining] Based on {source_agent} findings:"]
-        for rec in recommendations[:2]:  # Max 2 recommendations
+        for rec in recommendations[:2]:
             msg_lines.append(f"  → Task(subagent_type='{rec['agent']}') - {rec['reason']}")
         msg_lines.append("  Use orchestrator for comprehensive multi-agent review.")
 
-        result = {
+        return {
             "hookSpecificOutput": {
                 "hookEventName": "PostToolUse",
                 "message": "\n".join(msg_lines)
             }
         }
+
+    return None
+
+
+@graceful_main("agent_chaining")
+def main():
+    try:
+        ctx = json.load(sys.stdin)
+    except json.JSONDecodeError:
+        sys.exit(0)
+
+    result = suggest_chain(ctx)
+    if result:
         print(json.dumps(result))
 
     sys.exit(0)

@@ -103,6 +103,39 @@ def check_command(command: str) -> tuple:
 
     return ('allow', None)
 
+def check_dangerous_command(ctx: dict) -> dict | None:
+    """Handler function for dispatcher. Returns result dict or None."""
+    tool_input = ctx.get("tool_input", {})
+    command = tool_input.get("command", "")
+
+    if not command:
+        return None
+
+    action, reason = check_command(command)
+
+    if action == 'block':
+        log_event("dangerous_command_blocker", "blocked", {"reason": reason, "command": command[:100]})
+        return {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": f"[Dangerous Command] BLOCKED: {reason}. Command: {command[:100]}... This command could cause irreversible system damage."
+            }
+        }
+
+    elif action == 'warn':
+        log_event("dangerous_command_blocker", "warning", {"reason": reason, "command": command[:80]})
+        return {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "allow",
+                "permissionDecisionReason": f"[Dangerous Command] Warning: {reason}. Command: {command[:80]}..."
+            }
+        }
+
+    return None
+
+
 @graceful_main("dangerous_command_blocker")
 def main():
     try:
@@ -110,40 +143,12 @@ def main():
     except json.JSONDecodeError:
         sys.exit(0)
 
-    tool_input = ctx.get("tool_input", {})
-    command = tool_input.get("command", "")
-
-    if not command:
-        sys.exit(0)
-
-    action, reason = check_command(command)
-
-    if action == 'block':
-        log_event("dangerous_command_blocker", "blocked", {"reason": reason, "command": command[:100]})
-        # Use JSON output with permissionDecision for proper blocking
-        result = {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "deny",
-                "permissionDecisionReason": f"[Dangerous Command] BLOCKED: {reason}. Command: {command[:100]}... This command could cause irreversible system damage."
-            }
-        }
-        print(json.dumps(result))
-        sys.exit(0)  # Exit 0 with JSON, not exit 2
-
-    elif action == 'warn':
-        log_event("dangerous_command_blocker", "warning", {"reason": reason, "command": command[:80]})
-        # Warnings just add a message, don't block
-        result = {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "allow",
-                "permissionDecisionReason": f"[Dangerous Command] Warning: {reason}. Command: {command[:80]}..."
-            }
-        }
+    result = check_dangerous_command(ctx)
+    if result:
         print(json.dumps(result))
 
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

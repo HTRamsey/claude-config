@@ -153,19 +153,14 @@ def match_error_pattern(error_msg: str) -> dict | None:
             return info
     return None
 
-@graceful_main("tool_success_tracker")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
+def track_success(ctx: dict) -> dict | None:
+    """Handler function for dispatcher. Returns result dict or None."""
     tool_name = ctx.get("tool_name", "")
     tool_result = ctx.get("tool_result", {})
     session_id = ctx.get("session_id", "default")
 
     if not tool_name:
-        sys.exit(0)
+        return None
 
     state = load_state(session_id)
 
@@ -187,7 +182,6 @@ def main():
             "msg": error_msg[:200],
             "time": time.time()
         })
-        # Keep only last 10 errors
         tool_failures["recent_errors"] = tool_failures["recent_errors"][-10:]
 
         # Check for specific error pattern
@@ -213,9 +207,30 @@ def main():
     save_state(session_id, state)
 
     if messages:
-        print("\n".join(messages))
+        return {
+            "hookSpecificOutput": {
+                "hookEventName": "PostToolUse",
+                "message": "\n".join(messages)
+            }
+        }
+
+    return None
+
+
+@graceful_main("tool_success_tracker")
+def main():
+    try:
+        ctx = json.load(sys.stdin)
+    except json.JSONDecodeError:
+        sys.exit(0)
+
+    result = track_success(ctx)
+    if result:
+        msg = result.get("hookSpecificOutput", {}).get("message", "")
+        print(msg)
 
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

@@ -66,22 +66,17 @@ def save_cache(suggested: set):
     except Exception:
         pass
 
-@graceful_main("skill_suggester")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
+def suggest_skill(ctx: dict) -> dict | None:
+    """Handler function for dispatcher. Returns result dict or None."""
     tool_name = ctx.get("tool_name", "")
     if tool_name not in ("Write", "Edit"):
-        sys.exit(0)
+        return None
 
     tool_input = ctx.get("tool_input", {})
     file_path = tool_input.get("file_path", "")
 
     if not file_path:
-        sys.exit(0)
+        return None
 
     # Check each pattern
     for rule in SUGGESTIONS:
@@ -91,13 +86,13 @@ def main():
             cache_key = f"{rule['skill']}:{Path(file_path).name}"
 
             if cache_key in cache:
-                sys.exit(0)  # Already suggested, don't repeat
+                return None  # Already suggested, don't repeat
 
             # Add to cache
             cache.add(cache_key)
             save_cache(cache)
 
-            result = {
+            return {
                 "hookSpecificOutput": {
                     "hookEventName": "PreToolUse",
                     "permissionDecision": "allow",
@@ -108,10 +103,23 @@ def main():
                     )
                 }
             }
-            print(json.dumps(result))
-            break
+
+    return None
+
+
+@graceful_main("skill_suggester")
+def main():
+    try:
+        ctx = json.load(sys.stdin)
+    except json.JSONDecodeError:
+        sys.exit(0)
+
+    result = suggest_skill(ctx)
+    if result:
+        print(json.dumps(result))
 
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

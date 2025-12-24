@@ -233,204 +233,24 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Read|Write|Edit",
+        "matcher": "Read|Write|Edit|Bash|Grep|Glob|Task|Skill|WebFetch",
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/file_protection.py",
-            "timeout": 1
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/tdd_guard.py",
-            "timeout": 1
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/skill_suggester.py",
-            "timeout": 1
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/dangerous_command_blocker.py",
-            "timeout": 1
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/credential_scanner.py",
+            "command": "$HOME/.claude/hooks/pre_tool_dispatcher.py",
             "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|Grep|Read",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/suggest_tool_optimization.py",
-            "timeout": 1
-          }
-        ]
-      },
-      {
-        "matcher": "Read|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/file_access_tracker.py",
-            "timeout": 1
-          }
-        ]
-      },
-      {
-        "matcher": "Read",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/preread_summarize.py",
-            "timeout": 1
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/context_checkpoint.py",
-            "timeout": 1
-          }
-        ]
-      },
-      {
-        "matcher": "Grep|Glob|Read",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/suggest_subagent.py",
-            "timeout": 1
-          }
-        ]
-      },
-      {
-        "matcher": "Task|Skill",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/usage_tracker.py",
-            "timeout": 1
-          }
-        ]
-      },
-      {
-        "matcher": "Task",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/exploration_cache.py",
-            "timeout": 1
-          }
-        ]
-      },
-      {
-        "matcher": "WebFetch",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/research_cache.py",
-            "timeout": 2
           }
         ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|Grep|Glob|Read|Edit|Write|Task|WebFetch",
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/notify_complete.py",
+            "command": "$HOME/.claude/hooks/post_tool_dispatcher.py",
             "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "Grep|Glob|Read",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/file_access_tracker.py",
-            "timeout": 1
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/batch_operation_detector.py",
-            "timeout": 1
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|Grep|Glob|Read|Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/tool_success_tracker.py",
-            "timeout": 1
-          }
-        ]
-      },
-      {
-        "matcher": "Task",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/exploration_cache.py",
-            "timeout": 1
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/agent_chaining.py",
-            "timeout": 1
-          }
-        ]
-      },
-      {
-        "matcher": "WebFetch",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/research_cache.py",
-            "timeout": 2
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|Grep|Glob|Read|Edit|Write|Task",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/token_tracker.py",
-            "timeout": 1
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/output_size_monitor.py",
-            "timeout": 1
           }
         ]
       }

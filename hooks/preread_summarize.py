@@ -78,6 +78,35 @@ def should_summarize(file_path: str, limit: int | None) -> tuple[bool, str]:
 
     return True, reason
 
+def check_preread(ctx: dict) -> dict | None:
+    """Handler function for dispatcher. Returns result dict or None."""
+    tool_name = ctx.get("tool_name", "")
+    tool_input = ctx.get("tool_input", {})
+
+    if tool_name != "Read":
+        return None
+
+    file_path = tool_input.get("file_path", "")
+    limit = tool_input.get("limit")
+
+    if not file_path:
+        return None
+
+    should, reason = should_summarize(file_path, limit)
+
+    if should:
+        filename = Path(file_path).name
+        return {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "allow",
+                "permissionDecisionReason": f"[Large File] {filename}: {reason}\n  → Consider: Task(quick-lookup) or smart-preview.sh first\n  → Or add limit parameter to read specific section"
+            }
+        }
+
+    return None
+
+
 @graceful_main("preread_summarize")
 def main():
     try:
@@ -85,32 +114,12 @@ def main():
     except json.JSONDecodeError:
         sys.exit(0)
 
-    tool_name = ctx.get("tool_name", "")
-    tool_input = ctx.get("tool_input", {})
-
-    if tool_name != "Read":
-        sys.exit(0)
-
-    file_path = tool_input.get("file_path", "")
-    limit = tool_input.get("limit")
-
-    if not file_path:
-        sys.exit(0)
-
-    should, reason = should_summarize(file_path, limit)
-
-    if should:
-        filename = Path(file_path).name
-        result = {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "allow",
-                "permissionDecisionReason": f"[Large File] {filename}: {reason}\n  → Consider: Task(quick-lookup) or smart-preview.sh first\n  → Or add limit parameter to read specific section"
-            }
-        }
+    result = check_preread(ctx)
+    if result:
         print(json.dumps(result))
 
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

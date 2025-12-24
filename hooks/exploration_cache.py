@@ -14,6 +14,13 @@ import sys
 import time
 from pathlib import Path
 
+# Try to import rapidfuzz for better fuzzy matching
+try:
+    from rapidfuzz import fuzz
+    HAS_RAPIDFUZZ = True
+except ImportError:
+    HAS_RAPIDFUZZ = False
+
 # Import shared utilities
 sys.path.insert(0, str(Path(__file__).parent))
 try:
@@ -82,8 +89,8 @@ def find_similar_exploration(prompt: str, cwd: str, cache: dict) -> dict | None:
         if now - entry.get("timestamp", 0) < CACHE_TTL:
             return entry
 
-    # Fuzzy match - check keyword overlap
-    prompt_words = set(prompt.lower().split())
+    # Fuzzy match
+    prompt_lower = prompt.lower()
     best_match = None
     best_score = 0
 
@@ -93,15 +100,22 @@ def find_similar_exploration(prompt: str, cwd: str, cache: dict) -> dict | None:
         if entry.get("cwd", "") != cwd:
             continue
 
-        cached_words = set(entry.get("prompt", "").lower().split())
-        overlap = len(prompt_words & cached_words)
-        total = len(prompt_words | cached_words)
+        cached_prompt = entry.get("prompt", "").lower()
 
-        if total > 0:
-            score = overlap / total
-            if score > SIMILARITY_THRESHOLD and score > best_score:
-                best_score = score
-                best_match = entry
+        if HAS_RAPIDFUZZ:
+            # Use rapidfuzz for better fuzzy matching (0-100 scale)
+            score = fuzz.ratio(prompt_lower, cached_prompt) / 100.0
+        else:
+            # Fallback: naive word overlap
+            prompt_words = set(prompt_lower.split())
+            cached_words = set(cached_prompt.split())
+            overlap = len(prompt_words & cached_words)
+            total = len(prompt_words | cached_words)
+            score = overlap / total if total > 0 else 0
+
+        if score > SIMILARITY_THRESHOLD and score > best_score:
+            best_score = score
+            best_match = entry
 
     return best_match
 

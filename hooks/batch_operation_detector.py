@@ -127,19 +127,14 @@ def suggest_batch_command(edits: list, current_edit: dict) -> str:
         return f"sd '{old_str}' '{new_str}' '{glob_pattern}'"
     return f"code-mode batch edit across {glob_pattern}"
 
-@graceful_main("batch_operation_detector")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
+def detect_batch(ctx: dict) -> dict | None:
+    """Handler function for dispatcher. Returns result dict or None."""
     tool_name = ctx.get("tool_name", "")
     tool_input = ctx.get("tool_input", {})
     session_id = ctx.get("session_id", "default")
 
     if tool_name not in ("Edit", "Write"):
-        sys.exit(0)
+        return None
 
     state = load_state(session_id)
     message = None
@@ -178,7 +173,6 @@ def main():
 
             # Store this edit
             state["edits"].append(current_edit)
-            # Keep only last 50 edits
             state["edits"] = state["edits"][-50:]
 
     elif tool_name == "Write":
@@ -188,13 +182,12 @@ def main():
         if file_path and content:
             current_write = {
                 "file": file_path,
-                "content_hash": hash(content[:200]),  # Hash first 200 chars
+                "content_hash": hash(content[:200]),
                 "extension": get_file_extension(file_path),
                 "size": len(content),
                 "time": time.time()
             }
 
-            # Check for similar writes (same extension, similar size)
             similar_writes = [
                 w for w in state["writes"]
                 if w["extension"] == current_write["extension"]
@@ -217,9 +210,30 @@ def main():
     save_state(session_id, state)
 
     if message:
-        print(message)
+        return {
+            "hookSpecificOutput": {
+                "hookEventName": "PostToolUse",
+                "message": message
+            }
+        }
+
+    return None
+
+
+@graceful_main("batch_operation_detector")
+def main():
+    try:
+        ctx = json.load(sys.stdin)
+    except json.JSONDecodeError:
+        sys.exit(0)
+
+    result = detect_batch(ctx)
+    if result:
+        msg = result.get("hookSpecificOutput", {}).get("message", "")
+        print(msg)
 
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

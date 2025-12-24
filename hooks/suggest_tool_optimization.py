@@ -119,13 +119,8 @@ def check_read_optimization(tool_input: dict, session_reads: int) -> str | None:
 
     return None
 
-@graceful_main("suggest_tool_optimization")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
+def suggest_optimization(ctx: dict) -> dict | None:
+    """Handler function for dispatcher. Returns result dict or None."""
     tool_name = ctx.get("tool_name", "")
     tool_input = ctx.get("tool_input", {})
 
@@ -140,21 +135,33 @@ def main():
 
     elif tool_name == "Read":
         # Track reads in session (simplified - just check this call)
-        # A more sophisticated version would track across the session
         suggestion = check_read_optimization(tool_input, session_reads=1)
 
     if suggestion:
-        # Output suggestion as informational message
-        result = {
+        return {
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
                 "permissionDecision": "allow",
                 "permissionDecisionReason": f"[Optimization] {suggestion}"
             }
         }
+
+    return None
+
+
+@graceful_main("suggest_tool_optimization")
+def main():
+    try:
+        ctx = json.load(sys.stdin)
+    except json.JSONDecodeError:
+        sys.exit(0)
+
+    result = suggest_optimization(ctx)
+    if result:
         print(json.dumps(result))
 
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

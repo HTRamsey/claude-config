@@ -75,13 +75,9 @@ def estimate_tokens(text) -> int:
         return sum(estimate_tokens(item) for item in text)
     return 0
 
-@graceful_main("token_tracker")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
 
+def track_tokens(ctx: dict) -> dict | None:
+    """Handler function for dispatcher. Returns result dict or None."""
     tool_name = ctx.get("tool_name", "unknown")
     tool_input = ctx.get("tool_input", {})
     tool_result = ctx.get("tool_result", {})
@@ -103,13 +99,35 @@ def main():
     # Warn if approaching daily threshold
     if stats["total_tokens"] >= DAILY_WARNING_THRESHOLD:
         if stats["tool_calls"] % 50 == 0:  # Don't spam, warn every 50 calls
-            print(f"[Token Tracker] Daily usage: ~{stats['total_tokens']:,} tokens")
+            messages = [f"[Token Tracker] Daily usage: ~{stats['total_tokens']:,} tokens"]
             top_tools = sorted(stats["by_tool"].items(), key=lambda x: -x[1])[:3]
             if top_tools:
                 tools_str = ", ".join(f"{t}: {c:,}" for t, c in top_tools)
-                print(f"  Top tools: {tools_str}")
+                messages.append(f"  Top tools: {tools_str}")
+            return {
+                "hookSpecificOutput": {
+                    "hookEventName": "PostToolUse",
+                    "message": "\n".join(messages)
+                }
+            }
+
+    return None
+
+
+@graceful_main("token_tracker")
+def main():
+    try:
+        ctx = json.load(sys.stdin)
+    except json.JSONDecodeError:
+        sys.exit(0)
+
+    result = track_tokens(ctx)
+    if result:
+        msg = result.get("hookSpecificOutput", {}).get("message", "")
+        print(msg)
 
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

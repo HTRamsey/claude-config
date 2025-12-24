@@ -54,3 +54,43 @@ echo ""
 echo "Commands defined but never used:"
 comm -23 <(ls -1 ~/.claude/commands/*.md 2>/dev/null | xargs -I{} basename {} .md | sort) \
          <(jq -r '.commands | keys[]' "$USAGE_FILE" 2>/dev/null | sort) 2>/dev/null | head -10 || echo "  (tracking not started)"
+
+echo ""
+echo "--- Cache Statistics ---"
+CACHE_FILE="$HOME/.claude/data/exploration-cache.json"
+if [[ -f "$CACHE_FILE" ]] && command -v jq &>/dev/null; then
+    CACHE_SIZE=$(jq 'length' "$CACHE_FILE" 2>/dev/null || echo 0)
+    CACHE_BYTES=$(wc -c < "$CACHE_FILE" 2>/dev/null || echo 0)
+    echo "Exploration cache entries: $CACHE_SIZE"
+    echo "Cache file size: $((CACHE_BYTES / 1024))KB"
+
+    # Show oldest and newest entries if cache has data
+    if [[ "$CACHE_SIZE" -gt 0 ]]; then
+        OLDEST=$(jq -r 'to_entries | sort_by(.value.timestamp) | .[0].value.timestamp // "unknown"' "$CACHE_FILE" 2>/dev/null | cut -d'T' -f1)
+        NEWEST=$(jq -r 'to_entries | sort_by(.value.timestamp) | .[-1].value.timestamp // "unknown"' "$CACHE_FILE" 2>/dev/null | cut -d'T' -f1)
+        echo "Date range: $OLDEST to $NEWEST"
+    fi
+else
+    echo "No exploration cache data"
+fi
+
+echo ""
+echo "--- Token Usage ---"
+TOKEN_FILE="$HOME/.claude/data/token-usage.json"
+if [[ -f "$TOKEN_FILE" ]] && command -v jq &>/dev/null; then
+    TODAY=$(date +%Y-%m-%d)
+    TODAY_TOKENS=$(jq -r ".daily.\"$TODAY\".total // 0" "$TOKEN_FILE" 2>/dev/null)
+    TOTAL_TOKENS=$(jq -r '.total // 0' "$TOKEN_FILE" 2>/dev/null)
+    echo "Today's tokens: $TODAY_TOKENS"
+    echo "All-time tokens: $TOTAL_TOKENS"
+else
+    echo "No token usage data"
+fi
+
+echo ""
+echo "--- Session Info ---"
+SESSIONS=$(find "$HOME/.claude/projects" -name "*.jsonl" -mtime -7 2>/dev/null | wc -l)
+echo "Sessions (last 7 days): $SESSIONS"
+
+BACKUPS=$(ls -1 "$HOME/.claude/data/transcript-backups"/*.jsonl 2>/dev/null | wc -l)
+echo "Transcript backups: $BACKUPS"

@@ -228,6 +228,41 @@ def handle_post_tool_use(ctx: dict, state: dict) -> str | None:
 
     return message
 
+def track_file_access(ctx: dict) -> dict | None:
+    """Handler for PreToolUse. Returns result dict or None."""
+    session_id = ctx.get("session_id", "default")
+    state = load_state(session_id)
+    result = handle_pre_tool_use(ctx, state)
+    save_state(session_id, state)
+    return result
+
+
+def track_post_access(ctx: dict) -> dict | None:
+    """Handler for PostToolUse. Returns result dict or None."""
+    session_id = ctx.get("session_id", "default")
+    state = load_state(session_id)
+    message = handle_post_tool_use(ctx, state)
+    save_state(session_id, state)
+
+    if message:
+        total_searches = len(state["searches"])
+        total_reads = len(state["reads"])
+        dup_searches = sum(1 for s in state["searches"].values() if s.get("count", 1) > 1)
+        dup_reads = sum(1 for r in state["reads"].values() if r.get("count", 1) > 1)
+
+        stats = f"Session: {total_searches} searches, {total_reads} reads"
+        if dup_searches or dup_reads:
+            stats += f" ({dup_searches} dup searches, {dup_reads} dup reads)"
+
+        return {
+            "hookSpecificOutput": {
+                "hookEventName": "PostToolUse",
+                "message": f"{message}\n  {stats}"
+            }
+        }
+    return None
+
+
 @graceful_main("file_access_tracker")
 def main():
     try:
@@ -235,35 +270,19 @@ def main():
     except json.JSONDecodeError:
         sys.exit(0)
 
-    session_id = ctx.get("session_id", "default")
-
-    state = load_state(session_id)
-
-    # Detect pre/post based on presence of tool_result (PostToolUse has it, PreToolUse doesn't)
+    # Detect pre/post based on presence of tool_result
     if "tool_result" in ctx:
-        # PostToolUse
-        message = handle_post_tool_use(ctx, state)
-        save_state(session_id, state)
-        if message:
-            total_searches = len(state["searches"])
-            total_reads = len(state["reads"])
-            dup_searches = sum(1 for s in state["searches"].values() if s.get("count", 1) > 1)
-            dup_reads = sum(1 for r in state["reads"].values() if r.get("count", 1) > 1)
-
-            stats = f"Session: {total_searches} searches, {total_reads} reads"
-            if dup_searches or dup_reads:
-                stats += f" ({dup_searches} dup searches, {dup_reads} dup reads)"
-
-            print(f"{message}")
-            print(f"  {stats}")
+        result = track_post_access(ctx)
+        if result:
+            msg = result.get("hookSpecificOutput", {}).get("message", "")
+            print(msg)
     else:
-        # PreToolUse
-        result = handle_pre_tool_use(ctx, state)
-        save_state(session_id, state)
+        result = track_file_access(ctx)
         if result:
             print(json.dumps(result))
 
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

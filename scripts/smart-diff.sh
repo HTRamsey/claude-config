@@ -1,21 +1,14 @@
 #!/usr/bin/env bash
-# smart-diff.sh - Token-efficient git diff with multiple engines
-# Usage: smart-diff.sh [--structural] [git-diff-args...]
+# smart-diff.sh - Token-efficient diff with multiple engines
+# Usage: smart-diff.sh [--structural|-s] [git-diff-args...]
+#    or: smart-diff.sh <file1> <file2>   # Direct file comparison
 #
 # Engines (with fallback chain):
 #   Default:      delta → compress-diff.sh → git diff
 #   --structural: difftastic (AST-aware) → delta → git diff
-#
-# Consolidates smart-diff.sh and smart-difft.sh functionality
+#   File mode:    difft → diff -u
 
 set -e
-
-# Check for structural mode flag
-STRUCTURAL=false
-if [[ "$1" == "--structural" || "$1" == "-s" ]]; then
-    STRUCTURAL=true
-    shift
-fi
 
 # Find difftastic
 find_difft() {
@@ -25,6 +18,23 @@ find_difft() {
         echo "$HOME/.cargo/bin/difft"
     fi
 }
+
+# Direct file comparison mode (two files as arguments)
+if [[ -f "$1" && -f "$2" && $# -eq 2 ]]; then
+    DIFFT=$(find_difft)
+    if [[ -n "$DIFFT" ]]; then
+        exec $DIFFT --color=never "$1" "$2" 2>/dev/null | head -200
+    else
+        exec diff -u "$1" "$2" 2>/dev/null | head -100
+    fi
+fi
+
+# Check for structural mode flag
+STRUCTURAL=false
+if [[ "$1" == "--structural" || "$1" == "-s" ]]; then
+    STRUCTURAL=true
+    shift
+fi
 
 # Structural diff mode (uses difftastic)
 if [[ "$STRUCTURAL" == true ]]; then

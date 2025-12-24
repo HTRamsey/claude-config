@@ -109,25 +109,20 @@ def should_checkpoint(state: dict) -> bool:
     last = state.get("last_checkpoint", 0)
     return (time.time() - last) > CHECKPOINT_INTERVAL
 
-@graceful_main("context_checkpoint")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
+def save_checkpoint(ctx: dict) -> dict | None:
+    """Handler function for dispatcher. Returns result dict or None."""
     tool_name = ctx.get("tool_name", "")
     tool_input = ctx.get("tool_input", {})
     session_id = ctx.get("session_id", "unknown")
 
     if tool_name not in ("Edit", "Write"):
-        sys.exit(0)
+        return None
 
     file_path = tool_input.get("file_path", "")
     content = tool_input.get("content", "") or tool_input.get("new_string", "")
 
     if not file_path:
-        sys.exit(0)
+        return None
 
     state = load_state()
 
@@ -137,16 +132,30 @@ def main():
         checkpoint = checkpoint_to_memory(session_id, file_path, reason, ctx)
 
         filename = Path(file_path).name
-        result = {
+        return {
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
                 "permissionDecision": "allow",
                 "permissionDecisionReason": f"[Checkpoint] {filename} ({reason})\n  → State saved. To recover: search_nodes('checkpoint {session_id[:8]}')"
             }
         }
+
+    return None
+
+
+@graceful_main("context_checkpoint")
+def main():
+    try:
+        ctx = json.load(sys.stdin)
+    except json.JSONDecodeError:
+        sys.exit(0)
+
+    result = save_checkpoint(ctx)
+    if result:
         print(json.dumps(result))
 
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

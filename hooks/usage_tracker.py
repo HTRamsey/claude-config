@@ -71,13 +71,8 @@ def increment_usage(data, category, name):
     data["daily"][today][category] = data["daily"][today].get(category, 0) + 1
 
 
-@graceful_main("usage_tracker")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
+def track_usage(ctx: dict) -> dict | None:
+    """Handler function for dispatcher. Returns None (tracking only, no output)."""
     usage = load_usage()
     tracked = False
 
@@ -104,7 +99,20 @@ def main():
 
     if tracked:
         save_usage(usage)
+
+    return None  # Tracking only, no output
+
+
+@graceful_main("usage_tracker")
+def main():
+    try:
+        ctx = json.load(sys.stdin)
+    except json.JSONDecodeError:
+        sys.exit(0)
+
+    track_usage(ctx)
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

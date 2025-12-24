@@ -34,10 +34,11 @@ paths: src/api/**/*.ts
 
 Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 
-## Hooks (28) - Event Triggers
+## Hooks (27 + 2 dispatchers) - Event Triggers
 
 **Shared Utilities**: `hook_utils.py` provides graceful degradation, JSON logging, session state.
 **Migration Guide**: See `hooks/MIGRATION.md` for patterns.
+**Dispatchers (ACTIVE)**: `pre_tool_dispatcher.py` and `post_tool_dispatcher.py` consolidate all PreToolUse/PostToolUse hooks into single processes. ~200ms latency savings per tool call.
 
 ### PreToolUse (block/modify before execution)
 | Hook | Watches | Purpose |
@@ -143,7 +144,7 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 ### Specialized
 `memory-management-optimization`
 
-## Scripts (61) - Shell Utilities
+## Scripts (55) - Shell Utilities
 
 ### Search & Compression
 `offload-grep.sh` `offload-find.sh` `compress-diff.sh` `compress-build.sh` `compress-tests.sh` `compress-stacktrace.sh`
@@ -165,6 +166,9 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 
 ### Reporting
 `usage-report.sh`
+
+### Diagnostics
+`health-check.sh` `validate-config.sh` `hook-benchmark.sh` `test-hooks.sh`
 
 ## Data Flow
 
@@ -194,7 +198,7 @@ Hooks use an isolated venv at `~/.claude/venv/`. The PATH is set in `settings.js
 | Update deps | `~/.claude/scripts/venv-setup.sh update` |
 | Recreate | `~/.claude/scripts/venv-setup.sh create` |
 
-Dependencies: `requirements.txt` (currently: tiktoken)
+Dependencies: `requirements.txt` (currently: tiktoken, rapidfuzz)
 
 ## Key Files
 

@@ -41,25 +41,20 @@ def send_notification(title: str, message: str, urgency: str = "normal"):
     except Exception:
         pass  # Silently fail if notify-send not available
 
-@graceful_main("notify_complete")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
+def check_notify(ctx: dict) -> dict | None:
+    """Handler function for dispatcher. Returns result dict or None."""
     tool_name = ctx.get("tool_name", "")
 
     # Only process Bash tool completions
     if tool_name != "Bash":
-        sys.exit(0)
+        return None
 
     # Get duration if available
     duration_ms = ctx.get("duration_ms", 0)
     duration_secs = duration_ms / 1000
 
     if duration_secs < MIN_DURATION_SECS:
-        sys.exit(0)
+        return None
 
     # Get command info
     tool_input = ctx.get("tool_input", {})
@@ -80,7 +75,20 @@ def main():
 
     send_notification(title, message, urgency)
     log_event("notify_complete", "notification_sent", {"duration": duration_secs, "success": exit_code == 0})
+
+    return None  # Notification sent, no message to return
+
+
+@graceful_main("notify_complete")
+def main():
+    try:
+        ctx = json.load(sys.stdin)
+    except json.JSONDecodeError:
+        sys.exit(0)
+
+    check_notify(ctx)
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

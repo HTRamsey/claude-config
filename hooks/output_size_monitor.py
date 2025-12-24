@@ -45,20 +45,15 @@ def get_output_size(tool_response) -> int:
         return sum(get_output_size(item) for item in tool_response)
     return 0
 
-@graceful_main("output_size_monitor")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
+def check_output_size(ctx: dict) -> dict | None:
+    """Handler function for dispatcher. Returns result dict or None."""
     tool_name = ctx.get("tool_name", "")
     tool_result = ctx.get("tool_result", {})
 
     output_size = get_output_size(tool_result)
 
     if output_size == 0:
-        sys.exit(0)
+        return None
 
     estimated_tokens = estimate_tokens(output_size)
 
@@ -69,20 +64,46 @@ def main():
         warning_threshold *= 3
         critical_threshold *= 3
 
+    messages = []
+
     if output_size >= critical_threshold:
-        print(f"[Output Monitor] Large output from {tool_name}: ~{estimated_tokens:,} tokens ({output_size:,} chars)")
-        print("  Consider using compression scripts or limiting output.")
+        messages.append(f"[Output Monitor] Large output from {tool_name}: ~{estimated_tokens:,} tokens ({output_size:,} chars)")
+        messages.append("  Consider using compression scripts or limiting output.")
         if tool_name == "Bash":
-            print("  Tip: Pipe to head, use compress-*.sh scripts, or add output limits")
+            messages.append("  Tip: Pipe to head, use compress-*.sh scripts, or add output limits")
         elif tool_name == "Grep":
-            print("  Tip: Use head_limit parameter or offload-grep.sh")
+            messages.append("  Tip: Use head_limit parameter or offload-grep.sh")
         elif tool_name == "Read":
-            print("  Tip: Use smart-preview.sh or summarize-file.sh for large files")
+            messages.append("  Tip: Use smart-preview.sh or summarize-file.sh for large files")
 
     elif output_size >= warning_threshold:
-        print(f"[Output Monitor] {tool_name} output: ~{estimated_tokens:,} tokens")
+        messages.append(f"[Output Monitor] {tool_name} output: ~{estimated_tokens:,} tokens")
+
+    if messages:
+        return {
+            "hookSpecificOutput": {
+                "hookEventName": "PostToolUse",
+                "message": "\n".join(messages)
+            }
+        }
+
+    return None
+
+
+@graceful_main("output_size_monitor")
+def main():
+    try:
+        ctx = json.load(sys.stdin)
+    except json.JSONDecodeError:
+        sys.exit(0)
+
+    result = check_output_size(ctx)
+    if result:
+        msg = result.get("hookSpecificOutput", {}).get("message", "")
+        print(msg)
 
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

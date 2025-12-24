@@ -116,19 +116,14 @@ def detect_exploration_intent(tool_name: str, tool_input: dict, state: dict) -> 
     return (False, None, None)
 
 
-@graceful_main("suggest_subagent")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
+def suggest_subagent(ctx: dict) -> dict | None:
+    """Handler function for dispatcher. Returns result dict or None."""
     tool_name = ctx.get("tool_name", "")
     tool_input = ctx.get("tool_input", {})
 
     # Only check exploration tools
     if tool_name not in ("Grep", "Glob", "Read"):
-        sys.exit(0)
+        return None
 
     state = load_state()
     should_suggest, agent_type, reason = detect_exploration_intent(tool_name, tool_input, state)
@@ -141,13 +136,26 @@ def main():
             f"  Recommended: Task(subagent_type='{agent_name}') - {agent_desc}\n"
             f"  This offloads exploration to a subagent, saving main context tokens."
         )
-        result = {
+        return {
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
                 "permissionDecision": "allow",
                 "permissionDecisionReason": message
             }
         }
+
+    return None
+
+
+@graceful_main("suggest_subagent")
+def main():
+    try:
+        ctx = json.load(sys.stdin)
+    except json.JSONDecodeError:
+        sys.exit(0)
+
+    result = suggest_subagent(ctx)
+    if result:
         print(json.dumps(result))
 
     sys.exit(0)

@@ -50,6 +50,66 @@ def find_test_file(impl_path: Path) -> bool:
     return any(p.exists() for p in test_patterns)
 
 
+# Constants for check_tdd
+CODE_EXTENSIONS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rs', '.java', '.rb'}
+TEST_PATTERNS = ['test_', '_test', '.test.', '.spec.', 'tests/', 'test/', '__tests__/']
+SKIP_PATTERNS = [
+    '__init__', 'conftest', 'setup', 'config', 'settings',
+    'migrations/', 'scripts/', 'hooks/', 'commands/', 'skills/', 'agents/',
+    'utils/', 'helpers/', 'types/', 'models/', 'interfaces/', 'schemas/',
+    'examples/', 'fixtures/', 'mocks/', 'stubs/', 'constants/', 'enums/',
+    'webpack', 'vite', 'rollup', 'babel', 'eslint', 'prettier',
+]
+MIN_LINES_FOR_TDD = 30
+
+
+def check_tdd(ctx: dict) -> dict | None:
+    """Handler function for dispatcher. Returns result dict or None."""
+    tool_input = ctx.get("tool_input", {})
+    file_path = tool_input.get("file_path", "")
+
+    if not file_path:
+        return None
+
+    path = Path(file_path)
+
+    # Skip non-code files
+    if path.suffix not in CODE_EXTENSIONS:
+        return None
+
+    # Skip test files themselves
+    path_str = str(path).lower()
+    if any(p in path_str for p in TEST_PATTERNS):
+        return None
+
+    # Skip config, setup, utility, and low-test-value files
+    if any(p in path_str for p in SKIP_PATTERNS):
+        return None
+
+    # Only enforce for new files (skip existing files)
+    if path.exists():
+        return None
+
+    # Check content size - skip small files
+    content = tool_input.get("content", "") or tool_input.get("new_string", "")
+    line_count = content.count('\n') + 1 if content else 0
+    if line_count < MIN_LINES_FOR_TDD:
+        return None
+
+    # Check if test exists
+    if not find_test_file(path):
+        log_event("tdd_guard", "warning", {"file": path.name, "lines": line_count})
+        return {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "allow",
+                "permissionDecisionReason": f"[TDD] No test for {path.name} ({line_count} lines) - consider writing tests first"
+            }
+        }
+
+    return None
+
+
 @graceful_main("tdd_guard")
 def main():
     try:
@@ -57,60 +117,12 @@ def main():
     except (json.JSONDecodeError, Exception):
         sys.exit(0)
 
-    tool_input = ctx.get("tool_input", {})
-    file_path = tool_input.get("file_path", "")
-
-    if not file_path:
-        sys.exit(0)
-
-    path = Path(file_path)
-
-    # Skip non-code files
-    CODE_EXTENSIONS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rs', '.java', '.rb'}
-    if path.suffix not in CODE_EXTENSIONS:
-        sys.exit(0)
-
-    # Skip test files themselves
-    TEST_PATTERNS = ['test_', '_test', '.test.', '.spec.', 'tests/', 'test/', '__tests__/']
-    path_str = str(path).lower()
-    if any(p in path_str for p in TEST_PATTERNS):
-        sys.exit(0)
-
-    # Skip config, setup, utility, and low-test-value files
-    SKIP_PATTERNS = [
-        '__init__', 'conftest', 'setup', 'config', 'settings',
-        'migrations/', 'scripts/', 'hooks/', 'commands/', 'skills/', 'agents/',
-        'utils/', 'helpers/', 'types/', 'models/', 'interfaces/', 'schemas/',
-        'examples/', 'fixtures/', 'mocks/', 'stubs/', 'constants/', 'enums/',
-        'webpack', 'vite', 'rollup', 'babel', 'eslint', 'prettier',
-    ]
-    if any(p in path_str for p in SKIP_PATTERNS):
-        sys.exit(0)
-
-    # Only enforce for new files (skip existing files)
-    if path.exists():
-        sys.exit(0)
-
-    # Check content size - skip small files
-    MIN_LINES_FOR_TDD = 30
-    content = tool_input.get("content", "") or tool_input.get("new_string", "")
-    line_count = content.count('\n') + 1 if content else 0
-    if line_count < MIN_LINES_FOR_TDD:
-        sys.exit(0)
-
-    # Check if test exists
-    if not find_test_file(path):
-        log_event("tdd_guard", "warning", {"file": path.name, "lines": line_count})
-        result = {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "allow",
-                "permissionDecisionReason": f"[TDD] No test for {path.name} ({line_count} lines) - consider writing tests first"
-            }
-        }
+    result = check_tdd(ctx)
+    if result:
         print(json.dumps(result))
 
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

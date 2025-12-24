@@ -93,26 +93,20 @@ def matches_any(filepath: str, patterns: list) -> str | None:
     return None
 
 
-@graceful_main("file_protection")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except (json.JSONDecodeError, Exception):
-        sys.exit(0)
-
+def check_file_protection(ctx: dict) -> dict | None:
+    """Handler function for dispatcher. Returns result dict or None."""
     tool_name = ctx.get("tool_name", "")
     tool_input = ctx.get("tool_input", {})
     file_path = tool_input.get("file_path", "")
 
     if not file_path:
-        sys.exit(0)
+        return None
 
     # Expand home directory
     if file_path.startswith("~"):
         file_path = os.path.expanduser(file_path)
 
     is_write = tool_name in ("Write", "Edit")
-    is_read = tool_name == "Read"
 
     # Check protected patterns (block read and write)
     matched = matches_any(file_path, PROTECTED_PATTERNS)
@@ -123,15 +117,13 @@ def main():
             "pattern": matched,
             "tool": tool_name
         })
-        result = {
+        return {
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
                 "permissionDecision": "deny",
                 "permissionDecisionReason": f"Blocked {action} protected file: {file_path} (matches: {matched})"
             }
         }
-        print(json.dumps(result))
-        sys.exit(0)
 
     # Check write-only patterns (only block write/edit, allow read)
     if is_write:
@@ -142,17 +134,30 @@ def main():
                 "pattern": matched,
                 "tool": tool_name
             })
-            result = {
+            return {
                 "hookSpecificOutput": {
                     "hookEventName": "PreToolUse",
                     "permissionDecision": "deny",
                     "permissionDecisionReason": f"Blocked write to protected file: {file_path} (matches: {matched})"
                 }
             }
-            print(json.dumps(result))
-            sys.exit(0)
+
+    return None
+
+
+@graceful_main("file_protection")
+def main():
+    try:
+        ctx = json.load(sys.stdin)
+    except (json.JSONDecodeError, Exception):
+        sys.exit(0)
+
+    result = check_file_protection(ctx)
+    if result:
+        print(json.dumps(result))
 
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()
