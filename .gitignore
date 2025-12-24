@@ -1,0 +1,49 @@
+# Credentials and secrets
+.credentials.json
+settings.local.json
+
+# Session and runtime data
+history.jsonl
+data/
+debug/
+file-history/
+session-env/
+shell-snapshots/
+todos/
+tracking/
+plans/
+downloads/
+stats-cache.json
+.viewer_checked
+.viewer.pid
+
+# Internal Claude state
+.claude/
+statsig/
+
+# Plugins (reinstallable)
+plugins/
+
+# Project-specific data (generated per-directory)
+projects/
+
+# Python virtual environment (recreatable)
+venv/
+
+# Backups
+*.tar.gz
+*.bak
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~

@@ -1,0 +1,475 @@
+{
+  "cleanupPeriodDays": 30,
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "excludedCommands": ["docker", "git", "gh", "npm", "node"],
+    "allowUnsandboxedCommands": true
+  },
+  "enableAllProjectMcpServers": false,
+  "allowedMcpServers": [
+    {"serverName": "memory"},
+    {"serverName": "github"}
+  ],
+  "deniedMcpServers": [
+    {"serverName": "filesystem"}
+  ],
+  "env": {
+    "DISABLE_PROMPT_CACHING": "0",
+    "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "MAX_MCP_OUTPUT_TOKENS": "50000",
+    "MCP_TIMEOUT": "10000",
+    "MCP_TOOL_TIMEOUT": "120000",
+    "BASH_DEFAULT_TIMEOUT_MS": "120000",
+    "BASH_MAX_TIMEOUT_MS": "7200000",
+    "MAX_THINKING_TOKENS": "16000",
+    "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR": "1",
+    "DISABLE_TELEMETRY": "1",
+    "DISABLE_ERROR_REPORTING": "1"
+  },
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git checkout:*)",
+      "Bash(git stash:*)",
+      "Bash(git fetch:*)",
+      "Bash(git pull:*)",
+      "Bash(git merge:*)",
+      "Bash(git rebase:*)",
+      "Bash(git worktree:*)",
+      "Bash(git tag:*)",
+      "Bash(git show:*)",
+      "Bash(git blame:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(make:*)",
+      "Bash(cmake:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(yarn:*)",
+      "Bash(pnpm:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(pip:*)",
+      "Bash(pip3:*)",
+      "Bash(uv:*)",
+      "Bash(pytest:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(prettier:*)",
+      "Bash(eslint:*)",
+      "Bash(tsc:*)",
+      "Bash(black:*)",
+      "Bash(ruff:*)",
+      "Bash(mypy:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh run:*)",
+      "Bash(gh api:*)",
+      "Bash(gh issue:*)",
+      "Bash(gh repo:*)",
+      "Bash(pre-commit:*)",
+      "Bash(cargo:*)",
+      "Bash(go build:*)",
+      "Bash(go test:*)",
+      "Bash(go mod:*)",
+      "Bash(go run:*)",
+      "Bash(~/.claude/scripts/*:*)",
+      "Bash(pwd:*)",
+      "Bash(which:*)",
+      "Bash(uname:*)",
+      "Bash(date:*)",
+      "Bash(whoami:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(sort:*)",
+      "Bash(uniq:*)",
+      "Bash(cut:*)",
+      "Bash(tr:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(fd:*)",
+      "Bash(ag:*)",
+      "Bash(tar:*)",
+      "Bash(zip:*)",
+      "Bash(unzip:*)",
+      "Bash(gzip:*)",
+      "Bash(gunzip:*)",
+      "Bash(df:*)",
+      "Bash(du:*)",
+      "Bash(ls:*)",
+      "Bash(stat:*)",
+      "Bash(file:*)",
+      "Bash(jq:*)",
+      "Bash(yq:*)",
+      "Bash(gron:*)",
+      "Bash(bat:*)",
+      "Bash(eza:*)",
+      "Bash(dust:*)",
+      "Bash(tokei:*)",
+      "Bash(delta:*)",
+      "Bash(difft:*)",
+      "Bash(sd:*)",
+      "Bash(xh:*)",
+      "Bash(curlie:*)",
+      "Bash(htmlq:*)",
+      "Bash(tldr:*)",
+      "Bash(tmux:*)",
+      "Bash(docker build:*)",
+      "Bash(docker run:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker ps:*)",
+      "Bash(docker logs:*)",
+      "Bash(docker images:*)",
+      "Bash(docker exec:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo doc:*)",
+      "Bash(cargo check:*)",
+      "Bash(just:*)",
+      "Bash(task:*)",
+      "Bash(mkdir:*)",
+      "Bash(touch:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(ln:*)",
+      "Bash(realpath:*)",
+      "Bash(basename:*)",
+      "Bash(dirname:*)",
+      "Bash(claude-flow:*)",
+      "Bash(~/.claude/scripts/task-queue.sh:*)"
+    ],
+    "ask": [
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(node:*)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(**/.env.*)",
+      "Write(.env)",
+      "Write(**/.env.*)",
+      "Read(**/secrets/**)",
+      "Write(**/secrets/**)",
+      "Read(**/*credentials*)",
+      "Write(**/*credentials*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(**/id_rsa*)",
+      "Read(**/.ssh/**)",
+      "Read(**/.aws/**)",
+      "Read(**/.config/gcloud/**)",
+      "Read(**/*.p12)",
+      "Read(**/*.pfx)",
+      "Edit(.git/**)",
+      "Write(.git/**)",
+      "Read(**/token*)",
+      "Read(**/.npmrc)",
+      "Read(**/.pypirc)",
+      "Read(**/.netrc)",
+      "Read(**/.docker/config.json)",
+      "Read(**/.kube/config)",
+      "Write(**/id_rsa*)",
+      "Write(**/*.pem)",
+      "Write(**/*.key)"
+    ]
+  },
+  "model": "opus",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/session_start.py",
+            "timeout": 3
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/start_viewer.py",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/context_monitor.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "Read|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/smart_permissions.py",
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/file_protection.py",
+            "timeout": 1
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/tdd_guard.py",
+            "timeout": 1
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/skill_suggester.py",
+            "timeout": 1
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/dangerous_command_blocker.py",
+            "timeout": 1
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/credential_scanner.py",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Grep|Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/suggest_tool_optimization.py",
+            "timeout": 1
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/file_access_tracker.py",
+            "timeout": 1
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/preread_summarize.py",
+            "timeout": 1
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/context_checkpoint.py",
+            "timeout": 1
+          }
+        ]
+      },
+      {
+        "matcher": "Grep|Glob|Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/suggest_subagent.py",
+            "timeout": 1
+          }
+        ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/exploration_cache.py",
+            "timeout": 1
+          }
+        ]
+      },
+      {
+        "matcher": "WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/research_cache.py",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/notify_complete.py",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Grep|Glob|Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/file_access_tracker.py",
+            "timeout": 1
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/batch_operation_detector.py",
+            "timeout": 1
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Grep|Glob|Read|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/tool_success_tracker.py",
+            "timeout": 1
+          }
+        ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/exploration_cache.py",
+            "timeout": 1
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/agent_chaining.py",
+            "timeout": 1
+          }
+        ]
+      },
+      {
+        "matcher": "WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/research_cache.py",
+            "timeout": 2
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Grep|Glob|Read|Edit|Write|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/token_tracker.py",
+            "timeout": 1
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/output_size_monitor.py",
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/uncommitted_reminder.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/session_persistence.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/precompact_save.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/subagent_complete.py",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/scripts/statusline.sh",
+    "padding": 0
+  },
+  "enabledPlugins": {
+    "pyright@claude-code-lsps": true,
+    "clangd-lsp@claude-plugins-official": true
+  },
+  "outputStyle": "terse",
+  "spinnerTipsEnabled": false,
+  "alwaysThinkingEnabled": true
+}
