@@ -210,6 +210,11 @@
             "type": "command",
             "command": "$HOME/.claude/hooks/context_monitor.py",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/usage_tracker.py",
+            "timeout": 1
           }
         ]
       }
@@ -308,6 +313,16 @@
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/suggest_subagent.py",
+            "timeout": 1
+          }
+        ]
+      },
+      {
+        "matcher": "Task|Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/usage_tracker.py",
             "timeout": 1
           }
         ]

@@ -28,16 +28,17 @@ Skipping evaluation makes work INCOMPLETE. This protocol is MANDATORY.
 | Run tests | `/test` | When tests fail or need diagnosis |
 | Refactor | `/refactor` | Before any refactoring work |
 | Generate docs | `/docs` | When documentation needed |
-| Understand code | `/understand` | When exploring unfamiliar code |
 | Track tech debt | `/tech-debt` | When cataloging issues |
 | Implement feature | `/implement` | For structured feature work |
-| Deep review | `/deep-review` | Parallel security+perf+a11y specialists |
 | Save checkpoint | `/checkpoint` | Before complex or risky work |
-| Optimize context | `/optimize-context` | When context bloated |
 | Git worktree | `/worktree` | For parallel development |
 | Task queue | `/queue` | Add/run background agent tasks |
 | Claude flow | `/flow` | Multi-agent workflow orchestration |
 | Summarize session | `/summarize` | End of session recap |
+| Debug issues | `/debug` | Systematic debugging with root cause |
+| Create PR | `/pr` | Well-structured pull request |
+| Fix CI | `/ci-fix` | Fix CI failures iteratively |
+| Pipeline | `/pipeline` | Multi-stage feature workflow |
 
 ## Skills - Load Before These Tasks
 
@@ -103,18 +104,14 @@ Skipping evaluation makes work INCOMPLETE. This protocol is MANDATORY.
 | Trigger | Agent |
 |---------|-------|
 | "What is X?", "Where is X defined?" | `quick-lookup` |
-| Quick file finding, structure queries | `quick-explorer` |
 | "What does this error mean?" | `error-explainer` |
-| Summarize large file before reading | `file-summarizer` |
-| JSON↔YAML, format conversion | `format-converter` |
-| Typo fix, single-file change | `simple-edit` |
+| Simple lookup, quick syntax | `quick-researcher` |
 | Claude Code/SDK questions | `claude-code-guide` |
 
 ### Research
-| Trigger | Agent | Model |
-|---------|-------|-------|
-| Simple lookup, "what is X?", quick syntax | `quick-researcher` | Haiku (80% cheaper) |
-| Deep research, comparisons, migrations | `technical-researcher` | Sonnet |
+| Trigger | Agent |
+|---------|-------|
+| Deep research, comparisons, migrations | `technical-researcher` |
 
 ### Code Review & Quality
 | Trigger | Agent |
@@ -137,8 +134,7 @@ Skipping evaluation makes work INCOMPLETE. This protocol is MANDATORY.
 | Trigger | Agent |
 |---------|-------|
 | Find unused code, before cleanup | `dead-code-finder` |
-| Adding dependencies, before releases | `dependency-auditor` |
-| Major version upgrades, CVEs | `dependency-updater` |
+| Dependencies, CVEs, version upgrades | `migration-planner` |
 | Optimization ROI, business case | `impact-analyzer` |
 | Build failures, compilation issues | `build-expert` |
 
@@ -146,7 +142,7 @@ Skipping evaluation makes work INCOMPLETE. This protocol is MANDATORY.
 | Trigger | Agent |
 |---------|-------|
 | Backend system design, microservices | `backend-architect` |
-| Multi-database strategy, CAP trade-offs | `database-architect` |
+| Database strategy, schema, optimization | `database-architect` |
 | LLM integration, RAG, embeddings | `ai-engineer` |
 | Security threat analysis, attack surface | `threat-modeling-expert` |
 
@@ -154,19 +150,17 @@ Skipping evaluation makes work INCOMPLETE. This protocol is MANDATORY.
 | Trigger | Agent |
 |---------|-------|
 | CI/CD failures, deployment issues | `devops-troubleshooter` |
-| Slow queries, index optimization | `database-optimizer` |
 | Production incidents, outage triage | `incident-responder` |
 | Metrics, logging, tracing design | `observability-engineer` |
 
 ### Specialized
 | Trigger | Agent |
 |---------|-------|
-| Git history, past decisions, old bugs | `git-archaeologist` |
-| Complex git ops, merge conflicts | `git-expert` |
-| Database migrations, schema changes | `schema-designer` |
+| Complex git ops, history, merge conflicts | `git-expert` |
 | C++, Qt, embedded systems | `cpp-expert` |
 | Context bloated | `context-optimizer` |
 | Similar changes across 3+ files | `batch-editor` |
+| Test failures, flaky tests, timing issues | `testing-debugger` |
 
 ## Enforcement
 

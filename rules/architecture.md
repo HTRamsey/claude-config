@@ -78,10 +78,10 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 ## Agents (39) - Specialized Subagents
 
 ### Quick Operations (Haiku - 10x cheaper)
-`quick-lookup` `quick-explorer` `error-explainer` `file-summarizer` `format-converter` `simple-edit`
+`quick-lookup` `error-explainer` `quick-researcher`
 
 ### Research
-`quick-researcher` (Haiku) `technical-researcher` (Sonnet)
+`technical-researcher` (Sonnet)
 
 ### Code Review & Quality (Opus)
 `code-reviewer` `security-reviewer` `perf-reviewer` `accessibility-reviewer`
@@ -90,18 +90,18 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 `backend-architect` `database-architect` `ai-engineer` `threat-modeling-expert` `api-designer`
 
 ### Operations (Sonnet)
-`devops-troubleshooter` `database-optimizer` `incident-responder` `observability-engineer`
+`devops-troubleshooter` `incident-responder` `observability-engineer`
 
 ### Generation & Planning
-`test-generator` `doc-generator` `refactoring-planner` `orchestrator` `schema-designer`
+`test-generator` `doc-generator` `refactoring-planner` `orchestrator`
 
 ### Analysis
-`dead-code-finder` `dependency-auditor` `dependency-updater` `impact-analyzer` `build-expert`
+`dead-code-finder` `migration-planner` `impact-analyzer` `build-expert`
 
 ### Specialized
-`git-archaeologist` `git-expert` `cpp-expert` `context-optimizer` `batch-editor`
+`git-expert` `cpp-expert` `context-optimizer` `batch-editor` `testing-debugger`
 
-## Commands (20) - Slash Commands
+## Commands (16) - Slash Commands
 
 | Command | Purpose |
 |---------|---------|
@@ -110,12 +110,9 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 | `/test` | Diagnose test failures |
 | `/refactor` | Plan refactoring |
 | `/docs` | Generate documentation |
-| `/understand` | Explore unfamiliar code |
 | `/implement` | Structured feature work |
 | `/tech-debt` | Catalog technical debt |
-| `/deep-review` | Parallel specialist review |
 | `/checkpoint` | Save task state |
-| `/optimize-context` | Reduce context usage |
 | `/worktree` | Git worktree management |
 | `/queue` | Task queue management |
 | `/flow` | Claude-flow orchestration |
@@ -124,7 +121,6 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 | `/ci-fix` | Fix CI failures iteratively |
 | `/pr` | Create well-structured pull request |
 | `/debug` | Systematic debugging with root cause analysis |
-| `/security` | Quick security scan for vulnerabilities |
 
 ## Scripts (57) - Shell Utilities
 

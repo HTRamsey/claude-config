@@ -51,6 +51,31 @@ model: haiku               # Optional: haiku|sonnet|opus (default: inherit)
 
 **Design rule:** Start with the lightest model that can do the job.
 
+## Creation Process
+
+### Step 1: Initialize
+```bash
+~/.claude/skills/agent-creator/scripts/init_agent.py <name> --model <model> --description "<description>" [--tools "<tools>"]
+```
+
+Example:
+```bash
+~/.claude/skills/agent-creator/scripts/init_agent.py my-agent --model haiku --description "Quick lookup for X" --tools "Read,Grep,Glob"
+```
+
+### Step 2: Edit the Agent
+Complete the TODO sections in the generated file:
+- Add backstory (persona)
+- Define process steps
+- Specify response format
+- List anti-patterns
+- Add escalation triggers
+
+### Step 3: Validate
+```bash
+head -20 ~/.claude/agents/my-agent.md
+```
+
 ## Template
 
 ```markdown

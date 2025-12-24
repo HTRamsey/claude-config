@@ -26,6 +26,31 @@ Create slash commands that users invoke with `/name`.
 .claude/commands/            # Project commands (override global)
 ```
 
+## Creation Process
+
+### Step 1: Initialize
+```bash
+~/.claude/skills/command-creator/scripts/init_command.py <name> --description "<description>" [--global]
+```
+
+Example:
+```bash
+~/.claude/skills/command-creator/scripts/init_command.py deploy --description "Deploy to production" --global
+```
+
+### Step 2: Edit the Command
+Complete the TODO sections in the generated file:
+- Define workflow steps with bash examples
+- Add example outputs
+- List anti-patterns
+- Add escalation triggers
+
+### Step 3: Test
+Invoke the command to verify it works:
+```
+/command-name
+```
+
 ## Template
 
 ```markdown
