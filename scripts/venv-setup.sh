@@ -3,21 +3,25 @@
 set -e
 
 VENV_DIR="$HOME/.claude/venv"
-REQ_FILE="$HOME/.claude/requirements.txt"
+HOOKS_DIR="$HOME/.claude/hooks"
 
 case "${1:-update}" in
     create)
         echo "Creating venv at $VENV_DIR..."
         python3 -m venv "$VENV_DIR"
         "$VENV_DIR/bin/pip" install --quiet --upgrade pip
-        [ -f "$REQ_FILE" ] && "$VENV_DIR/bin/pip" install --quiet -r "$REQ_FILE"
+        if [[ -f "$HOOKS_DIR/pyproject.toml" ]]; then
+            "$VENV_DIR/bin/pip" install --quiet "$HOOKS_DIR"
+        fi
         echo "Done. Venv ready."
         ;;
     update)
         [ ! -d "$VENV_DIR" ] && exec "$0" create
         echo "Updating venv..."
         "$VENV_DIR/bin/pip" install --quiet --upgrade pip
-        [ -f "$REQ_FILE" ] && "$VENV_DIR/bin/pip" install --quiet -r "$REQ_FILE"
+        if [[ -f "$HOOKS_DIR/pyproject.toml" ]]; then
+            "$VENV_DIR/bin/pip" install --quiet --upgrade "$HOOKS_DIR"
+        fi
         echo "Done."
         ;;
     check)
@@ -30,8 +34,15 @@ case "${1:-update}" in
             exit 1
         fi
         ;;
+    dev)
+        # Install with dev dependencies
+        [ ! -d "$VENV_DIR" ] && exec "$0" create
+        echo "Installing with dev dependencies..."
+        "$VENV_DIR/bin/pip" install --quiet "$HOOKS_DIR[dev]"
+        echo "Done."
+        ;;
     *)
-        echo "Usage: $0 {create|update|check}"
+        echo "Usage: $0 {create|update|check|dev}"
         exit 1
         ;;
 esac

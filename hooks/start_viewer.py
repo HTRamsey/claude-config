@@ -24,7 +24,8 @@ except ImportError:
         pass
 
 VIEWER_CMD = "claude-code-viewer"
-PID_FILE = Path.home() / ".claude" / ".viewer.pid"
+DATA_DIR = Path.home() / ".claude" / "data"
+PID_FILE = DATA_DIR / ".viewer.pid"
 DEFAULT_PORT = 3000
 
 
@@ -103,7 +104,7 @@ def start_viewer() -> bool:
 @graceful_main("start_viewer")
 def main():
     # Only run once per session - use a session marker
-    session_marker = Path.home() / ".claude" / ".viewer_checked"
+    session_marker = DATA_DIR / ".viewer_checked"
 
     # Get current session ID from environment or create marker with timestamp
     # Simple approach: check if we've run in the last 5 seconds (same session)

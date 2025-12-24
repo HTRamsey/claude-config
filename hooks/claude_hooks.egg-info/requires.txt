@@ -1,0 +1,9 @@
+tiktoken>=0.5.0
+rapidfuzz>=3.0.0
+
+[ai]
+
+[analysis]
+
+[dev]
+pytest>=7.0.0

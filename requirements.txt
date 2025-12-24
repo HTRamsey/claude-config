@@ -1,3 +1,0 @@
-# Dependencies for Claude Code hooks
-tiktoken>=0.5.0
-rapidfuzz>=3.0.0

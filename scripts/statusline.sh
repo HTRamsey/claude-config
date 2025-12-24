@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 # Claude Code Status Line (v2.0.70+)
 #
-# Format: branch[•N] | path | Model | [████░░] 45% ⚡85% ⚠️ | 10m API:15% | +50/-10 | 120K↓ 50K↑ 5K/m
+# Format: v2.0.76 | path | branch[•N] | Model | terse | 45% ⚡99% ⚠️ | +50/-10 | 79K↓ 68K↑ 5K/m | 10m API:15%
 #
 # Sections (logically grouped):
-#   1. Git:     branch[~2+1-1•3] - branch name + status indicators
+#   1. Version: v2.0.76 - Claude Code version
 #   2. Path:    ~/project or subdir/ if in project subdirectory
-#   3. Model:   Opus 4.5, Sonnet, Haiku
-#   4. Context: [████░░░░] 45% ⚡85% ⚠️ - progress bar, %, cache hit, 200K warning
-#   5. Time:    10m API:15% - duration + API latency %
-#   6. Output:  +50/-10 - lines added/removed
-#   7. Tokens:  120K↓ 50K↑ 5K/m - input↓, output↑, rate per minute
+#   3. Git:     branch[~2+1-1•3] - branch name + status indicators
+#   4. Model:   Opus 4.5, Sonnet, Haiku
+#   5. Style:   terse - output style
+#   6. Context: 45% ⚡99% ⚠️ - usage %, cache % of context, 200K warning
+#   7. Output:  +50/-10 - lines added/removed
+#   8. Tokens:  79K↓ 68K↑ 5K/m - input↓, output↑, rate per minute
+#   9. Time:    10m API:15% - duration + API latency %
 #
-# Git indicators: ~modified +staged -deleted •untracked
+# Git indicators: +staged ~unstaged-modified -unstaged-deleted •untracked
 # Colors: green <40%, yellow 40-79%, red ≥80%
 
 # Read JSON input from stdin
@@ -29,14 +31,14 @@ input=$(cat)
     read -r current_output
     read -r context_size
     read -r exceeds_200k
-    read -r json_session_id
-    read -r total_cost
     read -r duration_ms
     read -r api_duration_ms
     read -r lines_added
     read -r lines_removed
     read -r cache_read
     read -r cache_create
+    read -r version
+    read -r output_style
 } < <(echo "$input" | jq -r '
     .model.display_name // .model.id // "unknown",
     .workspace.current_dir // .cwd // ".",
@@ -47,43 +49,20 @@ input=$(cat)
     .context_window.current_usage.output_tokens // 0,
     .context_window.context_window_size // 200000,
     .exceeds_200k_tokens // false,
-    .session_id // "unknown",
-    .cost.total_cost_usd // 0,
     .cost.total_duration_ms // 0,
     .cost.total_api_duration_ms // 0,
     .cost.total_lines_added // 0,
     .cost.total_lines_removed // 0,
     .context_window.current_usage.cache_read_input_tokens // 0,
-    .context_window.current_usage.cache_creation_input_tokens // 0
+    .context_window.current_usage.cache_creation_input_tokens // 0,
+    .version // "",
+    .output_style.name // ""
 ')
 
 # Calculate context usage - only INPUT tokens count against context window
 # Formula: input_tokens + cache_creation + cache_read (output tokens don't count)
 context_used=$((current_input + cache_create + cache_read))
 total_tokens=$((total_input + total_output))
-
-# --- Delta tracking for cost changes ---
-state_dir="/tmp/claude_statusline"
-mkdir -p "$state_dir" 2>/dev/null
-state_file="${state_dir}/${json_session_id}"
-
-# Read previous state for cost delta
-if [[ -f "$state_file" ]]; then
-    read -r last_total last_cost < "$state_file"
-    last_cost=${last_cost:-0}
-else
-    last_total=0
-    last_cost=0
-fi
-
-# Calculate token delta since last update (for +5K indicator)
-delta=$((total_tokens - last_total))
-
-# Calculate cost delta (using awk for floating point, pass vars safely)
-cost_delta=$(awk -v tc="$total_cost" -v lc="$last_cost" 'BEGIN {printf "%.4f", tc - lc}')
-
-# Save state for next call
-echo "$total_tokens $total_cost" > "$state_file"
 
 # Calculate percentage using input tokens only (accurate context window %)
 if [[ "$context_size" -gt 0 ]]; then
@@ -95,35 +74,11 @@ fi
 # Cap at 100%
 [[ "$usage_pct" -gt 100 ]] && usage_pct=100
 
-# Progress bar function (8 chars wide)
-make_progress_bar() {
-    local pct=$1
-    local width=8
-    local filled=$((pct * width / 100))
-    local empty=$((width - filled))
-    local bar=""
-    for ((i=0; i<filled; i++)); do bar+="█"; done
-    for ((i=0; i<empty; i++)); do bar+="░"; done
-    echo "$bar"
-}
-
-# Build progress bar with color
-progress_bar=$(make_progress_bar "$usage_pct")
-
-# Burn rate calculation ($/hr)
-burn_rate_display=""
-if [[ "$duration_ms" -gt 60000 ]]; then  # Only show after 1 minute
-    # cost per hour = (cost / duration_ms) * 3600000
-    burn_rate=$(awk -v tc="$total_cost" -v dm="$duration_ms" 'BEGIN {printf "%.2f", (tc / dm) * 3600000}')
-    if [[ $(awk -v br="$burn_rate" 'BEGIN {print (br > 0.01) ? 1 : 0}') == "1" ]]; then
-        burn_rate_display="\$${burn_rate}/hr"
-    fi
-fi
-
 # API latency percentage
 api_pct_display=""
 if [[ "$duration_ms" -gt 0 && "$api_duration_ms" -gt 0 ]]; then
     api_pct=$((api_duration_ms * 100 / duration_ms))
+    [[ "$api_pct" -gt 100 ]] && api_pct=100
     if [[ "$api_pct" -gt 0 ]]; then
         api_pct_display="API:${api_pct}%"
     fi
@@ -133,17 +88,6 @@ fi
 warning_display=""
 if [[ "$exceeds_200k" == "true" ]]; then
     warning_display="⚠️"
-fi
-
-# Format cost display (show delta if > $0.001, otherwise show total)
-cost_display=""
-is_cost_positive=$(awk -v cd="$cost_delta" 'BEGIN {print (cd > 0.001) ? 1 : 0}')
-if [[ "$is_cost_positive" == "1" ]]; then
-    # Show cost delta for last operation
-    cost_display=$(awk -v cd="$cost_delta" 'BEGIN {printf "+$%.2f", cd}')
-elif [[ $(awk -v tc="$total_cost" 'BEGIN {print (tc > 0.01) ? 1 : 0}') == "1" ]]; then
-    # Show total session cost if no recent delta
-    cost_display=$(awk -v tc="$total_cost" 'BEGIN {printf "$%.2f", tc}')
 fi
 
 # Format duration (show as Xm or Xh Ym)
@@ -162,15 +106,10 @@ if [[ "$duration_ms" -gt 0 ]]; then
     fi
 fi
 
-# Cache hit percentage (if caching is active)
+# Cache % of context (how much context is from cache)
 cache_display=""
-total_cache=$((cache_read + cache_create))
-if [[ "$total_cache" -gt 1000 ]]; then
-    if [[ "$cache_create" -gt 0 ]]; then
-        cache_pct=$((cache_read * 100 / (cache_read + cache_create)))
-    else
-        cache_pct=100
-    fi
+if [[ "$context_used" -gt 0 && "$cache_read" -gt 1000 ]]; then
+    cache_pct=$((cache_read * 100 / context_used))
     cache_display="⚡${cache_pct}%"
 fi
 
@@ -192,34 +131,35 @@ else
     path="${cwd/#$HOME/~}"
 fi
 
-# Git information
+# Git information (single git call)
 git_info=""
-if [[ -d "$cwd/.git" ]] || git -C "$cwd" rev-parse --git-dir > /dev/null 2>&1; then
-    branch=$(git -C "$cwd" --no-optional-locks rev-parse --abbrev-ref HEAD 2>/dev/null)
+git_output=$(git -C "$cwd" --no-optional-locks status -sb 2>/dev/null)
+if [[ -n "$git_output" ]]; then
+    # First line: ## branch...tracking info
+    branch=$(echo "$git_output" | head -1 | sed 's/^## //; s/\.\.\..*$//')
+    # Remaining lines: file status
+    git_files=$(echo "$git_output" | tail -n +2)
 
-    if [[ -n "$branch" ]]; then
-        git_status=$(git -C "$cwd" --no-optional-locks status --porcelain 2>/dev/null)
-
-        if [[ -n "$git_status" ]]; then
-            modified=$(echo "$git_status" | grep -c "^ M" || true)
-            added=$(echo "$git_status" | grep -c "^A" || true)
-            deleted=$(echo "$git_status" | grep -c "^ D" || true)
-            untracked=$(echo "$git_status" | grep -c "^??" || true)
-        else
-            modified=0 added=0 deleted=0 untracked=0
-        fi
+    if [[ -n "$git_files" ]]; then
+        # Git status format: XY where X=staged, Y=unstaged
+        # Staged changes: first char is A/M/D/R/C (not space or ?)
+        staged=$(echo "$git_files" | grep -cE "^[AMDRC]" || true)
+        # Unstaged modifications: second char is M
+        modified=$(echo "$git_files" | grep -c "^.M" || true)
+        # Unstaged deletions: second char is D
+        deleted=$(echo "$git_files" | grep -c "^.D" || true)
+        # Untracked files
+        untracked=$(echo "$git_files" | grep -c "^??" || true)
 
         status_indicators=""
+        [[ "$staged" -gt 0 ]] && status_indicators="${status_indicators}+${staged}"
         [[ "$modified" -gt 0 ]] && status_indicators="${status_indicators}~${modified}"
-        [[ "$added" -gt 0 ]] && status_indicators="${status_indicators}+${added}"
         [[ "$deleted" -gt 0 ]] && status_indicators="${status_indicators}-${deleted}"
         [[ "$untracked" -gt 0 ]] && status_indicators="${status_indicators}•${untracked}"
 
-        if [[ -z "$git_status" ]]; then
-            git_info=" | git:${branch}"
-        else
-            git_info=" | git:${branch}[${status_indicators}]"
-        fi
+        git_info=" | git:${branch}[${status_indicators}]"
+    else
+        git_info=" | git:${branch}"
     fi
 fi
 
@@ -234,26 +174,25 @@ fi
 
 # Build sections by logical grouping
 
-# 1. Git section (branch + status) - moved to front
-git_section=""
-if [[ -n "$git_info" ]]; then
-    # Extract just "branch[status]" without " | git:" prefix
-    git_section="\033[2;35m${git_info# | git:}\033[0m | "
-fi
-
 # 2. Path section
 path_section="\033[2;34m${path}\033[0m"
 
-# 3. Model section
+# 3. Git section (branch + status)
+git_section=""
+if [[ -n "$git_info" ]]; then
+    git_section="\033[2;35m${git_info# | git:}\033[0m | "
+fi
+
+# 4. Model section
 model_section="\033[2;36m${model_name}\033[0m"
 
-# 4. Context section (bar + % + cache + warning - all together)
-context_section="${ctx_color}[${progress_bar}] ${usage_pct}%"
+# 6. Context section (% + cache + warning)
+context_section="${ctx_color}${usage_pct}%"
 [[ -n "$cache_display" ]] && context_section="${context_section} ${cache_display}"
 context_section="${context_section}\033[0m"
 [[ -n "$warning_display" ]] && context_section="${context_section} \033[1;31m${warning_display}\033[0m"
 
-# 5. Token section (input↓ output↑ + burn rate)
+# 8. Token section (input↓ output↑)
 token_section=""
 if [[ "$total_tokens" -gt 0 ]]; then
     # Format input tokens
@@ -288,7 +227,7 @@ if [[ "$total_tokens" -gt 0 ]]; then
     token_section=" | \033[2;33m${in_display}↓ ${out_display}↑${tok_rate_display}\033[0m"
 fi
 
-# 6. Time section (duration + API%)
+# 9. Time section (duration + API%)
 time_section=""
 if [[ -n "$duration_display" && -n "$api_pct_display" ]]; then
     time_section=" | \033[2;37m${duration_display} ${api_pct_display}\033[0m"
@@ -296,10 +235,16 @@ elif [[ -n "$duration_display" ]]; then
     time_section=" | \033[2;37m${duration_display}\033[0m"
 fi
 
+# 5. Style section (output style)
+style_section=""
+[[ -n "$output_style" ]] && style_section=" | \033[2;90m${output_style}\033[0m"
+
 # 7. Output section (lines changed)
 output_section=""
 [[ -n "$lines_display" ]] && output_section=" | \033[2;32m${lines_display}\033[0m"
 
 # Build the complete status line
-# Format: branch[status] | path | Model | [████░░] 45% ⚡cache ⚠️ | duration API:% | +N/-M | 150K 5K/m
-echo -e "${git_section}${path_section} | ${model_section} | ${context_section}${time_section}${output_section}${token_section}"
+# Format: v2.0.76 | path | branch[status] | Model | terse | 45% ⚡99% ⚠️ | +N/-M | 79K↓ 68K↑ | 10m API:15%
+version_prefix=""
+[[ -n "$version" ]] && version_prefix="\033[2;90mv${version}\033[0m | "
+echo -e "${version_prefix}${path_section} | ${git_section}${model_section}${style_section} | ${context_section}${output_section}${token_section}${time_section}"

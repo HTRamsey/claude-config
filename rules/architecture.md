@@ -47,7 +47,7 @@ paths: src/api/**/*.ts
 
 Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 
-## Hooks (28 + 2 dispatchers) - Event Triggers
+## Hooks
 
 **Shared Utilities**: `hook_utils.py` provides graceful degradation, JSON logging, session state.
 **Dispatchers (ACTIVE)**: `pre_tool_dispatcher.py` and `post_tool_dispatcher.py` consolidate all PreToolUse/PostToolUse hooks into single processes. ~200ms latency savings per tool call.
@@ -93,7 +93,7 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 | `subagent_start` | SubagentStart | Track subagent spawn time |
 | `subagent_complete` | SubagentStop | Handle subagent completion, calculate duration |
 
-## Agents (24 custom + 3 built-in) - Specialized Subagents
+## Agents
 
 ### Built-in (no file needed)
 `Explore` `Plan` `claude-code-guide`
@@ -111,7 +111,7 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 `backend-architect` `database-architect` `ai-engineer`
 
 ### Operations
-`devops-troubleshooter` `incident-responder` `migration-planner`
+`devops-troubleshooter` `migration-planner`
 
 ### Generation & Planning
 `test-generator` `doc-generator` `orchestrator`
@@ -123,7 +123,7 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 ### Meta (Config Management)
 `claude-config-expert`
 
-## Commands (14) - Slash Commands
+## Commands
 
 | Command | Purpose |
 |---------|---------|
@@ -142,7 +142,7 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 | `/queue` | Task queue management |
 | `/flow` | Claude-flow orchestration |
 
-## Skills (16) - On-Demand Workflows
+## Skills
 
 ### Core Workflows
 `systematic-debugging` `test-driven-development` `verification-before-completion` `security-audit`
@@ -160,7 +160,7 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 ### Specialized
 `memory-management-optimization`
 
-## Scripts (55) - Shell Utilities
+## Scripts
 
 Organized into subdirectories:
 

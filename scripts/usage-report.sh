@@ -1,96 +1,131 @@
 #!/usr/bin/env bash
-# Usage Report - Shows skill/agent/command usage statistics
-# Reads from ~/.claude/data/usage-stats.json
+# Agent/Skill/Command usage report
+# Usage: usage-report.sh [--json|--summary]
+#
+# Options:
+#   --json     Output raw JSON
+#   --summary  Show summary only (default: detailed report)
 
-set -e
+set -euo pipefail
 
 USAGE_FILE="$HOME/.claude/data/usage-stats.json"
+FORMAT="${1:-}"
 
 if [[ ! -f "$USAGE_FILE" ]]; then
-    echo "No usage data yet. Run some skills/agents/commands first."
-    echo ""
-    echo "Usage tracking is enabled via the usage_tracker.py hook."
+    echo "No usage data found at $USAGE_FILE"
+    echo "Usage tracking starts after first agent/skill/command use."
     exit 0
 fi
 
-echo "=== Claude Code Usage Report ==="
-echo "Data from: $USAGE_FILE"
-echo ""
-
-# Check if jq is available
-if ! command -v jq &> /dev/null; then
-    echo "Install jq for formatted output: sudo apt install jq"
+if [[ "$FORMAT" == "--json" ]]; then
     cat "$USAGE_FILE"
     exit 0
 fi
 
-echo "--- Agents (by usage count) ---"
-jq -r '.agents | to_entries | sort_by(-.value.count) | .[] | "\(.value.count)\t\(.key)\t(last: \(.value.last_used // "never" | split("T")[0]))"' "$USAGE_FILE" 2>/dev/null || echo "No agent data"
+echo "╔════════════════════════════════════════════════════════════════════╗"
+echo "║                    Claude Code Usage Report                        ║"
+echo "╚════════════════════════════════════════════════════════════════════╝"
 echo ""
 
-echo "--- Skills (by usage count) ---"
-jq -r '.skills | to_entries | sort_by(-.value.count) | .[] | "\(.value.count)\t\(.key)\t(last: \(.value.last_used // "never" | split("T")[0]))"' "$USAGE_FILE" 2>/dev/null || echo "No skill data"
+# Parse and display with Python for reliable JSON handling
+python3 << 'PYTHON'
+import json
+from datetime import datetime
+from pathlib import Path
+
+usage_file = Path.home() / ".claude" / "data" / "usage-stats.json"
+if not usage_file.exists():
+    exit(0)
+
+with open(usage_file) as f:
+    data = json.load(f)
+
+# Agents section
+agents = data.get("agents", {})
+if agents:
+    print("## Agents")
+    print(f"{'Name':<30} {'Uses':>6} {'Last Used':<12}")
+    print("-" * 52)
+    sorted_agents = sorted(agents.items(), key=lambda x: x[1].get("count", 0), reverse=True)
+    for name, info in sorted_agents:
+        count = info.get("count", 0)
+        last = info.get("last_used", "")[:10]
+        print(f"{name:<30} {count:>6} {last:<12}")
+    print("")
+
+# Skills section
+skills = data.get("skills", {})
+if skills:
+    print("## Skills")
+    print(f"{'Name':<30} {'Uses':>6} {'Last Used':<12}")
+    print("-" * 52)
+    sorted_skills = sorted(skills.items(), key=lambda x: x[1].get("count", 0), reverse=True)
+    for name, info in sorted_skills:
+        count = info.get("count", 0)
+        last = info.get("last_used", "")[:10]
+        print(f"{name:<30} {count:>6} {last:<12}")
+    print("")
+
+# Commands section
+commands = data.get("commands", {})
+if commands:
+    print("## Commands")
+    print(f"{'Name':<30} {'Uses':>6} {'Last Used':<12}")
+    print("-" * 52)
+    sorted_commands = sorted(commands.items(), key=lambda x: x[1].get("count", 0), reverse=True)
+    for name, info in sorted_commands:
+        count = info.get("count", 0)
+        last = info.get("last_used", "")[:10]
+        print(f"{name:<30} {count:>6} {last:<12}")
+    print("")
+
+# Summary
+print("## Summary")
+daily = data.get("daily", {})
+total_agents = sum(d.get("agents", 0) for d in daily.values())
+total_skills = sum(d.get("skills", 0) for d in daily.values())
+total_commands = sum(d.get("commands", 0) for d in daily.values())
+print(f"Total agent invocations:   {total_agents}")
+print(f"Total skill invocations:   {total_skills}")
+print(f"Total command invocations: {total_commands}")
+print(f"Tracking since: {data.get('first_seen', 'unknown')[:10]}")
+
+# Unused features
+all_agents_dir = Path.home() / ".claude" / "agents"
+all_skills_dir = Path.home() / ".claude" / "skills"
+all_commands_dir = Path.home() / ".claude" / "commands"
+
+if all_agents_dir.exists():
+    # Exclude archive directory
+    all_agents = {p.stem for p in all_agents_dir.glob("*.md") if p.parent.name != "archive"}
+    used_agents = set(agents.keys())
+    unused_agents = all_agents - used_agents
+    if unused_agents:
+        print(f"\n## Unused Agents ({len(unused_agents)})")
+        for name in sorted(unused_agents):
+            print(f"  - {name}")
+
+if all_skills_dir.exists():
+    # Skills are directories containing SKILL.md, exclude archive
+    all_skills = {p.parent.name for p in all_skills_dir.glob("*/SKILL.md") if p.parent.name != "archive"}
+    used_skills = set(skills.keys())
+    unused_skills = all_skills - used_skills
+    if unused_skills:
+        print(f"\n## Unused Skills ({len(unused_skills)})")
+        for name in sorted(unused_skills):
+            print(f"  - {name}")
+
+if all_commands_dir.exists():
+    # Exclude archive directory
+    all_commands = {p.stem for p in all_commands_dir.glob("*.md") if p.parent.name != "archive"}
+    used_commands = set(commands.keys())
+    unused_commands = all_commands - used_commands
+    if unused_commands:
+        print(f"\n## Unused Commands ({len(unused_commands)})")
+        for name in sorted(unused_commands):
+            print(f"  - {name}")
+
+PYTHON
+
 echo ""
-
-echo "--- Commands (by usage count) ---"
-jq -r '.commands | to_entries | sort_by(-.value.count) | .[] | "\(.value.count)\t\(.key)\t(last: \(.value.last_used // "never" | split("T")[0]))"' "$USAGE_FILE" 2>/dev/null || echo "No command data"
-echo ""
-
-echo "--- Daily Totals (last 7 days) ---"
-jq -r '.daily | to_entries | sort_by(.key) | reverse | .[0:7] | .[] | "\(.key)\tagents:\(.value.agents // 0)\tskills:\(.value.skills // 0)\tcmds:\(.value.commands // 0)"' "$USAGE_FILE" 2>/dev/null || echo "No daily data"
-echo ""
-
-echo "--- Never Used ---"
-echo "Agents defined but never used:"
-comm -23 <(ls -1 ~/.claude/agents/*.md 2>/dev/null | xargs -I{} basename {} .md | sort) \
-         <(jq -r '.agents | keys[]' "$USAGE_FILE" 2>/dev/null | sort) 2>/dev/null | head -10 || echo "  (tracking not started)"
-
-echo ""
-echo "Skills defined but never used:"
-comm -23 <(ls -1d ~/.claude/skills/*/ 2>/dev/null | xargs -I{} basename {} | sort) \
-         <(jq -r '.skills | keys[]' "$USAGE_FILE" 2>/dev/null | sort) 2>/dev/null | head -10 || echo "  (tracking not started)"
-
-echo ""
-echo "Commands defined but never used:"
-comm -23 <(ls -1 ~/.claude/commands/*.md 2>/dev/null | xargs -I{} basename {} .md | sort) \
-         <(jq -r '.commands | keys[]' "$USAGE_FILE" 2>/dev/null | sort) 2>/dev/null | head -10 || echo "  (tracking not started)"
-
-echo ""
-echo "--- Cache Statistics ---"
-CACHE_FILE="$HOME/.claude/data/exploration-cache.json"
-if [[ -f "$CACHE_FILE" ]] && command -v jq &>/dev/null; then
-    CACHE_SIZE=$(jq 'length' "$CACHE_FILE" 2>/dev/null || echo 0)
-    CACHE_BYTES=$(wc -c < "$CACHE_FILE" 2>/dev/null || echo 0)
-    echo "Exploration cache entries: $CACHE_SIZE"
-    echo "Cache file size: $((CACHE_BYTES / 1024))KB"
-
-    # Show oldest and newest entries if cache has data
-    if [[ "$CACHE_SIZE" -gt 0 ]]; then
-        OLDEST=$(jq -r 'to_entries | sort_by(.value.timestamp) | .[0].value.timestamp // "unknown"' "$CACHE_FILE" 2>/dev/null | cut -d'T' -f1)
-        NEWEST=$(jq -r 'to_entries | sort_by(.value.timestamp) | .[-1].value.timestamp // "unknown"' "$CACHE_FILE" 2>/dev/null | cut -d'T' -f1)
-        echo "Date range: $OLDEST to $NEWEST"
-    fi
-else
-    echo "No exploration cache data"
-fi
-
-echo ""
-echo "--- Token Usage ---"
-TOKEN_FILE="$HOME/.claude/data/token-usage.json"
-if [[ -f "$TOKEN_FILE" ]] && command -v jq &>/dev/null; then
-    TODAY=$(date +%Y-%m-%d)
-    TODAY_TOKENS=$(jq -r ".daily.\"$TODAY\".total // 0" "$TOKEN_FILE" 2>/dev/null)
-    TOTAL_TOKENS=$(jq -r '.total // 0' "$TOKEN_FILE" 2>/dev/null)
-    echo "Today's tokens: $TODAY_TOKENS"
-    echo "All-time tokens: $TOTAL_TOKENS"
-else
-    echo "No token usage data"
-fi
-
-echo ""
-echo "--- Session Info ---"
-SESSIONS=$(find "$HOME/.claude/projects" -name "*.jsonl" -mtime -7 2>/dev/null | wc -l)
-echo "Sessions (last 7 days): $SESSIONS"
-
-BACKUPS=$(ls -1 "$HOME/.claude/data/transcript-backups"/*.jsonl 2>/dev/null | wc -l)
-echo "Transcript backups: $BACKUPS"
+echo "Data file: $USAGE_FILE"

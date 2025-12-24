@@ -5,6 +5,7 @@ settings.local.json
 # Session and runtime data
 history.jsonl
 data/
+image-cache/
 debug/
 file-history/
 session-env/

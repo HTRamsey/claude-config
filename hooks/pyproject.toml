@@ -1,0 +1,31 @@
+[project]
+name = "claude-hooks"
+version = "1.0.0"
+description = "Python dependencies for Claude Code hooks"
+requires-python = ">=3.10"
+
+dependencies = [
+    "tiktoken>=0.5.0",
+    "rapidfuzz>=3.0.0",
+]
+
+[project.optional-dependencies]
+# AI/LLM integrations
+ai = [
+    # "openai>=1.0.0",
+    # "anthropic>=0.18.0",
+]
+# Code analysis
+analysis = [
+    # "tree-sitter>=0.20.0",
+    # "pygments>=2.15.0",
+]
+# Development/testing
+dev = [
+    "pytest>=7.0.0",
+]
+
+[tool.setuptools]
+# Not a package - just dependency metadata
+py-modules = []
+packages = []

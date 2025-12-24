@@ -171,18 +171,27 @@ section "Python Environment"
 if [[ -d "$CLAUDE_DIR/venv" ]]; then
     pass "Python venv exists"
 
-    # Check required packages
-    if [[ -f "$CLAUDE_DIR/requirements.txt" ]]; then
-        while IFS= read -r pkg || [[ -n "$pkg" ]]; do
-            pkg_name=$(echo "$pkg" | sed 's/[>=<].*//' | xargs)
-            [[ -z "$pkg_name" || "$pkg_name" == "#"* ]] && continue
-
+    # Check required packages from pyproject.toml
+    if [[ -f "$CLAUDE_DIR/hooks/pyproject.toml" ]]; then
+        # Extract dependencies from pyproject.toml using Python for reliable parsing
+        deps=$("$CLAUDE_DIR/venv/bin/python3" -c "
+import tomllib
+from pathlib import Path
+with open(Path.home() / '.claude/hooks/pyproject.toml', 'rb') as f:
+    data = tomllib.load(f)
+for dep in data.get('project', {}).get('dependencies', []):
+    # Extract package name (before any version specifier)
+    name = dep.split('>=')[0].split('<=')[0].split('==')[0].split('<')[0].split('>')[0].strip()
+    print(name)
+" 2>/dev/null)
+        for pkg_name in $deps; do
+            [[ -z "$pkg_name" ]] && continue
             if "$CLAUDE_DIR/venv/bin/pip" show "$pkg_name" >/dev/null 2>&1; then
                 pass "Package installed: $pkg_name"
             else
                 warn "Package missing: $pkg_name (run venv-setup.sh)"
             fi
-        done < "$CLAUDE_DIR/requirements.txt"
+        done
     fi
 else
     warn "Python venv not found (run venv-setup.sh)"

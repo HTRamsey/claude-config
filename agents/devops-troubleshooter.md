@@ -1,6 +1,6 @@
 ---
 name: devops-troubleshooter
-description: "Use for CI/CD failures, build errors, deployment issues, infrastructure debugging, and observability setup (metrics, logging, tracing, dashboards, alerts)."
+description: "Use for CI/CD failures, build errors, deployment issues, infrastructure debugging, incident response, and observability setup (metrics, logging, tracing, dashboards, alerts)."
 tools: Read, Grep, Glob, Bash, WebSearch
 model: sonnet
 ---
@@ -340,6 +340,51 @@ alerts:
   - burn_rate: 6     # 5% budget in 6h
     severity: warning
     window: 6h
+```
+
+## Incident Response
+
+### Severity Levels
+| Level | Impact | Response |
+|-------|--------|----------|
+| P1/Critical | Service down, data loss | Immediate, all hands |
+| P2/High | Major feature broken | < 1 hour |
+| P3/Medium | Degraded performance | < 4 hours |
+| P4/Low | Minor issue | Next business day |
+
+### Response Flow
+1. **Triage** (5 min): What's broken? Who's affected? When did it start?
+2. **Mitigate**: Stop the bleeding (rollback, scale, restart)
+3. **Investigate**: Find root cause
+4. **Resolve**: Fix and verify
+
+### Communication Template
+```
+[INCIDENT] {Service} - {Brief description}
+Impact: {Who/what affected}
+Status: Investigating | Mitigating | Resolved
+```
+
+### Post-Mortem Template
+```markdown
+## Incident: {Title}
+
+**Duration**: {Start} - {End}
+**Impact**: {Users affected}
+**Severity**: P{1-4}
+
+### Timeline
+| Time | Event |
+
+### Root Cause
+{Technical explanation}
+
+### What Went Well / Wrong
+- Well: {positive}
+- Wrong: {issue}
+
+### Action Items
+| Action | Owner | Due |
 ```
 
 ## Root Cause Analysis

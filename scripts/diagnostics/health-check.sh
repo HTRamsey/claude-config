@@ -3,7 +3,7 @@
 # Usage: health-check.sh [--cleanup]
 #
 # Options:
-#   --cleanup    Rotate old data files (debug/, file-history/, transcript-backups/, logs)
+#   --cleanup    Rotate old data files (debug/, file-history/, transcript-backups/, backups/, logs)
 
 SCRIPT_VERSION="1.2.0"
 
@@ -34,22 +34,16 @@ do_cleanup() {
         echo "  file-history/: ✓ clean"
     fi
 
-    # Rotate transcript-backups > 7 days or if > 50MB total
+    # Rotate transcript-backups: always keep only 10 most recent files
     if [[ -d ~/.claude/data/transcript-backups ]]; then
-        old_transcripts=$(find ~/.claude/data/transcript-backups -type f -mtime +7 2>/dev/null | wc -l)
-        if [[ $old_transcripts -gt 0 ]]; then
-            find ~/.claude/data/transcript-backups -type f -mtime +7 -delete 2>/dev/null
-            echo "  transcript-backups/: deleted $old_transcripts files older than 7 days"
+        file_count=$(find ~/.claude/data/transcript-backups -type f -name "*.jsonl" 2>/dev/null | wc -l)
+        if [[ $file_count -gt 10 ]]; then
+            total_size=$(du -sh ~/.claude/data/transcript-backups 2>/dev/null | cut -f1 || echo "?")
+            deleted=$((file_count - 10))
+            ls -1t ~/.claude/data/transcript-backups/*.jsonl 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null
+            echo "  transcript-backups/: trimmed to 10 files (deleted $deleted, was $total_size)"
         else
-            # Check total size
-            total_size=$(du -sb ~/.claude/data/transcript-backups 2>/dev/null | cut -f1 || echo 0)
-            if [[ $total_size -gt 52428800 ]]; then
-                # Keep only 10 most recent files
-                ls -1t ~/.claude/data/transcript-backups/*.jsonl 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null
-                echo "  transcript-backups/: trimmed to 10 most recent (was $(numfmt --to=iec $total_size 2>/dev/null || echo "${total_size}B"))"
-            else
-                echo "  transcript-backups/: ✓ clean"
-            fi
+            echo "  transcript-backups/: ✓ clean ($file_count files)"
         fi
     fi
 
@@ -63,6 +57,17 @@ do_cleanup() {
             echo "  hook-events.jsonl: rotated (was $(numfmt --to=iec $size 2>/dev/null || echo "${size}B"))"
         else
             echo "  hook-events.jsonl: ✓ under 10MB"
+        fi
+    fi
+
+    # Rotate config backups > 30 days
+    if [[ -d ~/.claude/backups ]]; then
+        old_backups=$(find ~/.claude/backups -type f -mtime +30 2>/dev/null | wc -l)
+        if [[ $old_backups -gt 0 ]]; then
+            find ~/.claude/backups -type f -mtime +30 -delete 2>/dev/null
+            echo "  backups/: deleted $old_backups files older than 30 days"
+        else
+            echo "  backups/: ✓ clean"
         fi
     fi
 

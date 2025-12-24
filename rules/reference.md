@@ -11,7 +11,7 @@ Skills, agents, and commands quick reference.
 | Command (`~/.claude/commands/*.md`) | `command-creator` skill |
 | Skill (`~/.claude/skills/*/SKILL.md`) | `skill-creator` skill |
 
-## Slash Commands (14)
+## Slash Commands
 
 | Task | Command |
 |------|---------|
@@ -33,7 +33,7 @@ Skills, agents, and commands quick reference.
 **Task Queue**: `/queue add "task" --agent TYPE` | `/queue daemon start|stop`
 **Orchestration**: `/flow <workflow> "objective"` (feature, security-review, refactor, quick-review, docs)
 
-## Skills (16)
+## Skills
 
 ### Core Workflows
 | Trigger | Skill |
@@ -71,7 +71,7 @@ Skills, agents, and commands quick reference.
 | Creating commands | `command-creator` |
 | Creating skills | `skill-creator` |
 
-## Agents (24 custom + 3 built-in)
+## Agents
 
 **Invocation methods:**
 - `Task(subagent_type="agent-name", prompt="...")` - programmatic
@@ -123,8 +123,7 @@ Skills, agents, and commands quick reference.
 ### Operations
 | Trigger | Agent |
 |---------|-------|
-| CI/CD, builds, deployment, observability | `devops-troubleshooter` |
-| Production incidents, outage triage | `incident-responder` |
+| CI/CD, builds, deployment, incidents, observability | `devops-troubleshooter` |
 
 ### Specialized
 | Trigger | Agent |

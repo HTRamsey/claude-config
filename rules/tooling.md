@@ -105,7 +105,7 @@ Never read (waste tokens):
 - **Trigger words**: Prefix with "ultrathink:" for complex architecture
 - **Use for**: Architectural decisions, challenging bugs, multi-step planning
 
-## Hooks (27 + 2 dispatchers)
+## Hooks
 
 ### PreToolUse (via pre_tool_dispatcher.py)
 - File protection, Credential scanner (at commit), TDD Guard
@@ -120,6 +120,55 @@ Never read (waste tokens):
 - Context monitor (40K/80K warning), Session persistence, Uncommitted reminder
 - Skill suggester, Suggest subagent, Smart permissions
 - Precompact save, Research cache, Subagent complete
+
+## MCP Servers
+
+Model Context Protocol servers extend Claude's capabilities with external integrations.
+
+### Configuration
+
+MCP servers are configured in `settings.json` under `allowedMcpServers`:
+
+```json
+"allowedMcpServers": [
+  {"serverName": "memory"},
+  {"serverName": "github"}
+]
+```
+
+### Recommended Servers
+
+| Server | Purpose | Use When |
+|--------|---------|----------|
+| **Brave Search** | Web search without WebFetch | Research, documentation lookup |
+| **GitHub** | Native repo operations | PR reviews, issue management |
+| **Puppeteer** | Browser automation | Testing, scraping, screenshots |
+| **Memory** | Persistent knowledge graph | Cross-session context |
+| **Filesystem** | File operations | Sandboxed file access |
+
+### Installation
+
+```bash
+# Example: Install Brave Search MCP
+claude mcp add brave-search
+
+# List configured servers
+claude mcp list
+
+# Remove a server
+claude mcp remove <server-name>
+```
+
+### Best Practices
+
+- **Prefer MCP over WebFetch** when available (native integration, better reliability)
+- **Limit scope** - Only enable servers you actively use
+- **Security** - Review server permissions before enabling
+- **Timeout config** - Set `MCP_TIMEOUT` and `MCP_TOOL_TIMEOUT` in settings.json env
+
+### Current Status
+
+Run `claude mcp list` or `~/.claude/scripts/diagnostics/health-check.sh` to see configured servers.
 
 ## Plugins
 
