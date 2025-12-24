@@ -219,6 +219,47 @@ def generate_memory_suggestions(info: dict) -> dict:
 
     return suggestions
 
+def save_session_metadata(session_id: str, info: dict, transcript_path: str):
+    """Save session metadata for better resumption."""
+    if not session_id:
+        return
+
+    session_file = Path.home() / ".claude" / "data" / "session-history.json"
+    history = {}
+
+    try:
+        if session_file.exists():
+            with open(session_file) as f:
+                history = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        history = {}
+
+    # Store session info (keep last 50 sessions)
+    history[session_id] = {
+        "project_root": info.get("project_root"),
+        "technologies": info.get("technologies", []),
+        "files_modified_count": len(info.get("files_modified", [])),
+        "last_accessed": datetime.now().isoformat(),
+        "transcript_path": transcript_path
+    }
+
+    # Prune to 50 most recent
+    if len(history) > 50:
+        sorted_sessions = sorted(
+            history.items(),
+            key=lambda x: x[1].get("last_accessed", ""),
+            reverse=True
+        )
+        history = dict(sorted_sessions[:50])
+
+    try:
+        session_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(session_file, "w") as f:
+            json.dump(history, f, indent=2)
+    except IOError:
+        pass
+
+
 @graceful_main("session_persistence")
 def main():
     try:
@@ -233,9 +274,13 @@ def main():
 
     transcript_path = ctx.get("transcript_path", "")
     stop_reason = ctx.get("stop_hook_reason", "unknown")
+    session_id = ctx.get("session_id", "")
 
     # Extract information from transcript
     info = extract_project_info(transcript_path)
+
+    # Save session metadata for better resumption
+    save_session_metadata(session_id, info, transcript_path)
 
     # Skip if minimal activity
     total_tool_uses = sum(info["tools_used"].values())

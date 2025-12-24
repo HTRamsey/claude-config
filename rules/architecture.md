@@ -47,7 +47,7 @@ paths: src/api/**/*.ts
 
 Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 
-## Hooks (27 + 2 dispatchers) - Event Triggers
+## Hooks (28 + 2 dispatchers) - Event Triggers
 
 **Shared Utilities**: `hook_utils.py` provides graceful degradation, JSON logging, session state.
 **Dispatchers (ACTIVE)**: `pre_tool_dispatcher.py` and `post_tool_dispatcher.py` consolidate all PreToolUse/PostToolUse hooks into single processes. ~200ms latency savings per tool call.
@@ -90,7 +90,8 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 | `smart_permissions` | PermissionRequest | Context-aware auto-approval |
 | `precompact_save` | PreCompact | Save state before compaction |
 | `research_cache` | PreToolUse/PostToolUse | Cache web research results |
-| `subagent_complete` | SubagentStop | Handle subagent completion |
+| `subagent_start` | SubagentStart | Track subagent spawn time |
+| `subagent_complete` | SubagentStop | Handle subagent completion, calculate duration |
 
 ## Agents (24 custom + 3 built-in) - Specialized Subagents
 
@@ -212,6 +213,7 @@ Dependencies: `requirements.txt` (currently: tiktoken, rapidfuzz)
 Run `~/.claude/scripts/diagnostics/health-check.sh --cleanup` to:
 - Delete debug files older than 7 days
 - Delete file-history older than 30 days
+- Delete transcript-backups older than 7 days (or trim to 10 if > 50MB)
 - Rotate hook-events.jsonl if > 10MB
 - Clean old temp files
 
@@ -227,3 +229,4 @@ Run `~/.claude/scripts/diagnostics/health-check.sh --cleanup` to:
 | `data/exploration-cache.json` | Cached codebase exploration |
 | `data/usage-stats.json` | Agent/skill/command usage tracking |
 | `data/hook-events.jsonl` | Hook execution log |
+| `data/session-history.json` | Session metadata for resumption |

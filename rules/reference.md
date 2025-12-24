@@ -73,6 +73,10 @@ Skills, agents, and commands quick reference.
 
 ## Agents (24 custom + 3 built-in)
 
+**Invocation methods:**
+- `Task(subagent_type="agent-name", prompt="...")` - programmatic
+- `@agent-name` in prompt - inline mention (Tab to accept suggestion)
+
 ### Built-in (no file needed)
 | Trigger | Agent |
 |---------|-------|

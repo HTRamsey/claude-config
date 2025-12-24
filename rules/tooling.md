@@ -92,6 +92,7 @@ Never read (waste tokens):
 | Resume by name | `claude --resume auth-refactor` |
 | Custom session ID | `--session-id my-task --resume` |
 | Fork session | `/rewind` (creates grouped fork) |
+| Session history | Stored in `data/session-history.json` |
 
 ## Compaction (/compact)
 

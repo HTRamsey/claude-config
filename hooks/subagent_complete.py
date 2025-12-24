@@ -46,17 +46,35 @@ def main():
     subagent_stats = state.get("subagent_stats", {})
 
     if subagent_type not in subagent_stats:
-        subagent_stats[subagent_type] = {"count": 0, "last_run": None}
+        subagent_stats[subagent_type] = {"count": 0, "last_run": None, "total_duration_s": 0}
 
     subagent_stats[subagent_type]["count"] += 1
     subagent_stats[subagent_type]["last_run"] = datetime.now().isoformat()
 
-    update_session_state({"subagent_stats": subagent_stats})
+    # Calculate duration if we have start time from SubagentStart hook
+    duration_s = None
+    active_subagents = state.get("active_subagents", {})
+    if subagent_id in active_subagents:
+        try:
+            started_at = datetime.fromisoformat(active_subagents[subagent_id]["started_at"])
+            duration_s = (datetime.now() - started_at).total_seconds()
+            subagent_stats[subagent_type]["total_duration_s"] = \
+                subagent_stats[subagent_type].get("total_duration_s", 0) + duration_s
+        except (ValueError, KeyError):
+            pass
+        # Clean up active subagent entry
+        del active_subagents[subagent_id]
+
+    update_session_state({
+        "subagent_stats": subagent_stats,
+        "active_subagents": active_subagents
+    })
 
     log_event("subagent_complete", "success", {
         "subagent_type": subagent_type,
         "subagent_id": subagent_id,
         "stop_reason": stop_reason,
+        "duration_s": duration_s,
         "total_runs": subagent_stats[subagent_type]["count"]
     })
 

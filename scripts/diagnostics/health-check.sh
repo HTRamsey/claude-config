@@ -3,9 +3,9 @@
 # Usage: health-check.sh [--cleanup]
 #
 # Options:
-#   --cleanup    Rotate old data files (debug/, file-history/, logs)
+#   --cleanup    Rotate old data files (debug/, file-history/, transcript-backups/, logs)
 
-SCRIPT_VERSION="1.1.0"
+SCRIPT_VERSION="1.2.0"
 
 set -euo pipefail
 
@@ -32,6 +32,25 @@ do_cleanup() {
         echo "  file-history/: deleted $old_history files older than 30 days"
     else
         echo "  file-history/: ✓ clean"
+    fi
+
+    # Rotate transcript-backups > 7 days or if > 50MB total
+    if [[ -d ~/.claude/data/transcript-backups ]]; then
+        old_transcripts=$(find ~/.claude/data/transcript-backups -type f -mtime +7 2>/dev/null | wc -l)
+        if [[ $old_transcripts -gt 0 ]]; then
+            find ~/.claude/data/transcript-backups -type f -mtime +7 -delete 2>/dev/null
+            echo "  transcript-backups/: deleted $old_transcripts files older than 7 days"
+        else
+            # Check total size
+            total_size=$(du -sb ~/.claude/data/transcript-backups 2>/dev/null | cut -f1 || echo 0)
+            if [[ $total_size -gt 52428800 ]]; then
+                # Keep only 10 most recent files
+                ls -1t ~/.claude/data/transcript-backups/*.jsonl 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null
+                echo "  transcript-backups/: trimmed to 10 most recent (was $(numfmt --to=iec $total_size 2>/dev/null || echo "${total_size}B"))"
+            else
+                echo "  transcript-backups/: ✓ clean"
+            fi
+        fi
     fi
 
     # Rotate hook-events.jsonl if > 10MB

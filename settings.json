@@ -297,6 +297,17 @@
         ]
       }
     ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/subagent_start.py",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
     "SubagentStop": [
       {
         "hooks": [
