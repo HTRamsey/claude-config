@@ -6,7 +6,7 @@ argument-hint: <feature-description>
 
 # /implement
 
-> **Note**: For complex multi-stage features, consider `/pipeline` instead.
+> **Note**: For complex multi-stage features, consider using the `orchestrator` agent.
 
 ## Feature
 $ARGUMENTS

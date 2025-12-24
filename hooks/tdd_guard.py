@@ -5,7 +5,6 @@ PreToolUse hook for Write/Edit tools.
 Encourages test-driven development by reminding about tests.
 """
 import json
-import os
 import sys
 from pathlib import Path
 

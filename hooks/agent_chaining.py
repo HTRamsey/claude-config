@@ -48,8 +48,8 @@ CHAIN_RULES = [
             r"(?i)(performance|slow).*(critical|severe|significant)",
             r"(?i)🟡.*performance",
         ],
-        "agent": "perf-reviewer",
-        "reason": "Performance issue detected - deep performance analysis recommended",
+        "agent": "code-reviewer",
+        "reason": "Performance issue detected - code review with performance focus recommended",
     },
     # Accessibility escalation (UI code)
     {
@@ -58,8 +58,8 @@ CHAIN_RULES = [
             r"(?i)(screen reader|keyboard).*(navigation|focus|trap)",
             r"(?i)\.(jsx|tsx|vue|svelte|qml):\d+",  # UI file extensions
         ],
-        "agent": "accessibility-reviewer",
-        "reason": "UI code or accessibility issue - accessibility review recommended",
+        "agent": "code-reviewer",
+        "reason": "UI code or accessibility issue - code review with accessibility focus recommended",
     },
     # Test generation
     {
@@ -76,17 +76,17 @@ CHAIN_RULES = [
             r"(?i)(unused|dead|orphan).*(function|class|import|variable|code)",
             r"(?i)(deprecated|obsolete).*(still|found|exists)",
         ],
-        "agent": "dead-code-finder",
-        "reason": "Potential dead code - cleanup analysis recommended",
+        "agent": "code-reviewer",
+        "reason": "Potential dead code - code review for cleanup recommended",
     },
 ]
 
 # Agents that should trigger chaining (reviewers/analyzers)
 CHAINABLE_AGENTS = {
     "code-reviewer",
-    "quick-explorer",
     "Explore",
     "error-explainer",
+    "quick-lookup",
 }
 
 

@@ -1,6 +1,7 @@
 ---
 description: Save current task state for later continuation
 allowed-tools: Write, Read, Bash(date:*)
+argument-hint: [task-name]
 ---
 
 # /checkpoint

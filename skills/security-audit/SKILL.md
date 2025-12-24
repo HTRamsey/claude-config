@@ -150,9 +150,9 @@ rg "http://"                                    # non-HTTPS
 | Situation | Escalate To |
 |-----------|-------------|
 | Critical vulnerability found | Immediate user notification, suggest fix |
-| Threat model needed for complex feature | `threat-modeling-expert` agent |
+| Threat model needed for complex feature | `security-reviewer` agent for STRIDE analysis |
 | Crypto/auth implementation | Flag for expert human review |
-| Dependency with known CVE | `dependency-auditor` agent |
+| Dependency with known CVE | `migration-planner` agent for remediation |
 | Production incident suspected | `incident-responder` agent |
 
 ## Failure Behavior
@@ -164,12 +164,10 @@ rg "http://"                                    # non-HTTPS
 
 ## Integration
 
-- **security-reviewer** (agent) - Automated security review
-- **giving-code-review** - Security is one aspect of reviews
-- **error-handling-patterns** - Secure error handling
-- **root-cause-tracing** - Trace where bad data originates
-- **systematic-debugging** - Parent debugging workflow when security bugs found
-- **test-driven-development** - Verify each validation layer with tests
+- **security-reviewer** agent - Automated security review
+- **code-reviewer** agent - Security is one aspect of reviews
+- **systematic-debugging** skill - Debugging workflow when security bugs found
+- **test-driven-development** skill - Verify each validation layer with tests
 
 ## Key Insight
 

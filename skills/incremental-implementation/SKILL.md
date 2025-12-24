@@ -7,6 +7,8 @@ description: Use when building multi-day features or avoiding long-lived branche
 
 **Persona:** Surgeon who makes small, precise incisions - each cut is complete and leaves the patient stable, never open everything at once.
 
+**Announce at start:** "I'm using the incremental-implementation skill to break this into deployable increments."
+
 **Core principle:** Every commit to main should be deployable. No "work in progress" merges.
 
 ## When to Use
@@ -113,3 +115,10 @@ Recommendation: [path forward]
 - "WIP" commits on main
 - "Part 1 of 3" where parts aren't independent
 - Features that "only work when everything is done"
+
+## Integration
+
+- **using-git-worktrees** skill - Isolate each increment in worktree
+- **orchestrator** agent - Help plan increment ordering
+- **test-driven-development** skill - Each increment needs tests
+- **verification-before-completion** skill - Verify before merging each increment

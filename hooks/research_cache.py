@@ -14,13 +14,17 @@ from pathlib import Path
 # Import shared utilities for logging
 sys.path.insert(0, str(Path(__file__).parent))
 try:
-    from hook_utils import log_event, DATA_DIR
+    from hook_utils import log_event, DATA_DIR, graceful_main
     HAS_UTILS = True
 except ImportError:
     HAS_UTILS = False
     DATA_DIR = Path.home() / ".claude" / "data"
     def log_event(*args, **kwargs):
         pass
+    def graceful_main(name):
+        def decorator(func):
+            return func
+        return decorator
 
 CACHE_FILE = DATA_DIR / "research-cache.json"
 CACHE_TTL_HOURS = 24
@@ -73,6 +77,7 @@ def prune_cache(cache: dict):
     cache["entries"] = fresh
 
 
+@graceful_main("research_cache")
 def main():
     try:
         ctx = json.load(sys.stdin)
@@ -127,7 +132,7 @@ def main():
             result = {
                 "hookSpecificOutput": {
                     "hookEventName": "PreToolUse",
-                    "permissionDecision": "approve",
+                    "permissionDecision": "allow",
                     "permissionDecisionReason": f"[CACHE HIT - {CACHE_TTL_HOURS}h fresh] {url}\n\nCached content:\n{cached_summary}\n\n(Consider skipping fetch if this answers your question)"
                 }
             }

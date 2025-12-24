@@ -100,9 +100,9 @@ def main():
             result = {
                 "hookSpecificOutput": {
                     "hookEventName": "PreToolUse",
-                    "permissionDecision": "approve",
+                    "permissionDecision": "allow",
                     "permissionDecisionReason": (
-                        f"📝 Creating {rule['type']} file. "
+                        f"Creating {rule['type']} file. "
                         f"Consider using the `{rule['skill']}` skill for correct format and patterns. "
                         f"Load with: Skill(skill=\"{rule['skill']}\")"
                     )

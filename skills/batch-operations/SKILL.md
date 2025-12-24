@@ -7,6 +7,8 @@ description: Use when performing 3+ similar operations like file edits, searches
 
 **Persona:** Efficiency obsessive - one operation is fine, three identical operations is a code smell.
 
+**Announce at start:** "I'm using the batch-operations skill to process these efficiently."
+
 ## Should NOT Attempt
 
 - Batch operations that depend on previous results
@@ -115,3 +117,9 @@ Use `Task(batch-editor)` instead of manual batching when:
 - 5+ files need same change
 - Change requires understanding file context
 - Pattern-based replacement might have false positives
+
+## Integration
+
+- **batch-editor** agent - For complex multi-file changes requiring context
+- **code-reviewer** agent - Review batch changes before committing
+- **verification-before-completion** skill - Verify all changes after batch

@@ -1,12 +1,11 @@
 #!/home/jonglaser/.claude/venv/bin/python3
 """
 Pre-Read Summarization Hook - Intercepts large file reads.
-Suggests using file-summarizer agent for files >200 lines before full read.
+Suggests using quick-lookup agent or smart-preview.sh for files >200 lines before full read.
 
 Returns modification to use summarization for large files.
 """
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -106,7 +105,7 @@ def main():
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
                 "permissionDecision": "allow",
-                "permissionDecisionReason": f"[Large File] {filename}: {reason}\n  → Consider: Task(file-summarizer) or smart-preview.sh first\n  → Or add limit parameter to read specific section"
+                "permissionDecisionReason": f"[Large File] {filename}: {reason}\n  → Consider: Task(quick-lookup) or smart-preview.sh first\n  → Or add limit parameter to read specific section"
             }
         }
         print(json.dumps(result))

@@ -3,6 +3,8 @@
 # Returns counts and categorized results instead of full listing
 # Usage: offload-find.sh '<path>' '<pattern>' [max_results]
 
+set -euo pipefail
+
 SEARCH_PATH="${1:-.}"
 PATTERN="${2:-*}"
 MAX_RESULTS="${3:-30}"

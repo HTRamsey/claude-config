@@ -8,7 +8,6 @@ Sends desktop notification if command took > 30 seconds.
 import json
 import subprocess
 import sys
-import os
 from pathlib import Path
 
 # Import shared utilities

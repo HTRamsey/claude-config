@@ -113,7 +113,7 @@ def handle_pre_tool_use(ctx: dict) -> dict | None:
     subagent_type = tool_input.get("subagent_type", "")
     prompt = tool_input.get("prompt", "")
 
-    if subagent_type not in ("Explore", "quick-explorer"):
+    if subagent_type not in ("Explore", "quick-lookup"):
         return None
     if not prompt:
         return None
@@ -128,7 +128,7 @@ def handle_pre_tool_use(ctx: dict) -> dict | None:
         return {
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
-                "permissionDecision": "approve",
+                "permissionDecision": "allow",
                 "permissionDecisionReason": f"[Cache Hit] Similar exploration found ({age_mins}m ago): {summary}"
             }
         }
@@ -143,7 +143,7 @@ def handle_post_tool_use(ctx: dict) -> dict | None:
     subagent_type = tool_input.get("subagent_type", "")
     prompt = tool_input.get("prompt", "")
 
-    if subagent_type not in ("Explore", "quick-explorer"):
+    if subagent_type not in ("Explore", "quick-lookup"):
         return None
     if not prompt:
         return None

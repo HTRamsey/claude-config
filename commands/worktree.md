@@ -1,31 +1,63 @@
 ---
 description: Manage git worktrees for parallel development sessions
+allowed-tools: Bash(git:*)
+argument-hint: [list|add <branch>|remove <branch>]
 ---
 
-Help me manage git worktrees. Based on the argument provided:
+# /worktree
 
-**If no argument or "list":** Show existing worktrees with `git worktree list`
+Manage git worktrees for parallel development sessions.
 
-**If "add <branch>":** Create a new worktree:
+## Arguments
+$ARGUMENTS - One of: `list`, `add <branch>`, or `remove <branch>`
+
+## Workflow
+
+### list (default)
+Show existing worktrees:
+```bash
+git worktree list
+```
+
+### add <branch>
+Create a new worktree:
 1. Check if branch exists locally or remotely
 2. Create worktree in `../$(basename $PWD)-<branch>/`
-3. Report the path so I can open another Claude session there
+3. Report the path for opening another Claude session
 
-**If "remove <branch>":** Remove worktree safely:
-1. Check for uncommitted changes
+```bash
+git worktree add ../myproject-<branch> <branch>
+```
+
+### remove <branch>
+Remove worktree safely:
+1. Check for uncommitted changes - warn if present
 2. Run `git worktree remove <path>`
 3. Optionally delete the branch if requested
 
-**Common workflow:**
-```bash
-# Create worktree for feature branch
-git worktree add ../myproject-feature feature-branch
+## Rules
 
-# Work in parallel (separate terminal)
-cd ../myproject-feature && claude
+- Never remove a worktree with uncommitted changes without warning
+- Always report the full path after creating a worktree
+- Check if branch exists before creating worktree
 
-# When done, remove worktree
-git worktree remove ../myproject-feature
+## Output
+
+```
+Worktree created: /path/to/project-feature
+Branch: feature-branch
+Ready for: cd /path/to/project-feature && claude
 ```
 
-Execute the appropriate git worktree commands based on what I requested.
+## Examples
+
+```
+/worktree list
+→ Show all worktrees
+
+/worktree add feature-auth
+→ Create worktree for feature-auth branch
+
+/worktree remove feature-auth
+→ Remove the feature-auth worktree
+```

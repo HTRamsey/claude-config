@@ -33,10 +33,24 @@ if [[ -z "$HTMLQ" ]]; then
     # Fallback: use Python with beautifulsoup if available
     if python3 -c "import bs4" 2>/dev/null; then
         echo "Falling back to BeautifulSoup..." >&2
+        # Use environment variables to safely pass values to Python (no shell injection)
         if [[ "$input" == "-" ]]; then
-            python3 -c "from bs4 import BeautifulSoup; import sys; soup = BeautifulSoup(sys.stdin.read(), 'html.parser'); [print(e.get_text()) for e in soup.select('$selector')]"
+            SELECTOR="$selector" python3 -c '
+import os, sys
+from bs4 import BeautifulSoup
+soup = BeautifulSoup(sys.stdin.read(), "html.parser")
+for e in soup.select(os.environ["SELECTOR"]):
+    print(e.get_text())
+'
         else
-            python3 -c "from bs4 import BeautifulSoup; soup = BeautifulSoup(open('$input').read(), 'html.parser'); [print(e.get_text()) for e in soup.select('$selector')]"
+            INPUT_FILE="$input" SELECTOR="$selector" python3 -c '
+import os
+from bs4 import BeautifulSoup
+with open(os.environ["INPUT_FILE"]) as f:
+    soup = BeautifulSoup(f.read(), "html.parser")
+for e in soup.select(os.environ["SELECTOR"]):
+    print(e.get_text())
+'
         fi
         exit $?
     fi

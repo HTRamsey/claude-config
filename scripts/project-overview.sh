@@ -19,7 +19,7 @@ echo "## Project Type:"
 [[ -f "$dir/pyproject.toml" || -f "$dir/setup.py" ]] && echo "  - Python"
 [[ -f "$dir/pom.xml" ]] && echo "  - Java/Maven (pom.xml)"
 [[ -f "$dir/build.gradle" ]] && echo "  - Gradle (build.gradle)"
-[[ -f "$dir/*.pro" ]] 2>/dev/null && echo "  - Qt (*.pro)"
+compgen -G "$dir/*.pro" >/dev/null 2>&1 && echo "  - Qt (*.pro)"
 echo ""
 
 # Directory structure (depth 2)

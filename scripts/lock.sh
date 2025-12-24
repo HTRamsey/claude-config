@@ -94,6 +94,7 @@ check_lock() {
 
     # Check if stale
     local created=$(grep "^created=" "$file" 2>/dev/null | cut -d= -f2)
+    created=${created:-0}
     local now=$(date +%s)
     local age=$((now - created))
 
@@ -121,11 +122,23 @@ acquire_lock() {
     local waited=0
 
     while true; do
-        # Try to create lock atomically
-        if ( set -o noclobber; echo "$$" > "$file.tmp" ) 2>/dev/null; then
-            mv "$file.tmp" "$file"
-            create_lock "$name" "$@"
-            return 0
+        # Try to create lock atomically - write full content to tmp, then move
+        local tmp_file="$file.tmp.$$"
+        if ( set -o noclobber; echo "$$" > "$tmp_file" ) 2>/dev/null; then
+            # Write lock metadata to tmp file
+            cat > "$tmp_file" << LOCKEOF
+pid=$$
+user=$(whoami)
+host=$(hostname)
+command=$*
+created=$(date +%s)
+created_human=$(date)
+LOCKEOF
+            # Atomic move
+            if mv "$tmp_file" "$file" 2>/dev/null; then
+                return 0
+            fi
+            rm -f "$tmp_file"
         fi
 
         # Lock exists - check if valid
@@ -260,8 +273,9 @@ if ! acquire_lock "$LOCK_NAME" "${COMMAND[@]}"; then
     exit 1
 fi
 
-# Ensure lock is released on exit
-trap "release_lock '$LOCK_NAME'" EXIT
+# Ensure lock is released on exit (use variable reference, not interpolation)
+_LOCK_TO_RELEASE="$LOCK_NAME"
+trap 'release_lock "$_LOCK_TO_RELEASE"' EXIT
 
 # Run the command
 echo -e "${GREEN}Lock acquired: $LOCK_NAME${NC}" >&2

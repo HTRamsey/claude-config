@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/jonglaser/.claude/venv/bin/python3
 """
 Usage Tracker Hook - Tracks skill, agent, and command usage.
 
@@ -11,6 +11,16 @@ import json
 import sys
 from datetime import datetime, date
 from pathlib import Path
+
+# Import shared utilities
+sys.path.insert(0, str(Path(__file__).parent))
+try:
+    from hook_utils import graceful_main
+except ImportError:
+    def graceful_main(name):
+        def decorator(func):
+            return func
+        return decorator
 
 DATA_DIR = Path.home() / ".claude" / "data"
 USAGE_FILE = DATA_DIR / "usage-stats.json"
@@ -60,6 +70,8 @@ def increment_usage(data, category, name):
         data["daily"][today] = {"agents": 0, "skills": 0, "commands": 0}
     data["daily"][today][category] = data["daily"][today].get(category, 0) + 1
 
+
+@graceful_main("usage_tracker")
 def main():
     try:
         ctx = json.load(sys.stdin)

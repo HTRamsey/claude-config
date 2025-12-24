@@ -7,6 +7,8 @@ description: Manage Claude's context window efficiently. This skill should be us
 
 **Persona:** Context accountant - every token has a cost, track spending, prevent waste, checkpoint value.
 
+**Announce at start:** "I'm using the context-management skill to optimize context usage."
+
 ## Should NOT Attempt
 
 - Read entire large files into context
@@ -26,7 +28,7 @@ description: Manage Claude's context window efficiently. This skill should be us
 | Context % | Status | Action |
 |-----------|--------|--------|
 | <40% | Green | Normal operation |
-| 40-60% | Yellow | Use Task(Explore) for searches, file-summarizer for large files |
+| 40-60% | Yellow | Use Task(Explore) for searches, smart-preview.sh for large files |
 | 60-80% | Orange | Checkpoint to memory, compress completed work, consider /compact |
 | >80% | Red | **STOP** - Save to memory, run /compact, resume after |
 
@@ -35,7 +37,7 @@ description: Manage Claude's context window efficiently. This skill should be us
 ### 1. Use Subagents for Exploration
 ```
 Task(subagent_type=Explore, prompt="Find authentication implementation")
-Task(subagent_type=quick-explorer, prompt="List all API endpoints")
+Task(subagent_type=quick-lookup, prompt="Where are API endpoints defined?")
 ```
 
 ### 2. Compress Large Outputs
@@ -58,7 +60,7 @@ After reading files, summarize findings rather than quoting large sections.
 
 | Content Type | Budget | Strategy if Exceeded |
 |--------------|--------|---------------------|
-| File reads | 100 lines | smart-preview.sh |
+| File reads | 100 lines | ~/.claude/scripts/smart-preview.sh |
 | Search results | 20 matches | head_limit |
 | Diffs | Summary only | compress-diff.sh |
 | Build/test output | Errors only | compress scripts |
@@ -110,7 +112,6 @@ add_observations: [{
 |---------|---------|
 | `/compact` | Compress conversation context |
 | `/checkpoint` | Save task state to memory |
-| `/context-audit` | Analyze session efficiency |
 
 ## Escalation Triggers
 

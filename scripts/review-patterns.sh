@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Code Review Detection Patterns
 # Reference for code-reviewer agent
 

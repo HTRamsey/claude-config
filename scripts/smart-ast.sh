@@ -65,15 +65,15 @@ EOF
 detect_language() {
     local p="$1"
     if [[ -d "$p" ]]; then
-        # Check most common file in directory
-        if ls "$p"/*.py 2>/dev/null | head -1 | grep -q .; then echo "python"
-        elif ls "$p"/*.ts 2>/dev/null | head -1 | grep -q .; then echo "typescript"
-        elif ls "$p"/*.js 2>/dev/null | head -1 | grep -q .; then echo "javascript"
-        elif ls "$p"/*.rs 2>/dev/null | head -1 | grep -q .; then echo "rust"
-        elif ls "$p"/*.go 2>/dev/null | head -1 | grep -q .; then echo "go"
-        elif ls "$p"/*.cpp 2>/dev/null | head -1 | grep -q .; then echo "cpp"
-        elif ls "$p"/*.java 2>/dev/null | head -1 | grep -q .; then echo "java"
-        elif ls "$p"/*.rb 2>/dev/null | head -1 | grep -q .; then echo "ruby"
+        # Check for files by extension using find (more reliable than ls glob)
+        if find "$p" -maxdepth 1 -name "*.py" -print -quit 2>/dev/null | grep -q .; then echo "python"
+        elif find "$p" -maxdepth 1 -name "*.ts" -print -quit 2>/dev/null | grep -q .; then echo "typescript"
+        elif find "$p" -maxdepth 1 -name "*.js" -print -quit 2>/dev/null | grep -q .; then echo "javascript"
+        elif find "$p" -maxdepth 1 -name "*.rs" -print -quit 2>/dev/null | grep -q .; then echo "rust"
+        elif find "$p" -maxdepth 1 -name "*.go" -print -quit 2>/dev/null | grep -q .; then echo "go"
+        elif find "$p" -maxdepth 1 -name "*.cpp" -print -quit 2>/dev/null | grep -q .; then echo "cpp"
+        elif find "$p" -maxdepth 1 -name "*.java" -print -quit 2>/dev/null | grep -q .; then echo "java"
+        elif find "$p" -maxdepth 1 -name "*.rb" -print -quit 2>/dev/null | grep -q .; then echo "ruby"
         fi
     else
         case "$p" in

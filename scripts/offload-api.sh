@@ -1,31 +1,76 @@
 #!/usr/bin/env bash
 # Offload API calls and compress responses
 # Extracts only essential fields from JSON responses
-# Usage: offload-api.sh '<curl_command>' 'field1,field2'
+# Usage: offload-api.sh <url> [fields] [--method METHOD] [--header HEADER]
+#
+# Safer alternative to passing raw curl commands - parses URL and options directly
 
-CURL_CMD="$1"
-FIELDS="$2"
+set -euo pipefail
 
-if [[ -z "$CURL_CMD" ]]; then
-    echo "Usage: offload-api.sh '<curl_command>' 'field1,field2'"
-    echo "Example: offload-api.sh 'curl -s https://api.example.com/data' 'id,name,status'"
+URL=""
+FIELDS=""
+METHOD="GET"
+HEADERS=()
+
+usage() {
+    cat << 'EOF'
+offload-api.sh - Fetch API and extract fields
+
+Usage:
+  offload-api.sh <url> [fields] [options]
+
+Options:
+  --method, -X METHOD    HTTP method (default: GET)
+  --header, -H HEADER    Add header (can be repeated)
+  --help                 Show this help
+
+Examples:
+  offload-api.sh 'https://api.example.com/data' 'id,name,status'
+  offload-api.sh 'https://api.github.com/repos/owner/repo' 'name,stars' -H 'Accept: application/json'
+
+EOF
+    exit 0
+}
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help) usage ;;
+        -X|--method) METHOD="$2"; shift 2 ;;
+        -H|--header) HEADERS+=("-H" "$2"); shift 2 ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)
+            if [[ -z "$URL" ]]; then
+                URL="$1"
+            elif [[ -z "$FIELDS" ]]; then
+                FIELDS="$1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$URL" ]]; then
+    echo "Error: URL required" >&2
+    usage
+fi
+
+# Validate URL format (basic check)
+if ! [[ "$URL" =~ ^https?:// ]]; then
+    echo "Error: URL must start with http:// or https://" >&2
     exit 1
 fi
 
-# Security: Validate command starts with curl/wget and doesn't contain dangerous patterns
-if ! [[ "$CURL_CMD" =~ ^(curl|wget)[[:space:]] ]]; then
-    echo "Error: Command must start with 'curl' or 'wget'" >&2
-    exit 1
+# Execute curl with parsed arguments (no shell injection possible)
+# Handle empty HEADERS array safely with set -u
+if [[ ${#HEADERS[@]} -gt 0 ]]; then
+    RESPONSE=$(curl -s -X "$METHOD" "${HEADERS[@]}" "$URL" 2>/dev/null)
+else
+    RESPONSE=$(curl -s -X "$METHOD" "$URL" 2>/dev/null)
 fi
-
-# Block command chaining and injection patterns
-if [[ "$CURL_CMD" =~ [\;\|\&\$\`] ]] || [[ "$CURL_CMD" =~ \$\( ]]; then
-    echo "Error: Command contains prohibited characters (;|&\$\`)" >&2
-    exit 1
-fi
-
-# Execute using bash -c instead of eval for slightly better isolation
-RESPONSE=$(bash -c "$CURL_CMD" 2>/dev/null)
 
 if [[ -z "$RESPONSE" ]]; then
     echo "Error: No response from API"

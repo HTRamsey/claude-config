@@ -12,22 +12,20 @@ PROJECT_RULES=".claude/rules"
 # Critical rules that subagents should inherit
 CRITICAL_RULES=(
     "01-style.md"           # Response style, conciseness
-    "02-verification.md"    # Always verify before completion
-    "03-security-coding.md" # Security-first coding
-    "04-tool-optimization.md" # Tool usage patterns
+    "02-security.md"        # Security + verification
+    "03-optimization.md"    # Tool usage patterns
+    "04-skills.md"          # Skill/agent triggers
 )
 
 # All rules (if --all flag)
 ALL_RULES=(
+    "00-quickstart.md"
     "01-style.md"
-    "02-verification.md"
-    "03-security-coding.md"
-    "04-tool-optimization.md"
-    "05-skill-usage.md"
-    "06-scripts.md"
-    "07-modern-tools.md"
-    "08-general.md"
-    "09-context-guidelines.md"
+    "02-security.md"
+    "03-optimization.md"
+    "04-skills.md"
+    "05-context.md"
+    "architecture.md"
 )
 
 # Parse arguments

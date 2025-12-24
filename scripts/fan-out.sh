@@ -47,13 +47,21 @@ if [[ "$PATTERN" == "-" ]]; then
         [[ -n "$line" && -f "$line" ]] && FILES+=("$line")
     done
 else
-    while IFS= read -r -d '' file; do
-        FILES+=("$file")
-    done < <(find . -path "./.git" -prune -o -type f -name "$PATTERN" -print0 2>/dev/null || \
-             fd --type f "$PATTERN" 2>/dev/null | tr '\n' '\0' || \
-             echo -n "")
+    # Try fd first (faster), then find, then glob
+    if command -v fd &>/dev/null; then
+        while IFS= read -r file; do
+            [[ -n "$file" && -f "$file" ]] && FILES+=("$file")
+        done < <(fd --type f "$PATTERN" 2>/dev/null)
+    fi
 
-    # If find/fd didn't work, try glob
+    # If fd didn't find anything, try find with -print0
+    if [[ ${#FILES[@]} -eq 0 ]]; then
+        while IFS= read -r -d '' file; do
+            FILES+=("$file")
+        done < <(find . -path "./.git" -prune -o -type f -name "$PATTERN" -print0 2>/dev/null)
+    fi
+
+    # If find didn't work, try glob
     if [[ ${#FILES[@]} -eq 0 ]]; then
         shopt -s globstar nullglob 2>/dev/null || true
         for f in $PATTERN; do
@@ -143,20 +151,23 @@ File: $file" --max-turns 10 2>&1); then
     export -f process_file
     export PROMPT
 
-    # Use xargs for parallel execution
+    # Use xargs for parallel execution (PROMPT already exported above)
     if command -v parallel &>/dev/null; then
-        parallel -j "$PARALLEL" --bar claude -p "\"$PROMPT\" File: {}" --max-turns 10 :::: "$TASK_FILE"
-    else
-        # Fallback: xargs
-        cat "$TASK_FILE" | xargs -P "$PARALLEL" -I {} bash -c "
-            if claude -p \"$PROMPT
+        parallel -j "$PARALLEL" --bar bash -c 'claude -p "$PROMPT
 
-File: {}\" --max-turns 10 >/dev/null 2>&1; then
-                echo \"✓ {}\"
+File: $1" --max-turns 10' _ {} :::: "$TASK_FILE"
+    else
+        # Fallback: xargs (use environment variable for prompt to avoid injection)
+        export PROMPT
+        xargs -P "$PARALLEL" -I {} bash -c '
+            if claude -p "$PROMPT
+
+File: $1" --max-turns 10 >/dev/null 2>&1; then
+                echo "✓ $1"
             else
-                echo \"✗ {}\" >&2
+                echo "✗ $1" >&2
             fi
-        "
+        ' _ {} < "$TASK_FILE"
     fi
 
     rm "$TASK_FILE"

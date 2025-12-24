@@ -45,19 +45,19 @@ check_file ~/.claude/CLAUDE.md
 echo ""
 
 echo "## 2. Commands"
-check_file ~/.claude/commands/optimize-context.md
-check_file ~/.claude/commands/batch-review.md
 check_file ~/.claude/commands/commit.md
 check_file ~/.claude/commands/review.md
 check_file ~/.claude/commands/test.md
 check_file ~/.claude/commands/refactor.md
 check_file ~/.claude/commands/worktree.md
+check_file ~/.claude/commands/pr.md
+check_file ~/.claude/commands/debug.md
 echo ""
 
-echo "## 3. Monitoring Scripts"
-check_executable ~/.claude/scripts/monitor-tokens.sh
-check_executable ~/.claude/scripts/monitor-response-time.sh
-check_executable ~/.claude/scripts/monitor-context-efficiency.sh
+echo "## 3. Core Scripts"
+check_executable ~/.claude/scripts/compress.sh
+check_executable ~/.claude/scripts/health-check.sh
+check_executable ~/.claude/scripts/usage-report.sh
 echo ""
 
 echo "## 4. Agents"
@@ -65,8 +65,8 @@ check_file ~/.claude/agents/code-reviewer.md
 check_file ~/.claude/agents/git-expert.md
 check_file ~/.claude/agents/batch-editor.md
 check_file ~/.claude/agents/context-optimizer.md
-check_file ~/.claude/agents/file-summarizer.md
-check_file ~/.claude/agents/quick-explorer.md
+check_file ~/.claude/agents/quick-lookup.md
+check_file ~/.claude/agents/Explore.md
 echo ""
 
 echo "## 5. Optimization Scripts"

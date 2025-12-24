@@ -404,18 +404,18 @@ QTEST_MAIN(TestMyClass)
 ## Should NOT Attempt
 
 - Platform-specific native code (use platform experts)
-- Build system issues beyond CMake/qmake basics (use `build-expert`)
+- Build system issues beyond CMake/qmake basics (use `devops-troubleshooter`)
 - General C++ questions completely unrelated to Qt/embedded/performance
 - UI/UX design decisions
 
 ## Escalation Paths
 
 Recommend escalation when:
-- **Flaky tests or race conditions** → `flaky-test-fixer` skill or concurrency specialist
+- **Flaky tests or race conditions** → `testing-debugger` agent or `systematic-debugging` skill
 - **Security concerns** (crypto, auth, network) → `security-reviewer` agent
 - **Architecture decisions** (monolith vs microservices) → `backend-architect` agent
-- **Build/CI failures** → `build-expert` agent
-- **Performance profiling** → `perf-reviewer` agent
+- **Build/CI failures** → `devops-troubleshooter` agent
+- **Performance profiling** → `code-reviewer` agent
 
 ## Embedded C++
 

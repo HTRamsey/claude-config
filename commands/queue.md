@@ -21,7 +21,7 @@ Parse the arguments and execute the appropriate task-queue.sh command.
    ```bash
    ~/.claude/scripts/task-queue.sh add "<prompt>" --agent <type> [--after <id>] [--priority <n>] [--worktree]
    ```
-   - Default agent: Explore
+   - Default agent: general-purpose (built-in)
    - Priority: 1 (highest) to 10 (lowest), default 5
    - --after: Task ID that must complete first
    - --worktree: Run in isolated git worktree
@@ -72,10 +72,10 @@ User: `/queue status`
 
 ### Agent Types
 Use any agent from `~/.claude/agents/`:
-- `security-reviewer`, `perf-reviewer`, `code-reviewer`
+- `security-reviewer`, `code-reviewer`
 - `test-generator`, `doc-generator`
-- `Explore`, `Plan`, `quick-lookup`
-- `batch-editor`, `refactoring-planner`
+- `quick-lookup`, `error-explainer`
+- `batch-editor`, `orchestrator`
 
 ### Output
 - For add: Return the task ID

@@ -38,6 +38,12 @@ cache_file() {
     echo "$CACHE_DIR/$(hash_key "$1")"
 }
 
+# Get file mtime portably (Linux and macOS)
+get_mtime() {
+    local file="$1"
+    stat -c %Y "$file" 2>/dev/null || stat -f %m "$file" 2>/dev/null || echo 0
+}
+
 # Check if cache is valid (exists and not expired)
 cache_valid() {
     local file="$1"
@@ -46,7 +52,7 @@ cache_valid() {
     [[ ! -f "$file" ]] && return 1
 
     local now=$(date +%s)
-    local mtime=$(stat -c %Y "$file" 2>/dev/null || stat -f %m "$file" 2>/dev/null)
+    local mtime=$(get_mtime "$file")
     local age=$((now - mtime))
 
     [[ $age -lt $ttl ]]
@@ -136,7 +142,8 @@ case "${1:-}" in
             exit 1
         fi
         if [[ -d "$CACHE_DIR" ]]; then
-            rm -rf "${CACHE_DIR:?}"/*
+            # Use find for safer deletion than rm -rf with glob
+            find "$CACHE_DIR" -mindepth 1 -delete 2>/dev/null || rm -rf "${CACHE_DIR:?}"/*
             echo "Cleared all cache entries"
         else
             echo "Cache directory does not exist"
@@ -148,7 +155,7 @@ case "${1:-}" in
         for f in "$CACHE_DIR"/*; do
             [[ -f "$f" ]] || continue
             [[ "$(basename "$f")" == ".stats" ]] && continue
-            age=$(( $(date +%s) - $(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null) ))
+            age=$(( $(date +%s) - $(get_mtime "$f") ))
             size=$(wc -c < "$f")
             echo "  $(basename "$f"): ${age}s old, ${size} bytes"
         done | head -20

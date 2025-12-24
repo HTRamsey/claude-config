@@ -73,7 +73,7 @@ gh run list --branch $(git branch --show-current) --status failure --limit 1 --j
 gh run view <run-id> --log-failed
 ```
 
-Use `compress-build.sh` or `compress-tests.sh` to reduce log output if verbose.
+Use `~/.claude/scripts/compress-build.sh` or `~/.claude/scripts/compress-tests.sh` to reduce log output if verbose.
 
 ### Step 4: Diagnose the Failure
 

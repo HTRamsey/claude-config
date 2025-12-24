@@ -36,6 +36,9 @@ if [[ "$STRUCTURAL" == true ]]; then
     echo "# difftastic not found, falling back to delta" >&2
 fi
 
+# Cache difft lookup
+DIFFT=$(find_difft)
+
 # Standard diff mode with delta
 if command -v delta &>/dev/null; then
     git diff "$@" | delta \
@@ -49,9 +52,8 @@ if command -v delta &>/dev/null; then
         --minus-style='red' \
         --plus-style='green' \
         2>/dev/null | head -200
-elif [[ -n "$(find_difft)" ]]; then
+elif [[ -n "$DIFFT" ]]; then
     # Fall back to difftastic if delta not available
-    DIFFT=$(find_difft)
     GIT_EXTERNAL_DIFF="$DIFFT" git diff "$@" 2>/dev/null | head -200
 elif [[ -f "$HOME/.claude/scripts/compress-diff.sh" ]]; then
     # Fall back to compression script

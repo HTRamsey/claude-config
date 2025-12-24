@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Usage Report - Shows skill/agent/command usage statistics
 # Reads from ~/.claude/data/usage-stats.json
 
@@ -9,8 +9,7 @@ USAGE_FILE="$HOME/.claude/data/usage-stats.json"
 if [[ ! -f "$USAGE_FILE" ]]; then
     echo "No usage data yet. Run some skills/agents/commands first."
     echo ""
-    echo "To enable tracking, create the usage_tracker.py hook:"
-    echo "  See: ~/.claude/scripts/create-usage-tracker.sh"
+    echo "Usage tracking is enabled via the usage_tracker.py hook."
     exit 0
 fi
 

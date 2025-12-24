@@ -1,6 +1,7 @@
 ---
 description: Create conventional commit from staged changes
 allowed-tools: Bash(git:*)
+argument-hint: [message-hint]
 ---
 
 # /commit

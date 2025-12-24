@@ -271,7 +271,7 @@ You MUST complete each phase before proceeding to the next.
 ### Phase 4: Implementation
 
 1. **Create Failing Test Case**
-   - **REQUIRED SUB-SKILL:** Use superpowers:test-driven-development
+   - **REQUIRED:** Use the `test-driven-development` skill
    - MUST have before fixing
 
 2. **Implement Single Fix**
@@ -336,13 +336,13 @@ If you catch yourself thinking:
 | Situation | Escalate To |
 |-----------|-------------|
 | Root cause spans multiple systems | Ask user, involve system owners |
-| Fix requires changing public API | `api-versioning` skill |
+| Fix requires changing public API | Ask user about backwards compatibility |
 | Bug reveals security vulnerability | `security-reviewer` agent |
 | 3+ fix attempts failed | Question architecture with user |
 | Root cause in third-party library | Report finding, ask user for guidance |
-| Race condition suspected in 3+ locations | `refactoring-planner` agent |
-| Need git history context | `git-archaeologist` agent |
-| Multi-service concurrency issue | `observability-engineer` agent |
+| Race condition suspected in 3+ locations | `orchestrator` agent for planning |
+| Need git history context | `git-expert` agent |
+| Multi-service concurrency issue | `devops-troubleshooter` agent |
 | Cannot reproduce locally | Ask user for exact reproduction steps |
 | Test flakiness across suites | Isolate polluting test, apply defense-in-depth |
 
@@ -544,16 +544,16 @@ done
 ## Integration with Other Skills
 
 **This skill requires using:**
-- **test-driven-development** - REQUIRED for creating failing test case (Phase 4)
+- **test-driven-development** skill - REQUIRED for creating failing test case (Phase 4)
 
 **Complementary skills:**
-- **defense-in-depth** - Add validation at multiple layers after finding root cause (especially after concurrency bugs)
-- **condition-based-waiting** - Replace arbitrary timeouts identified in Phase 2
-- **verification-before-completion** - Verify fix worked before claiming success
+- **security-audit** skill - Multi-layer validation section for defense-in-depth
+- **verification-before-completion** skill - Verify fix worked before claiming success
 
-**When to combine with:**
-- **root-cause-tracing techniques** - Included in Phase 1 step 5 for deep call stacks
-- **concurrency debugging techniques** - Included in Phase 1 step 6 for race conditions and deadlocks
+**Techniques included in this skill:**
+- Root cause tracing for deep call stacks (Phase 1 step 5)
+- Condition-based waiting to replace arbitrary timeouts (Phase 2)
+- Concurrency debugging for race conditions and deadlocks (Phase 1 step 6)
 
 ## Save Learnings to Memory
 

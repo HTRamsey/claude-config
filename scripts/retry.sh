@@ -22,6 +22,7 @@ BACKOFF=2
 MAX_DELAY=60
 ON_RETRY=""
 MAX_ATTEMPTS=3
+QUIET=false
 
 # Colors
 RED='\033[0;31m'
@@ -115,11 +116,22 @@ fi
 # Calculate delay with exponential backoff
 calc_delay() {
     local attempt="$1"
-    local delay=$(echo "$DELAY * $BACKOFF ^ ($attempt - 1)" | bc 2>/dev/null || echo "$DELAY")
+    local delay
 
-    # Cap at max delay
-    if [[ $(echo "$delay > $MAX_DELAY" | bc 2>/dev/null || echo 0) -eq 1 ]]; then
-        delay=$MAX_DELAY
+    # Use bc for float math if available, otherwise use integer approximation
+    if command -v bc &>/dev/null; then
+        delay=$(echo "$DELAY * $BACKOFF ^ ($attempt - 1)" | bc 2>/dev/null)
+        # Cap at max delay
+        if [[ $(echo "$delay > $MAX_DELAY" | bc 2>/dev/null) -eq 1 ]]; then
+            delay=$MAX_DELAY
+        fi
+    else
+        # Integer-only fallback (good enough for most cases)
+        delay=$DELAY
+        for ((i = 1; i < attempt; i++)); do
+            delay=$((delay * BACKOFF))
+            [[ $delay -gt $MAX_DELAY ]] && delay=$MAX_DELAY && break
+        done
     fi
 
     # Ensure integer

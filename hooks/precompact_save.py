@@ -5,16 +5,34 @@ Backs up transcript and logs key session state.
 """
 import sys
 import os
+from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from hook_utils import (
-    graceful_main,
-    read_stdin_context,
-    backup_transcript,
-    log_event,
-    update_session_state
-)
-from datetime import datetime
+try:
+    from hook_utils import (
+        graceful_main,
+        read_stdin_context,
+        backup_transcript,
+        log_event,
+        update_session_state
+    )
+except ImportError:
+    def graceful_main(name):
+        def decorator(func):
+            return func
+        return decorator
+    def read_stdin_context():
+        import json
+        try:
+            return json.load(sys.stdin)
+        except:
+            return {}
+    def backup_transcript(*args, **kwargs):
+        return None
+    def log_event(*args, **kwargs):
+        pass
+    def update_session_state(*args, **kwargs):
+        pass
 
 
 @graceful_main("precompact_save")
@@ -39,3 +57,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    sys.exit(0)

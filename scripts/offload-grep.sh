@@ -3,7 +3,9 @@
 # Returns counts and limited samples instead of full matches
 # Usage: offload-grep.sh '<pattern>' '<path>' [max_samples]
 
-PATTERN="$1"
+set -euo pipefail
+
+PATTERN="${1:-}"
 SEARCH_PATH="${2:-.}"
 MAX_SAMPLES="${3:-10}"
 

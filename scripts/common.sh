@@ -154,12 +154,13 @@ truncate_lines() {
     local max="${1:-20}"
     local input="${2:-$(cat)}"
 
-    local count=$(echo "$input" | wc -l)
+    local count
+    count=$(printf '%s\n' "$input" | wc -l)
     if [[ $count -gt $max ]]; then
-        echo "$input" | head -n "$max"
+        printf '%s\n' "$input" | head -n "$max"
         echo "[... $((count - max)) more lines]"
     else
-        echo "$input"
+        printf '%s\n' "$input"
     fi
 }
 
@@ -213,7 +214,8 @@ relative_path() {
         realpath --relative-to="$cwd" "$path" 2>/dev/null || echo "$path"
     else
         # Fallback to python if realpath not available
-        python3 -c "import os; print(os.path.relpath('$path', '$cwd'))" 2>/dev/null || echo "$path"
+        # Use environment variables to safely pass values (no shell injection)
+        PATH_ARG="$path" CWD_ARG="$cwd" python3 -c 'import os; print(os.path.relpath(os.environ["PATH_ARG"], os.environ["CWD_ARG"]))' 2>/dev/null || echo "$path"
     fi
 }
 

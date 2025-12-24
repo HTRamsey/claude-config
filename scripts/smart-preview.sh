@@ -121,4 +121,8 @@ if [[ $PREVIEW_LINES -gt $TOTAL_LINES ]]; then
     PREVIEW_LINES=$TOTAL_LINES
 fi
 echo ""
-echo "[Previewed ~$PREVIEW_LINES of $TOTAL_LINES lines ($(( (PREVIEW_LINES * 100) / TOTAL_LINES ))%)]"
+if [[ $TOTAL_LINES -gt 0 ]]; then
+    echo "[Previewed ~$PREVIEW_LINES of $TOTAL_LINES lines ($(( (PREVIEW_LINES * 100) / TOTAL_LINES ))%)]"
+else
+    echo "[Empty file]"
+fi

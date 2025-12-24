@@ -83,8 +83,8 @@ analyze_usage_patterns() {
 calculate_transcript_sizes() {
     print_section "Context Usage Analysis"
 
-    # Use du for faster total size calculation
-    local total_size=$(find "$PROJECTS_DIR" -name "*.jsonl" -mtime -30 -exec stat -c%s {} \; 2>/dev/null | awk '{sum+=$1} END {print sum+0}')
+    # Use find -printf for faster total size calculation (single pass, no stat per file)
+    local total_size=$(find "$PROJECTS_DIR" -name "*.jsonl" -mtime -30 -printf '%s\n' 2>/dev/null | awk '{sum+=$1} END {print sum+0}')
     local file_count=$(find "$PROJECTS_DIR" -name "*.jsonl" -mtime -30 2>/dev/null | wc -l)
 
     if [[ $file_count -gt 0 ]] && [[ $total_size -gt 0 ]]; then

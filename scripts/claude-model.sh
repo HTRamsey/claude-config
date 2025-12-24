@@ -33,10 +33,8 @@ log_info() { echo -e "${GREEN}[MODEL]${NC} $1" >&2; }
 log_model() { echo -e "${BLUE}[MODEL]${NC} Selected: $1" >&2; }
 
 # Keywords for complexity detection
-# CONFIGURATION: Heavily favors Opus 4.5 for maximum capability
+# CONFIGURATION: Uses Haiku only for simple lookups, Opus for everything else
 SIMPLE_KEYWORDS="what is|what does|how do i|explain this error|show me|format this|convert|typo|syntax error"
-MODERATE_KEYWORDS=""  # Disabled - route to Opus instead
-COMPLEX_KEYWORDS=".*"  # Match everything by default
 
 detect_complexity() {
     local prompt="$1"

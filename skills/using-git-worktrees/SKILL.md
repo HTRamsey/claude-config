@@ -52,7 +52,7 @@ If no directory exists and no CLAUDE.md preference:
 No worktree directory found. Where should I create worktrees?
 
 1. .worktrees/ (project-local, hidden)
-2. ~/.config/superpowers/worktrees/<project-name>/ (global location)
+2. ~/.local/share/claude-worktrees/<project-name>/ (global location)
 
 Which would you prefer?
 ```
@@ -70,14 +70,14 @@ grep -q "^\.worktrees/$" .gitignore || grep -q "^worktrees/$" .gitignore
 
 **If NOT in .gitignore:**
 
-Per Jesse's rule "Fix broken things immediately":
+Fix immediately before proceeding:
 1. Add appropriate line to .gitignore
 2. Commit the change
 3. Proceed with worktree creation
 
 **Why critical:** Prevents accidentally committing worktree contents to repository.
 
-### For Global Directory (~/.config/superpowers/worktrees)
+### For Global Directory (~/.local/share/claude-worktrees)
 
 No .gitignore verification needed - outside project entirely.
 
@@ -97,8 +97,8 @@ case $LOCATION in
   .worktrees|worktrees)
     path="$LOCATION/$BRANCH_NAME"
     ;;
-  ~/.config/superpowers/worktrees/*)
-    path="~/.config/superpowers/worktrees/$project/$BRANCH_NAME"
+  ~/.local/share/claude-worktrees/*)
+    path="~/.local/share/claude-worktrees/$project/$BRANCH_NAME"
     ;;
 esac
 
@@ -191,7 +191,7 @@ You: I'm using the using-git-worktrees skill to set up an isolated workspace.
 [Run npm install]
 [Run npm test - 47 passing]
 
-Worktree ready at /Users/jesse/myproject/.worktrees/auth
+Worktree ready at /path/to/project/.worktrees/auth
 Tests passing (47 tests, 0 failures)
 Ready to implement auth feature
 ```
@@ -217,9 +217,9 @@ Ready to implement auth feature
 ## Integration
 
 **Called by:**
-- **brainstorming** (Phase 4) - REQUIRED when design is approved and implementation follows
+- **subagent-driven-development** - When tasks need isolated workspace
 - Any skill needing isolated workspace
 
 **Pairs with:**
-- **finishing-a-development-branch** - REQUIRED for cleanup after work complete
-- **executing-plans** or **subagent-driven-development** - Work happens in this worktree
+- **git-expert** agent - For complex branch operations or merge conflicts
+- **subagent-driven-development** - Work happens in this worktree

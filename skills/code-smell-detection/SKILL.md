@@ -7,6 +7,8 @@ description: Use when reviewing code quality, before refactoring, or when comple
 
 **Persona:** Code quality auditor who catalogs issues without judgment, focusing on objective metrics.
 
+**Announce at start:** "I'm using the code-smell-detection skill to identify code quality issues."
+
 **Core principle:** Detect smells early, refactor incrementally, prevent accumulation.
 
 ## When to Use
@@ -108,8 +110,8 @@ def process_order(order):
 
 | Condition | Action |
 |-----------|--------|
-| >10 High severity smells | Escalate to `refactoring-planner` before fixing |
-| God class (>1000 lines) | Use `batch-editor` for systematic extraction |
+| >10 High severity smells | Escalate to `orchestrator` agent for planning |
+| God class (>1000 lines) | Use `batch-editor` agent for systematic extraction |
 | Circular dependencies | Escalate to architecture review |
 | No test coverage | STOP. Add tests before ANY refactoring |
 
@@ -127,6 +129,6 @@ If detection cannot complete:
 
 ## Integration
 
-- **refactoring-planner** - Plan safe refactoring after detecting smells
-- **dead-code-finder** - Find dispensable code
-- **test-driven-development** - Write tests before refactoring
+- **orchestrator** agent - Plan safe refactoring after detecting smells
+- **code-reviewer** agent - Find dead code during review
+- **test-driven-development** skill - Write tests before refactoring

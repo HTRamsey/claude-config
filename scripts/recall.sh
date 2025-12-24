@@ -60,6 +60,19 @@ if [[ ! -d "$PROJECTS_DIR" ]]; then
 fi
 
 # Find session files
+# Portable find with mtime sorting (works on Linux and macOS)
+find_sorted_by_mtime() {
+    local dir="$1"
+    local limit="$2"
+    # Try GNU find -printf first, fall back to stat-based sorting
+    if find "$dir" -name "*.jsonl" -type f -printf '%T@ %p\n' 2>/dev/null | head -1 | grep -q .; then
+        find "$dir" -name "*.jsonl" -type f -printf '%T@ %p\n' | sort -rn | head -n "$limit" | cut -d' ' -f2-
+    else
+        # macOS/BSD fallback using stat
+        find "$dir" -name "*.jsonl" -type f -exec stat -f '%m %N' {} \; 2>/dev/null | sort -rn | head -n "$limit" | cut -d' ' -f2-
+    fi
+}
+
 find_sessions() {
     local sessions=()
 
@@ -71,13 +84,13 @@ find_sessions() {
 
         if [[ -d "$project_dir" ]]; then
             while IFS= read -r f; do
-                sessions+=("$f")
-            done < <(find "$project_dir" -name "*.jsonl" -type f -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -n "$LAST_N" | cut -d' ' -f2-)
+                [[ -n "$f" ]] && sessions+=("$f")
+            done < <(find_sorted_by_mtime "$project_dir" "$LAST_N")
         fi
     else
         while IFS= read -r f; do
-            sessions+=("$f")
-        done < <(find "$PROJECTS_DIR" -name "*.jsonl" -type f -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -n "$LAST_N" | cut -d' ' -f2-)
+            [[ -n "$f" ]] && sessions+=("$f")
+        done < <(find_sorted_by_mtime "$PROJECTS_DIR" "$LAST_N")
     fi
 
     printf '%s\n' "${sessions[@]}"
@@ -105,7 +118,8 @@ search_sessions() {
             local session_id
             session_id=$(basename "$session_file" .jsonl)
             local session_date
-            session_date=$(stat -c %y "$session_file" 2>/dev/null | cut -d' ' -f1)
+            session_date=$(stat -c %y "$session_file" 2>/dev/null | cut -d' ' -f1 || \
+                          stat -f '%Sm' -t '%Y-%m-%d' "$session_file" 2>/dev/null)
 
             echo ""
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -123,11 +137,11 @@ search_sessions() {
                 local content
                 content=$(sed -n "${line_num}p" "$session_file" 2>/dev/null)
 
-                # Try to extract human-readable content
+                # Try to extract human-readable content using jq (portable, no grep -P)
                 local text
-                text=$(echo "$content" | grep -oP '"content"\s*:\s*"\K[^"]+' 2>/dev/null | head -1) || \
-                text=$(echo "$content" | grep -oP '"text"\s*:\s*"\K[^"]+' 2>/dev/null | head -1) || \
-                text=$(echo "$match" | cut -d: -f2- | head -c 200)
+                text=$(echo "$content" | jq -r '.content // .text // empty' 2>/dev/null | head -1)
+                # Fallback to raw match if jq fails
+                [[ -z "$text" ]] && text=$(echo "$match" | cut -d: -f2- | head -c 200)
 
                 if [[ -n "$text" ]]; then
                     # Highlight search term

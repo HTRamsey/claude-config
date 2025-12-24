@@ -108,7 +108,7 @@ compress_diff() {
         return 0
     fi
 
-    local total_lines=$(echo "$diff_input" | wc -l | tr -d ' ')
+    local total_lines=$(echo "$diff_input" | wc -l)
     local added=$(echo "$diff_input" | grep -c "^+" || echo 0)
     local removed=$(echo "$diff_input" | grep -c "^-" || echo 0)
     local file_count=$(echo "$diff_input" | grep -c "^diff --git" || echo 0)
@@ -231,7 +231,7 @@ EOF
 # ============================================================
 compress_tests() {
     local input
-    if [[ -f "$1" ]]; then
+    if [[ -n "${1:-}" && -f "$1" ]]; then
         input=$(cat "$1")
     else
         input=$(cat)

@@ -123,9 +123,9 @@ echo "## Checking for debug statements..."
 debug_patterns='console\.log\(|debugger|print\(.*DEBUG|pdb\.set_trace|breakpoint\(\)|binding\.pry'
 
 if $STAGED_ONLY; then
-    debug_files=$(git diff --cached --name-only | xargs grep -l -E "$debug_patterns" 2>/dev/null || true)
+    debug_files=$(git diff --cached --name-only -z | xargs -0 grep -l -E "$debug_patterns" 2>/dev/null || true)
 else
-    debug_files=$(git ls-files | xargs grep -l -E "$debug_patterns" 2>/dev/null | head -10 || true)
+    debug_files=$(git ls-files -z | xargs -0 grep -l -E "$debug_patterns" 2>/dev/null | head -10 || true)
 fi
 
 if [[ -n "$debug_files" ]]; then
@@ -141,9 +141,9 @@ echo "## Checking for potential secrets..."
 secret_patterns='(password|secret|api.?key|token|credential)\s*[:=]\s*["\x27][^"\x27]{8,}|BEGIN (RSA|DSA|EC|OPENSSH) PRIVATE KEY'
 
 if $STAGED_ONLY; then
-    secret_files=$(git diff --cached --name-only | xargs grep -l -iE "$secret_patterns" 2>/dev/null | grep -v "\.md$\|\.lock$\|\.sum$" || true)
+    secret_files=$(git diff --cached --name-only -z | xargs -0 grep -l -iE "$secret_patterns" 2>/dev/null | grep -v "\.md$\|\.lock$\|\.sum$" || true)
 else
-    secret_files=$(git ls-files | xargs grep -l -iE "$secret_patterns" 2>/dev/null | grep -v "\.md$\|\.lock$\|\.sum$" | head -10 || true)
+    secret_files=$(git ls-files -z | xargs -0 grep -l -iE "$secret_patterns" 2>/dev/null | grep -v "\.md$\|\.lock$\|\.sum$" | head -10 || true)
 fi
 
 if [[ -n "$secret_files" ]]; then

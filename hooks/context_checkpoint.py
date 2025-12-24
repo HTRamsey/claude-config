@@ -6,10 +6,8 @@ Runs on PreToolUse for Edit|Write on critical files.
 Saves current task context to memory MCP for recovery.
 """
 import json
-import os
 import re
 import sys
-import subprocess
 from pathlib import Path
 from datetime import datetime
 

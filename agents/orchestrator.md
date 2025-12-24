@@ -15,8 +15,8 @@ Task: Comprehensive code review
 
 Spawn in parallel:
 ├── @security-reviewer → security findings
-├── @perf-reviewer → performance findings
-└── @accessibility-reviewer → a11y findings (if UI code)
+├── @code-reviewer → performance findings
+└── @code-reviewer → a11y findings (if UI code)
 
 Synthesize: Unified prioritized report
 ```
@@ -26,7 +26,7 @@ Synthesize: Unified prioritized report
 Task: Implement new feature
 
 Sequential flow:
-1. @api-designer → API spec
+1. @backend-architect → API spec
 2. Main agent → Implementation
 3. @test-generator → Tests
 4. @code-reviewer → Final review
@@ -49,8 +49,8 @@ Loop:
 Task: Find root cause of bug
 
 Fan-out:
-├── @quick-explorer → Recent changes
-├── @quick-explorer → Related code paths
+├── @quick-lookup → Recent changes
+├── @quick-lookup → Related code paths
 └── @error-explainer → Error patterns
 
 Synthesize: Most likely cause + evidence
@@ -66,8 +66,8 @@ Synthesize: Most likely cause + evidence
 ## Execution
 1. Categorize files (backend/frontend/infra/tests)
 2. Spawn appropriate reviewers in parallel:
-   - Backend → @security-reviewer, @perf-reviewer
-   - Frontend → @accessibility-reviewer, @perf-reviewer
+   - Backend → @security-reviewer, @code-reviewer
+   - Frontend → @code-reviewer
    - All → @code-reviewer
 3. Collect results
 4. Deduplicate findings
@@ -87,8 +87,8 @@ Unified review with sections:
 - Feature requirements
 
 ## Execution
-1. @api-designer → Design API (if needed)
-2. @refactoring-planner → Plan changes (if modifying existing)
+1. @backend-architect → Design API (if needed)
+2. Orchestrator → Plan changes (if modifying existing)
 3. Present plan for approval
 4. Implement in phases:
    - Core logic
@@ -109,11 +109,11 @@ Unified review with sections:
 - Package(s) to update
 
 ## Execution
-1. @dependency-auditor → Current vulnerabilities
+1. @migration-planner → Current vulnerabilities
 2. Analyze breaking changes (see Refactoring Planning)
 3. Update dependencies
 4. Run tests
-5. @dead-code-finder → Check for newly unused code
+5. @code-reviewer → Check for newly unused code
 
 ## Output
 - Updated packages
@@ -449,16 +449,16 @@ When receiving a complex task:
    | Task Type | Agent/Capability |
    |-----------|----------|
    | Security concerns | @security-reviewer |
-   | Performance analysis | @perf-reviewer |
-   | UI accessibility | @accessibility-reviewer |
+   | Performance analysis | @code-reviewer |
+   | UI accessibility | @code-reviewer |
    | Test generation | @test-generator |
-   | API design | @api-designer |
+   | API design | @backend-architect |
    | Refactoring planning | Orchestrator (Refactoring Planning) |
    | ROI/impact analysis | Orchestrator (Impact Analysis) |
    | Documentation | @doc-generator |
-   | Dependency issues | @dependency-auditor |
-   | Dead code | @dead-code-finder |
-   | Quick search | @quick-explorer |
+   | Dependency issues | @migration-planner |
+   | Dead code | @code-reviewer |
+   | Quick search | @quick-lookup |
    | Error analysis | @error-explainer |
    | General review | @code-reviewer |
 

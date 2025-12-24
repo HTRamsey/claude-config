@@ -185,17 +185,17 @@ cmd_run() {
     # Check dependencies and get next task
     get_next_task() {
         jq -r '
-            .tasks
+            .tasks as $all_tasks |
+            $all_tasks
             | map(select(.status == "pending"))
             | map(select(
                 .after == null or
-                (. as $t | $t.after as $dep |
-                    any(input.tasks[]; .id == $dep and .status == "done"))
+                (.after as $dep | any($all_tasks[]; .id == $dep and .status == "done"))
             ))
             | sort_by(.priority)
             | first // empty
             | .id
-        ' "$QUEUE_FILE" "$QUEUE_FILE" 2>/dev/null || true
+        ' "$QUEUE_FILE" 2>/dev/null || true
     }
 
     run_task() {
@@ -211,14 +211,14 @@ cmd_run() {
 
         echo "[$(date +%H:%M:%S)] Running: $id ($agent)"
 
-        # Build command
-        local cmd="claude --print"
-        [[ "$worktree" == "true" ]] && cmd="$cmd --worktree"
-        cmd="$cmd -p \"Using agent: $agent. Task: $prompt\""
+        # Build command as array (safe - no shell injection possible)
+        local cmd_args=("claude" "--print")
+        [[ "$worktree" == "true" ]] && cmd_args+=("--worktree")
+        cmd_args+=("-p" "Using agent: $agent. Task: $prompt")
 
-        # Execute
+        # Execute using array expansion (no eval needed)
         local output
-        if output=$(eval "$cmd" 2>&1); then
+        if output=$("${cmd_args[@]}" 2>&1); then
             jq_update --arg id "$id" --argjson completed "$(now)" '
                 .tasks |= map(if .id == $id then .status = "done" | .completed = $completed else . end)'
             echo "[$(date +%H:%M:%S)] Done: $id"
@@ -238,18 +238,44 @@ cmd_run() {
         fi
     }
 
+    # Acquire lock helper
+    acquire_queue_lock() {
+        local waited=0
+        while ! (set -o noclobber; echo $$ > "$LOCK_FILE") 2>/dev/null; do
+            if [[ $waited -ge 10 ]]; then
+                echo "Warning: Could not acquire queue lock" >&2
+                return 1
+            fi
+            sleep 0.5
+            ((waited++))
+        done
+        trap 'rm -f "$LOCK_FILE"' EXIT
+        return 0
+    }
+
+    release_queue_lock() {
+        rm -f "$LOCK_FILE"
+    }
+
     # Main loop
     while true; do
         local running=$(jq '[.tasks[] | select(.status == "running")] | length' "$QUEUE_FILE")
 
         if [[ $running -lt $max ]]; then
-            local next=$(get_next_task)
-            if [[ -n "$next" ]]; then
-                run_task "$next" &
-                $once && wait && break
-            elif [[ $running -eq 0 ]]; then
-                echo "Queue empty"
-                break
+            # Use lock to prevent race condition
+            if acquire_queue_lock; then
+                local next=$(get_next_task)
+                if [[ -n "$next" ]]; then
+                    run_task "$next" &
+                    release_queue_lock
+                    $once && wait && break
+                else
+                    release_queue_lock
+                    if [[ $running -eq 0 ]]; then
+                        echo "Queue empty"
+                        break
+                    fi
+                fi
             fi
         fi
 

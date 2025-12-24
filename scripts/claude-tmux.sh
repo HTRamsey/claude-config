@@ -14,6 +14,13 @@
 SESSION="claude-dev"
 PROJECT="${1:-$(pwd)}"
 
+# Check if tmux is installed
+if ! command -v tmux &>/dev/null; then
+    echo "Error: tmux is required but not installed" >&2
+    echo "Install with: apt install tmux (Debian/Ubuntu) or brew install tmux (macOS)" >&2
+    exit 1
+fi
+
 # Kill existing session if exists
 tmux kill-session -t "$SESSION" 2>/dev/null
 

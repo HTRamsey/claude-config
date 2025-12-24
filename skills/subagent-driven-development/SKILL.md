@@ -39,7 +39,7 @@ Task tool:
 ```
 
 ### 3. Review Subagent's Work
-Dispatch code-reviewer using template at `requesting-code-review/code-reviewer.md`
+Dispatch `code-reviewer` agent to review the subagent's changes
 
 ### 4. Apply Feedback
 
@@ -55,8 +55,8 @@ If issues found, dispatch follow-up subagent: "Fix issues from code review: [lis
 Update TodoWrite, repeat steps 2-5.
 
 ### 6. Final Review + Complete
-- Dispatch final code-reviewer (entire implementation, all requirements, overall architecture)
-- Use superpowers:finishing-a-development-branch skill
+- Dispatch final `code-reviewer` agent (entire implementation, all requirements, overall architecture)
+- Use `git-expert` agent for branch cleanup if needed
 
 ---
 
@@ -67,7 +67,7 @@ Update TodoWrite, repeat steps 2-5.
 2. Execute batch (default: first 3 tasks) - mark in_progress, follow steps, verify, mark completed
 3. Report: what implemented, verification output, "Ready for feedback"
 4. Apply changes from feedback, execute next batch, repeat
-5. Use superpowers:finishing-a-development-branch skill
+5. Use `git-expert` agent for branch cleanup and PR preparation
 
 ### When to Stop
 - Hit blocker (missing dependency, failing test, unclear instruction)
@@ -160,7 +160,7 @@ Do NOT just increase timeouts. Return: summary of root cause and changes.
 | Situation | Escalate To |
 |-----------|-------------|
 | Subagent fails same task 2x | User for approach change or clarification |
-| Code review finds architectural issues | Architect for design revision |
+| Code review finds architectural issues | `backend-architect` agent for design revision |
 | Parallel agents conflict on same files | Stop parallel, switch to sequential |
-| Plan ambiguity causes repeated failures | `writing-plans` skill to clarify plan |
+| Plan ambiguity causes repeated failures | User to clarify plan requirements |
 | All tasks blocked | User to prioritize or provide missing info |

@@ -33,9 +33,14 @@ fi
 if [[ -z "$YQ" ]]; then
     echo "Error: yq not found. Install: snap install yq" >&2
     # Fallback: use Python for basic YAML parsing
+    # Use environment variable to safely pass filename (no shell injection)
     if command -v python3 &>/dev/null; then
         echo "Falling back to Python yaml module..." >&2
-        python3 -c "import yaml, sys; print(yaml.safe_dump(yaml.safe_load(open('$file'))))"
+        INPUT_FILE="$file" python3 -c '
+import yaml, os
+with open(os.environ["INPUT_FILE"]) as f:
+    print(yaml.safe_dump(yaml.safe_load(f)))
+'
         exit $?
     fi
     exit 1

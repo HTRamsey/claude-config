@@ -119,24 +119,25 @@ cmd_stale() {
     local threshold=$((now - days * 86400))
     local found=0
 
-    for branch in $(git branch -a --format='%(refname:short)'); do
+    # Use git for-each-ref for batch efficiency (single git call instead of per-branch)
+    while IFS=$'\t' read -r refname committerdate authorname subject; do
+        local branch="${refname#refs/heads/}"
+        branch="${branch#refs/remotes/}"
+
         # Skip protected
         is_protected "${branch##*/}" && continue
 
-        local last_commit=$(git log -1 --format="%ct" "$branch" 2>/dev/null || echo "0")
-
+        local last_commit="$committerdate"
         if [[ "$last_commit" -lt "$threshold" && "$last_commit" -gt 0 ]]; then
             local age=$(( (now - last_commit) / 86400 ))
-            local author=$(git log -1 --format="%an" "$branch" 2>/dev/null)
-            local message=$(git log -1 --format="%s" "$branch" 2>/dev/null | head -c 50)
 
             echo -e "${YELLOW}$branch${NC}"
-            echo "  ${age} days old | $author"
-            echo "  Last: $message"
+            echo "  ${age} days old | $authorname"
+            echo "  Last: ${subject:0:50}"
             echo ""
             ((found++))
         fi
-    done
+    done < <(git for-each-ref --format='%(refname)	%(committerdate:unix)	%(authorname)	%(subject)' refs/heads/ refs/remotes/ 2>/dev/null)
 
     if [[ $found -eq 0 ]]; then
         echo -e "${GREEN}No stale branches found${NC}"

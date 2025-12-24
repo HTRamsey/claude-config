@@ -18,26 +18,44 @@
 # Read JSON input from stdin
 input=$(cat)
 
-# Extract JSON fields (single jq call for efficiency)
-eval "$(echo "$input" | jq -r '
-  @sh "model_name=\(.model.display_name // .model.id)",
-  @sh "cwd=\(.workspace.current_dir // .cwd)",
-  @sh "project_dir=\(.workspace.project_dir // .cwd)",
-  @sh "total_input=\(.context_window.total_input_tokens // 0)",
-  @sh "total_output=\(.context_window.total_output_tokens // 0)",
-  @sh "current_input=\(.context_window.current_usage.input_tokens // 0)",
-  @sh "current_output=\(.context_window.current_usage.output_tokens // 0)",
-  @sh "context_size=\(.context_window.context_window_size // 200000)",
-  @sh "exceeds_200k=\(.exceeds_200k_tokens // false)",
-  @sh "json_session_id=\(.session_id // "unknown")",
-  @sh "total_cost=\(.cost.total_cost_usd // 0)",
-  @sh "duration_ms=\(.cost.total_duration_ms // 0)",
-  @sh "api_duration_ms=\(.cost.total_api_duration_ms // 0)",
-  @sh "lines_added=\(.cost.total_lines_added // 0)",
-  @sh "lines_removed=\(.cost.total_lines_removed // 0)",
-  @sh "cache_read=\(.context_window.current_usage.cache_read_input_tokens // 0)",
-  @sh "cache_create=\(.context_window.current_usage.cache_creation_input_tokens // 0)"
-' | tr '\n' ' ')"
+# Extract JSON fields safely using read (avoids eval command injection)
+{
+    read -r model_name
+    read -r cwd
+    read -r project_dir
+    read -r total_input
+    read -r total_output
+    read -r current_input
+    read -r current_output
+    read -r context_size
+    read -r exceeds_200k
+    read -r json_session_id
+    read -r total_cost
+    read -r duration_ms
+    read -r api_duration_ms
+    read -r lines_added
+    read -r lines_removed
+    read -r cache_read
+    read -r cache_create
+} < <(echo "$input" | jq -r '
+    .model.display_name // .model.id // "unknown",
+    .workspace.current_dir // .cwd // ".",
+    .workspace.project_dir // .cwd // ".",
+    .context_window.total_input_tokens // 0,
+    .context_window.total_output_tokens // 0,
+    .context_window.current_usage.input_tokens // 0,
+    .context_window.current_usage.output_tokens // 0,
+    .context_window.context_window_size // 200000,
+    .exceeds_200k_tokens // false,
+    .session_id // "unknown",
+    .cost.total_cost_usd // 0,
+    .cost.total_duration_ms // 0,
+    .cost.total_api_duration_ms // 0,
+    .cost.total_lines_added // 0,
+    .cost.total_lines_removed // 0,
+    .context_window.current_usage.cache_read_input_tokens // 0,
+    .context_window.current_usage.cache_creation_input_tokens // 0
+')
 
 # Calculate context usage - only INPUT tokens count against context window
 # Formula: input_tokens + cache_creation + cache_read (output tokens don't count)
@@ -61,8 +79,8 @@ fi
 # Calculate token delta since last update (for +5K indicator)
 delta=$((total_tokens - last_total))
 
-# Calculate cost delta (using awk for floating point)
-cost_delta=$(awk "BEGIN {printf \"%.4f\", $total_cost - $last_cost}")
+# Calculate cost delta (using awk for floating point, pass vars safely)
+cost_delta=$(awk -v tc="$total_cost" -v lc="$last_cost" 'BEGIN {printf "%.4f", tc - lc}')
 
 # Save state for next call
 echo "$total_tokens $total_cost" > "$state_file"
@@ -96,8 +114,8 @@ progress_bar=$(make_progress_bar "$usage_pct")
 burn_rate_display=""
 if [[ "$duration_ms" -gt 60000 ]]; then  # Only show after 1 minute
     # cost per hour = (cost / duration_ms) * 3600000
-    burn_rate=$(awk "BEGIN {printf \"%.2f\", ($total_cost / $duration_ms) * 3600000}")
-    if [[ $(awk "BEGIN {print ($burn_rate > 0.01) ? 1 : 0}") == "1" ]]; then
+    burn_rate=$(awk -v tc="$total_cost" -v dm="$duration_ms" 'BEGIN {printf "%.2f", (tc / dm) * 3600000}')
+    if [[ $(awk -v br="$burn_rate" 'BEGIN {print (br > 0.01) ? 1 : 0}') == "1" ]]; then
         burn_rate_display="\$${burn_rate}/hr"
     fi
 fi
@@ -119,13 +137,13 @@ fi
 
 # Format cost display (show delta if > $0.001, otherwise show total)
 cost_display=""
-is_cost_positive=$(awk "BEGIN {print ($cost_delta > 0.001) ? 1 : 0}")
+is_cost_positive=$(awk -v cd="$cost_delta" 'BEGIN {print (cd > 0.001) ? 1 : 0}')
 if [[ "$is_cost_positive" == "1" ]]; then
     # Show cost delta for last operation
-    cost_display=$(awk "BEGIN {printf \"+\$%.2f\", $cost_delta}")
-elif [[ $(awk "BEGIN {print ($total_cost > 0.01) ? 1 : 0}") == "1" ]]; then
+    cost_display=$(awk -v cd="$cost_delta" 'BEGIN {printf "+$%.2f", cd}')
+elif [[ $(awk -v tc="$total_cost" 'BEGIN {print (tc > 0.01) ? 1 : 0}') == "1" ]]; then
     # Show total session cost if no recent delta
-    cost_display=$(awk "BEGIN {printf \"\$%.2f\", $total_cost}")
+    cost_display=$(awk -v tc="$total_cost" 'BEGIN {printf "$%.2f", tc}')
 fi
 
 # Format duration (show as Xm or Xh Ym)
@@ -259,7 +277,7 @@ if [[ "$total_tokens" -gt 0 ]]; then
     # Calculate tokens per minute (if session > 1 min)
     tok_rate_display=""
     if [[ "$duration_ms" -gt 60000 ]]; then
-        tok_per_min=$(awk "BEGIN {printf \"%.0f\", ($total_tokens / $duration_ms) * 60000}")
+        tok_per_min=$(awk -v tt="$total_tokens" -v dm="$duration_ms" 'BEGIN {printf "%.0f", (tt / dm) * 60000}')
         if [[ "$tok_per_min" -ge 1000 ]]; then
             tok_rate_display=" $((tok_per_min / 1000))K/m"
         elif [[ "$tok_per_min" -gt 0 ]]; then

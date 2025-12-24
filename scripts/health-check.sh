@@ -158,34 +158,38 @@ else
 fi
 echo ""
 
-# Dependencies from manifest
+# Dependencies from manifest - use sorted array for consistent output
 echo "## Dependencies"
-declare -A dep_checks=(
-    ["xh"]="command -v xh || test -x ~/.cargo/bin/xh"
-    ["yq"]="command -v yq || test -x ~/.local/bin/yq"
-    ["htmlq"]="command -v htmlq || test -x ~/.cargo/bin/htmlq"
-    ["tldr"]="command -v tldr"
-    ["curlie"]="command -v curlie || test -x ~/go/bin/curlie"
-    ["gron"]="command -v gron"
-    ["rg"]="command -v rg || test -x ~/.cargo/bin/rg"
-    ["fd"]="command -v fd || command -v fdfind || test -x ~/.cargo/bin/fd"
-    ["bat"]="command -v bat || command -v batcat || test -x ~/.cargo/bin/bat"
-    ["eza"]="command -v eza"
-    ["delta"]="command -v delta"
-    ["sd"]="command -v sd"
-    ["dust"]="command -v dust || test -x ~/.cargo/bin/dust"
-    ["difft"]="command -v difft || test -x ~/.cargo/bin/difft"
-    ["tokei"]="command -v tokei || test -x ~/.cargo/bin/tokei"
-    ["ast-grep"]="command -v ast-grep || command -v sg || test -x ~/.cargo/bin/ast-grep"
-    ["zoxide"]="command -v zoxide"
-    ["fzf"]="command -v fzf"
-    ["jq"]="command -v jq"
-    ["git"]="command -v git"
+
+# Define dependencies as sorted list for predictable output
+dep_list=(
+    "ast-grep:command -v ast-grep || command -v sg || test -x ~/.cargo/bin/ast-grep"
+    "bat:command -v bat || command -v batcat || test -x ~/.cargo/bin/bat"
+    "curlie:command -v curlie || test -x ~/go/bin/curlie"
+    "delta:command -v delta"
+    "difft:command -v difft || test -x ~/.cargo/bin/difft"
+    "dust:command -v dust || test -x ~/.cargo/bin/dust"
+    "eza:command -v eza"
+    "fd:command -v fd || command -v fdfind || test -x ~/.cargo/bin/fd"
+    "fzf:command -v fzf"
+    "git:command -v git"
+    "gron:command -v gron"
+    "htmlq:command -v htmlq || test -x ~/.cargo/bin/htmlq"
+    "jq:command -v jq"
+    "rg:command -v rg || test -x ~/.cargo/bin/rg"
+    "sd:command -v sd"
+    "tldr:command -v tldr"
+    "tokei:command -v tokei || test -x ~/.cargo/bin/tokei"
+    "xh:command -v xh || test -x ~/.cargo/bin/xh"
+    "yq:command -v yq || test -x ~/.local/bin/yq"
+    "zoxide:command -v zoxide"
 )
 
 missing_deps=()
-for dep in "${!dep_checks[@]}"; do
-    if eval "${dep_checks[$dep]}" &>/dev/null; then
+for entry in "${dep_list[@]}"; do
+    dep="${entry%%:*}"
+    check="${entry#*:}"
+    if eval "$check" &>/dev/null; then
         echo "  $dep: ✓"
     else
         echo "  $dep: ✗ missing"

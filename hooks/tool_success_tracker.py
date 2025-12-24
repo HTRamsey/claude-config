@@ -6,12 +6,10 @@ Runs on PostToolUse to monitor errors and recommend better approaches.
 Tracks failures in a session-specific temp file.
 """
 import json
-import os
 import re
 import sys
 import time
 from pathlib import Path
-from collections import defaultdict
 
 # Import shared utilities
 sys.path.insert(0, str(Path(__file__).parent))

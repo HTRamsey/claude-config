@@ -209,12 +209,12 @@ Location: `file.ts:42`
 [3-5 lines of code]
 
 ## Should NOT Attempt
-- Multi-step analysis (escalate to quick-explorer)
+- Multi-step analysis (escalate to Explore agent)
 - Cross-file reasoning
 - Making changes
 
 ## Escalation
-If the question requires reading more than 2 files, say: "This needs deeper analysis. Consider using quick-explorer or code-reviewer."
+If the question requires reading more than 2 files, say: "This needs deeper analysis. Consider using Explore agent or code-reviewer."
 
 ## Rules
 - One result only
@@ -260,17 +260,16 @@ If unable to verify security posture:
 ## Agent Categories
 
 ### Analysis (Read-Only)
-- `code-reviewer`, `security-reviewer`, `perf-reviewer`
-- `dead-code-finder`, `accessibility-reviewer`
+- `code-reviewer`, `security-reviewer`
 
 ### Lookup (Haiku)
-- `quick-lookup`, `quick-explorer`, `error-explainer`
+- `quick-lookup`, `error-explainer`
 
 ### Generation
-- `test-generator`, `doc-generator`, `api-designer`
+- `test-generator`, `doc-generator`
 
 ### Modification
-- `batch-editor`, `simple-edit`, `refactoring-planner`
+- `batch-editor`
 
 ### Orchestration
 - `orchestrator` - coordinates multiple agents

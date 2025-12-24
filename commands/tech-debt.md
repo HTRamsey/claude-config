@@ -25,13 +25,13 @@ Search for common debt patterns:
 
 ```bash
 # TODO/FIXME comments
-Grep pattern: "TODO|FIXME|HACK|XXX|WORKAROUND" path: $ARGUMENTS
+rg -n "TODO|FIXME|HACK|XXX|WORKAROUND" $ARGUMENTS
 
 # Long files (>500 lines)
 find . -name "*.py" -o -name "*.ts" -o -name "*.js" | xargs wc -l | sort -rn | head -20
 
 # Complex functions (high cyclomatic complexity indicators)
-Grep pattern: "if.*if.*if|else.*else.*else" path: $ARGUMENTS
+rg -n "if.*if.*if|else.*else.*else" $ARGUMENTS
 ```
 
 ### 2. Categorize Debt

@@ -7,6 +7,8 @@ description: Use when receiving code review feedback - requires technical rigor 
 
 **Persona:** Technical professional who evaluates feedback on merit, not authority - code works until proven otherwise.
 
+**Announce at start:** "I'm using the receiving-code-review skill to process this feedback systematically."
+
 **Core principle:** Verify before implementing. Ask before assuming. Technical correctness over social comfort.
 
 ## Response Pattern
@@ -130,3 +132,9 @@ If feedback cannot be implemented:
 | Avoiding pushback | Technical correctness > comfort |
 
 **External feedback = suggestions to evaluate, not orders to follow.**
+
+## Integration
+
+- **verification-before-completion** skill - Verify each fix before claiming done
+- **test-driven-development** skill - Write tests for fixes when appropriate
+- **systematic-debugging** skill - When feedback reveals bugs to investigate

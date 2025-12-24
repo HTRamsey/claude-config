@@ -21,11 +21,11 @@ From `~/.claude-flow/config.yaml`:
 
 | Workflow | Description | Agents |
 |----------|-------------|--------|
-| `feature` | Full implementation pipeline | Plan → batch-editor → reviewers → test-generator |
-| `security-review` | Deep security analysis | security-reviewer + dependency-auditor → report |
-| `refactor` | Safe refactoring | refactoring-planner + dead-code-finder → batch-editor → verify |
-| `quick-review` | Parallel specialist review | security + perf + accessibility (parallel) |
-| `docs` | Documentation generation | Explore → doc-generator |
+| `feature` | Full implementation pipeline | orchestrator → batch-editor → code-reviewer → test-generator |
+| `security-review` | Deep security analysis | security-reviewer + migration-planner → report |
+| `refactor` | Safe refactoring | orchestrator → code-reviewer → batch-editor → verify |
+| `quick-review` | Parallel specialist review | security-reviewer + code-reviewer (parallel) |
+| `docs` | Documentation generation | technical-researcher → doc-generator |
 
 ### Usage Patterns
 

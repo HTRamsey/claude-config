@@ -117,15 +117,15 @@ Example:
 
 | Situation | Escalate To |
 |-----------|-------------|
-| Task complexity exceeds command scope | `/understand` or `orchestrator` agent |
+| Task complexity exceeds command scope | `Explore` agent or `orchestrator` agent |
 | Security implications detected | `/review` with security focus |
-| Multi-step reasoning beyond workflow | `Plan` agent for architecture |
+| Multi-step reasoning beyond workflow | `orchestrator` agent for planning |
 | Conflicting constraints | User clarification |
 
 Add explicit escalation guidance to commands:
 ```markdown
 ## Escalation
-If this requires architecture decisions, recommend `/understand` first.
+If this requires architecture decisions, recommend using `Explore` agent first.
 If security concerns arise, recommend running `/review` with security focus.
 ```
 
@@ -244,7 +244,7 @@ Run tests and analyze failures.
 - Tests require manual setup (DB, env vars)
 
 ## Escalation
-If test failures indicate design issues, recommend `/understand` to explore the codebase first.
+If test failures indicate design issues, recommend using `Explore` agent to understand the codebase first.
 ```
 
 ### /refactor

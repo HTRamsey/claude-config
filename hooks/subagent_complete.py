@@ -4,16 +4,34 @@ SubagentStop hook - tracks subagent completion for metrics and debugging.
 """
 import sys
 import os
+from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from hook_utils import (
-    graceful_main,
-    read_stdin_context,
-    log_event,
-    get_session_state,
-    update_session_state
-)
-from datetime import datetime
+try:
+    from hook_utils import (
+        graceful_main,
+        read_stdin_context,
+        log_event,
+        get_session_state,
+        update_session_state
+    )
+except ImportError:
+    def graceful_main(name):
+        def decorator(func):
+            return func
+        return decorator
+    def read_stdin_context():
+        import json
+        try:
+            return json.load(sys.stdin)
+        except:
+            return {}
+    def log_event(*args, **kwargs):
+        pass
+    def get_session_state():
+        return {}
+    def update_session_state(*args, **kwargs):
+        pass
 
 
 @graceful_main("subagent_complete")
@@ -45,3 +63,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    sys.exit(0)

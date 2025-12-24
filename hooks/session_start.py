@@ -18,7 +18,23 @@ from pathlib import Path
 
 # Import shared utilities
 sys.path.insert(0, str(Path(__file__).parent))
-from hook_utils import graceful_main, log_event, is_new_session, read_stdin_context
+try:
+    from hook_utils import graceful_main, log_event, is_new_session, read_stdin_context
+except ImportError:
+    def graceful_main(name):
+        def decorator(func):
+            return func
+        return decorator
+    def log_event(*args, **kwargs):
+        pass
+    def is_new_session():
+        return True
+    def read_stdin_context():
+        import json
+        try:
+            return json.load(sys.stdin)
+        except:
+            return {}
 
 def run_cmd(cmd: list, cwd: str = None) -> str:
     """Run command and return output, or empty string on failure."""

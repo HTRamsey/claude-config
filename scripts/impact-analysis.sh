@@ -96,13 +96,20 @@ else
 fi
 
 dependents_found=0
-if [[ -n "$FD" ]]; then
-    # Use fd for faster search
-    while IFS= read -r f; do
-        if [[ "$f" != "$file" ]] && grep -lE "$import_pattern" "$f" 2>/dev/null; then
-            dependents_found=1
-        fi
-    done < <($FD -e "${extension}" . "$search_path" 2>/dev/null)
+# Use ripgrep if available (fastest), then grep -r
+if command -v rg &>/dev/null; then
+    results=$(rg -l "$import_pattern" "$search_path" --glob "*.${extension}" 2>/dev/null | grep -v "^$file$" | head -20)
+    if [[ -n "$results" ]]; then
+        echo "$results"
+        dependents_found=1
+    fi
+elif [[ -n "$FD" ]]; then
+    # Use fd + grep (slower but still efficient)
+    results=$($FD -e "${extension}" . "$search_path" 2>/dev/null | xargs -r grep -lE "$import_pattern" 2>/dev/null | grep -v "^$file$" | head -20)
+    if [[ -n "$results" ]]; then
+        echo "$results"
+        dependents_found=1
+    fi
 else
     # Fallback to grep -r
     results=$(grep -rlE "$import_pattern" "$search_path" --include="$file_glob" 2>/dev/null | grep -v "^$file$" | head -20)

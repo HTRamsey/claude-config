@@ -424,7 +424,7 @@ await new Promise(r => setTimeout(r, 200));   // Then: known timing (2 ticks at 
 
 - Testing actual timing behavior (debounce, throttle) - use real timing
 - Synchronous code - condition-based waiting is for async
-- If condition never becomes true, escalate to `root-cause-tracing`
+- If condition never becomes true, escalate to `systematic-debugging` skill (Phase 1)
 
 ## Anti-Patterns: What NOT to Do
 

@@ -156,9 +156,23 @@ start_job() {
 
 # Wait for a job to finish
 wait_for_job() {
-    local pid
-    wait -n -p pid 2>/dev/null || wait -n
-    pid=${pid:-$(jobs -p | head -1)}
+    local pid=""
+    local wait_status=0
+
+    # bash 5.1+ supports wait -n -p to get the finished PID
+    if [[ ${BASH_VERSINFO[0]} -ge 5 && ${BASH_VERSINFO[1]} -ge 1 ]]; then
+        wait -n -p pid 2>/dev/null || wait_status=$?
+    else
+        # Fallback for older bash: wait for any job, then find which one finished
+        wait -n 2>/dev/null || wait_status=$?
+        # Find a PID that's no longer in jobs list but was in PIDS
+        for p in "${!PIDS[@]}"; do
+            if ! kill -0 "$p" 2>/dev/null; then
+                pid="$p"
+                break
+            fi
+        done
+    fi
 
     if [[ -n "${PIDS[$pid]:-}" ]]; then
         local cmd="${PIDS[$pid]}"
@@ -187,7 +201,7 @@ wait_for_job() {
             echo -e "${RED}✗ Failed:${NC} $cmd (exit $exit_code, ${duration}s)"
             if [[ -f "$output_file" ]] && ! $QUIET; then
                 echo "--- Output ---"
-                cat "$output_file" | head -50
+                head -50 "$output_file"
                 echo "---"
             fi
         fi

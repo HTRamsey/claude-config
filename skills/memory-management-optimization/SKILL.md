@@ -1,6 +1,6 @@
 ---
 name: memory-management-optimization
-description: "Debug memory leaks, profile memory usage, optimize allocations. Use when heap grows unexpectedly, OOM errors occur, or allocation performance matters. Covers C++ (Valgrind, ASAN, RAII), Python (tracemalloc, objgraph), and general patterns."
+description: Debug memory leaks, profile memory usage, optimize allocations. Use when heap grows unexpectedly, OOM errors occur, or allocation performance matters. Covers C++ (Valgrind, ASAN, RAII), Python (tracemalloc, objgraph), and general patterns.
 ---
 
 # Memory Management Optimization
@@ -215,9 +215,9 @@ public:
 
 ## Escalation
 
-- Concurrency in allocators → `concurrency-debugging` skill
-- Architecture-level memory design → `backend-architect`
-- Qt-specific issues → `qt-expert`
+- Concurrency in allocators → `systematic-debugging` skill (concurrency section)
+- Architecture-level memory design → `backend-architect` agent
+- Qt/C++ specific issues → `cpp-expert` agent
 - Real-time allocation constraints → `real-time-systems` agent
 
 ## Common Mistakes

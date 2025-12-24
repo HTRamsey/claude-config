@@ -29,14 +29,14 @@ if [[ ! -f "$file" ]]; then
     exit 1
 fi
 
-# Build blame options
-blame_opts=""
+# Build blame options as array (avoids word splitting issues)
+blame_opts=()
 
 # Use ignore-revs file if present (for formatting commits, etc.)
 if [[ -f ".git-blame-ignore-revs" ]]; then
-    blame_opts="$blame_opts --ignore-revs-file=.git-blame-ignore-revs"
+    blame_opts+=("--ignore-revs-file=.git-blame-ignore-revs")
 elif [[ -f "$(git rev-parse --show-toplevel 2>/dev/null)/.git-blame-ignore-revs" ]]; then
-    blame_opts="$blame_opts --ignore-revs-file=$(git rev-parse --show-toplevel)/.git-blame-ignore-revs"
+    blame_opts+=("--ignore-revs-file=$(git rev-parse --show-toplevel)/.git-blame-ignore-revs")
 fi
 
 # Add line range if specified
@@ -44,17 +44,24 @@ if [[ -n "$line" ]]; then
     start=$((line - context))
     end=$((line + context))
     [[ $start -lt 1 ]] && start=1
-    blame_opts="$blame_opts -L $start,$end"
+    blame_opts+=("-L" "$start,$end")
 fi
 
 # Run git blame with options
 # Format: short commit hash, author, date, line number, content
-output=$(git blame $blame_opts --date=short -s "$file" 2>/dev/null)
+output=$(git blame "${blame_opts[@]}" --date=short -s "$file" 2>/dev/null)
 
 if [[ -z "$output" ]]; then
     echo "No blame data available"
     exit 0
 fi
+
+# Extract unique commits and batch-fetch their info
+declare -A commit_cache
+while IFS= read -r commit; do
+    [[ -z "$commit" || -n "${commit_cache[$commit]:-}" ]] && continue
+    commit_cache[$commit]=$(git log -1 --format="%an|%s" "$commit" 2>/dev/null | head -c 60)
+done < <(echo "$output" | awk '{print $1}' | sort -u)
 
 # Process output to make it more compact and readable
 echo "$output" | while IFS= read -r blame_line; do
@@ -62,11 +69,8 @@ echo "$output" | while IFS= read -r blame_line; do
     commit=$(echo "$blame_line" | awk '{print $1}')
     line_info=$(echo "$blame_line" | sed 's/^[^ ]* //')
 
-    # Get commit info (cached for efficiency)
-    if [[ "$commit" != "$last_commit" ]]; then
-        commit_info=$(git log -1 --format="%an|%s" "$commit" 2>/dev/null | head -c 60)
-        last_commit="$commit"
-    fi
+    # Get commit info from cache
+    commit_info="${commit_cache[$commit]:-}"
 
     # Check if this is a "noise" commit (formatting, lint, etc.)
     is_noise=""
@@ -79,10 +83,3 @@ echo "$output" | while IFS= read -r blame_line; do
     echo "$short_commit$is_noise $line_info"
 done
 
-# Show legend if noise commits were found
-if git blame $blame_opts --date=short -s "$file" 2>/dev/null | \
-   xargs -I{} git log -1 --format="%s" {} 2>/dev/null | \
-   grep -qiE "(format|lint|style|whitespace)" 2>/dev/null; then
-    echo ""
-    echo "# [fmt] = formatting/lint commit (consider .git-blame-ignore-revs)"
-fi
