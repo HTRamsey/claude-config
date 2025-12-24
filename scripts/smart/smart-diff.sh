@@ -65,9 +65,9 @@ if command -v delta &>/dev/null; then
 elif [[ -n "$DIFFT" ]]; then
     # Fall back to difftastic if delta not available
     GIT_EXTERNAL_DIFF="$DIFFT" git diff "$@" 2>/dev/null | head -200
-elif [[ -f "$HOME/.claude/scripts/compress-diff.sh" ]]; then
+elif [[ -f "$HOME/.claude/scripts/compress/compress-diff.sh" ]]; then
     # Fall back to compression script
-    git diff "$@" | "$HOME/.claude/scripts/compress-diff.sh"
+    git diff "$@" | "$HOME/.claude/scripts/compress/compress-diff.sh"
 else
     # Basic fallback
     git diff --stat "$@" 2>/dev/null

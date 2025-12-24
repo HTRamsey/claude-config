@@ -83,6 +83,15 @@
       "Bash(go mod:*)",
       "Bash(go run:*)",
       "Bash(~/.claude/scripts/*:*)",
+      "Bash(~/.claude/scripts/search/*:*)",
+      "Bash(~/.claude/scripts/compress/*:*)",
+      "Bash(~/.claude/scripts/smart/*:*)",
+      "Bash(~/.claude/scripts/analysis/*:*)",
+      "Bash(~/.claude/scripts/git/*:*)",
+      "Bash(~/.claude/scripts/queue/*:*)",
+      "Bash(~/.claude/scripts/diagnostics/*:*)",
+      "Bash(~/.claude/scripts/automation/*:*)",
+      "Bash(~/.claude/scripts/lib/*:*)",
       "Bash(pwd:*)",
       "Bash(which:*)",
       "Bash(uname:*)",
@@ -148,7 +157,7 @@
       "Bash(basename:*)",
       "Bash(dirname:*)",
       "Bash(claude-flow:*)",
-      "Bash(~/.claude/scripts/task-queue.sh:*)"
+      "Bash(~/.claude/scripts/queue/task-queue.sh:*)"
     ],
     "ask": [
       "Bash(curl:*)",

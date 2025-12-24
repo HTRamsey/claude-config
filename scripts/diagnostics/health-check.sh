@@ -1,10 +1,67 @@
 #!/usr/bin/env bash
 # Claude Code configuration health check
-# Usage: health-check.sh
+# Usage: health-check.sh [--cleanup]
+#
+# Options:
+#   --cleanup    Rotate old data files (debug/, file-history/, logs)
 
-SCRIPT_VERSION="1.0.0"
+SCRIPT_VERSION="1.1.0"
 
 set -euo pipefail
+
+CLEANUP=false
+[[ "${1:-}" == "--cleanup" ]] && CLEANUP=true
+
+# Data rotation function
+do_cleanup() {
+    echo "=== Data Rotation ==="
+
+    # Rotate debug files > 7 days
+    old_debug=$(find ~/.claude/debug -type f -mtime +7 2>/dev/null | wc -l)
+    if [[ $old_debug -gt 0 ]]; then
+        find ~/.claude/debug -type f -mtime +7 -delete 2>/dev/null
+        echo "  debug/: deleted $old_debug files older than 7 days"
+    else
+        echo "  debug/: ✓ clean"
+    fi
+
+    # Rotate file-history > 30 days
+    old_history=$(find ~/.claude/file-history -type f -mtime +30 2>/dev/null | wc -l)
+    if [[ $old_history -gt 0 ]]; then
+        find ~/.claude/file-history -type f -mtime +30 -delete 2>/dev/null
+        echo "  file-history/: deleted $old_history files older than 30 days"
+    else
+        echo "  file-history/: ✓ clean"
+    fi
+
+    # Rotate hook-events.jsonl if > 10MB
+    if [[ -f ~/.claude/data/hook-events.jsonl ]]; then
+        size=$(stat -f%z ~/.claude/data/hook-events.jsonl 2>/dev/null || stat -c%s ~/.claude/data/hook-events.jsonl 2>/dev/null || echo 0)
+        if [[ $size -gt 10485760 ]]; then
+            # Keep last 5000 lines
+            tail -5000 ~/.claude/data/hook-events.jsonl > ~/.claude/data/hook-events.jsonl.tmp
+            mv ~/.claude/data/hook-events.jsonl.tmp ~/.claude/data/hook-events.jsonl
+            echo "  hook-events.jsonl: rotated (was $(numfmt --to=iec $size 2>/dev/null || echo "${size}B"))"
+        else
+            echo "  hook-events.jsonl: ✓ under 10MB"
+        fi
+    fi
+
+    # Clean old temp files
+    old_temp=$(find /tmp -maxdepth 2 -name "claude-*" -type f -mtime +7 2>/dev/null | wc -l)
+    if [[ $old_temp -gt 0 ]]; then
+        find /tmp -maxdepth 2 -name "claude-*" -type f -mtime +7 -delete 2>/dev/null
+        echo "  /tmp/claude-*: deleted $old_temp files older than 7 days"
+    else
+        echo "  /tmp/: ✓ clean"
+    fi
+
+    echo ""
+    echo "=== Cleanup Complete ==="
+    exit 0
+}
+
+[[ "$CLEANUP" == true ]] && do_cleanup
 
 echo "=== Claude Code Health Check ==="
 echo ""
@@ -139,11 +196,12 @@ else
 fi
 echo ""
 
-# Scripts
+# Scripts (including subdirectories)
 echo "## Scripts"
-total=$(ls ~/.claude/scripts/*.sh 2>/dev/null | wc -l)
-executable=$(find ~/.claude/scripts -name "*.sh" -executable | wc -l)
+total=$(find ~/.claude/scripts -name "*.sh" -type f 2>/dev/null | wc -l)
+executable=$(find ~/.claude/scripts -name "*.sh" -type f -executable 2>/dev/null | wc -l)
 echo "  $executable/$total scripts executable"
+echo "  Subdirectories: search/, compress/, smart/, analysis/, git/, queue/, diagnostics/, automation/, lib/"
 
 # Manifest validation
 if [[ -f ~/.claude/scripts/manifest.json ]]; then

@@ -1,4 +1,46 @@
-# Security & Verification
+# Guidelines
+
+Style, security, and verification rules.
+
+## Response Style
+
+- Lead with the answer, explain after if needed
+- No filler phrases ("I'll help you with...", "Sure!", "Great question!")
+- No restating the question or echoing file contents just read
+- Use "Done." not "I have successfully completed the task."
+- Skip unnecessary caveats ("It's worth noting that...")
+- One clear example beats three redundant ones
+- Don't narrate self-documenting code
+
+## Code Comments
+
+**DEFAULT: No comments.** Only add when ALL apply:
+1. Logic is genuinely non-obvious
+2. Cannot be clarified by better naming
+3. Explains WHY, not WHAT
+
+**NEVER add:**
+- Comments describing what code does
+- Docstrings restating function signatures
+- Comments on standard patterns (try/except, loops)
+- Comments to code you didn't write
+
+## Documentation & Naming
+
+- Bullet points over paragraphs
+- Tables for comparisons
+- Code examples over prose explanations
+- File:line references for code locations
+- Follow existing project conventions
+- Descriptive > short (within reason)
+- No abbreviations unless domain-standard
+
+## Commits/PRs
+
+- Imperative mood ("Add feature" not "Added feature")
+- Why over what in descriptions
+- No emoji unless project uses them
+- 1-2 sentence summary, details in bullets
 
 ## Verification Rules
 
@@ -48,16 +90,6 @@
 - `~/.aws/**`, `~/.ssh/**` - Cloud/SSH keys
 - `**/id_rsa`, `**/*.pem` - Private keys
 
-## Docker Permissions
-
-| Setting | Value | Effect |
-|---------|-------|--------|
-| Sandbox exclusion | `docker` in `excludedCommands` | Runs outside sandbox |
-| Pre-approved | `build`, `run`, `compose`, `ps`, `logs`, `images`, `exec` | No prompt needed |
-| Blocked reads | `~/.docker/config.json` | Protects auth tokens |
-
-**Note:** Docker commands run unsandboxed for full functionality. Use caution with `docker run` flags that mount host paths.
-
 ## Permission Modes
 
 | Mode | Behavior | Use When |
@@ -68,3 +100,16 @@
 | Bypass | Auto-approve all | Isolated containers only |
 
 Toggle with **Shift+Tab** during session.
+
+## Before You Start
+
+1. **Read the file first** - Never edit without reading
+2. **Use agents for exploration** - Don't grep inline, use `Task(Explore)`
+3. **Compress output** - Always compress diffs, builds, test output
+4. **Verify before done** - Run tests, show evidence
+5. **Clear between tasks** - Use `/clear` to reset context
+6. **Name sessions** - Use `/rename` for easy resumption
+
+## Health Check
+
+Run `~/.claude/scripts/diagnostics/health-check.sh` to verify setup.

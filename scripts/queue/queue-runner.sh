@@ -6,7 +6,7 @@ set -euo pipefail
 
 PID_FILE="${HOME}/.claude/data/queue-runner.pid"
 LOG_FILE="${HOME}/.claude/data/queue-runner.log"
-QUEUE_SCRIPT="${HOME}/.claude/scripts/task-queue.sh"
+QUEUE_SCRIPT="${HOME}/.claude/scripts/queue/task-queue.sh"
 POLL_INTERVAL="${POLL_INTERVAL:-5}"
 MAX_PARALLEL="${MAX_PARALLEL:-3}"
 

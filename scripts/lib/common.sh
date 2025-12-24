@@ -2,7 +2,7 @@
 # common.sh - Shared library functions for Claude Code scripts
 #
 # Usage:
-#   source ~/.claude/scripts/common.sh
+#   source ~/.claude/scripts/lib/common.sh
 #
 # Provides:
 #   - Consistent error handling
@@ -353,7 +353,7 @@ Utilities:
   relative_path <path> [base]
 
 Usage:
-  source ~/.claude/scripts/common.sh
+  source ~/.claude/scripts/lib/common.sh
 
 EOF
 }

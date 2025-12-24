@@ -10,12 +10,25 @@ Map of Claude Code customizations at `~/.claude/`.
 ├── settings.json          # Permissions, model config
 ├── requirements.txt       # Python dependencies for hooks
 ├── venv/                  # Python venv (auto-used via PATH)
-├── rules/                 # Auto-loaded instruction files
+├── rules/                 # Auto-loaded instruction files (4 files)
+│   ├── guidelines.md      # Style, security, verification
+│   ├── tooling.md         # Tools, scripts, context
+│   ├── reference.md       # Skills, agents, commands
+│   └── architecture.md    # This file
 ├── hooks/                 # Event-triggered Python scripts
 ├── agents/                # Task tool subagent definitions
 ├── commands/              # Slash command definitions
 ├── skills/                # Loaded-on-demand workflows
-├── scripts/               # Optimization shell scripts
+├── scripts/               # Shell utilities (organized)
+│   ├── search/            # offload-grep, offload-find
+│   ├── compress/          # compress-diff, compress-build, etc.
+│   ├── smart/             # smart-*, summarize-file, extract-signatures
+│   ├── analysis/          # find-related, project-overview, etc.
+│   ├── git/               # git-prep, git-cleanup
+│   ├── queue/             # task-queue, queue-runner
+│   ├── diagnostics/       # health-check, validate-config, etc.
+│   ├── automation/        # claude-safe, batch-process, etc.
+│   └── lib/               # common, cache, lock, notify
 └── data/                  # Runtime data (caches, logs)
 ```
 
@@ -37,14 +50,13 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 ## Hooks (27 + 2 dispatchers) - Event Triggers
 
 **Shared Utilities**: `hook_utils.py` provides graceful degradation, JSON logging, session state.
-**Migration Guide**: See `hooks/MIGRATION.md` for patterns.
 **Dispatchers (ACTIVE)**: `pre_tool_dispatcher.py` and `post_tool_dispatcher.py` consolidate all PreToolUse/PostToolUse hooks into single processes. ~200ms latency savings per tool call.
 
 ### PreToolUse (block/modify before execution)
 | Hook | Watches | Purpose |
 |------|---------|---------|
 | `file_protection` | Write, Edit | Block protected files |
-| `credential_scanner` | Write, Edit | Detect secrets in code |
+| `credential_scanner` | Bash (git commit) | Detect secrets in staged changes |
 | `tdd_guard` | Write, Edit | Warn if no tests for code changes |
 | `dangerous_command_blocker` | Bash | Block destructive commands |
 | `suggest_tool_optimization` | Bash, Grep, Read | Suggest better alternatives |
@@ -68,11 +80,11 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 ### Other Events
 | Hook | Event | Purpose |
 |------|-------|---------|
-| `session_start` | UserPromptSubmit | Auto-load git context on new session |
+| `session_start` | SessionStart | Auto-load git context on new session |
 | `context_monitor` | UserPromptSubmit | Warn at 40K/80K tokens, auto-backup |
-| `session_persistence` | Stop | Auto-save session insights |
+| `session_persistence` | SessionEnd | Auto-save session insights |
 | `uncommitted_reminder` | Stop | Remind about uncommitted changes |
-| `start_viewer` | Notification | Start claude-code-viewer |
+| `start_viewer` | SessionStart | Start claude-code-viewer |
 | `skill_suggester` | UserPromptSubmit | Suggest relevant skills |
 | `suggest_subagent` | UserPromptSubmit | Suggest agent delegation |
 | `smart_permissions` | PermissionRequest | Context-aware auto-approval |
@@ -146,44 +158,36 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 
 ## Scripts (55) - Shell Utilities
 
-### Search & Compression
-`offload-grep.sh` `offload-find.sh` `compress-diff.sh` `compress-build.sh` `compress-tests.sh` `compress-stacktrace.sh`
+Organized into subdirectories:
 
-### Code Analysis
-`extract-signatures.sh` `smart-preview.sh` `summarize-file.sh` `find-related.sh` `project-overview.sh` `review-patterns.sh`
+| Directory | Purpose | Key Scripts |
+|-----------|---------|-------------|
+| `search/` | Offloaded search | `offload-grep.sh`, `offload-find.sh` |
+| `compress/` | Output compression | `compress-diff.sh`, `compress-build.sh`, `compress-tests.sh` |
+| `smart/` | Smart file viewing | `smart-preview.sh`, `smart-diff.sh`, `summarize-file.sh` |
+| `analysis/` | Code analysis | `find-related.sh`, `project-overview.sh`, `review-patterns.sh` |
+| `git/` | Git workflow | `git-prep.sh`, `git-cleanup.sh` |
+| `queue/` | Task queue | `task-queue.sh`, `queue-runner.sh` |
+| `diagnostics/` | Health & testing | `health-check.sh`, `validate-config.sh`, `hook-benchmark.sh` |
+| `automation/` | Batch operations | `claude-safe.sh`, `batch-process.sh`, `parallel.sh` |
+| `lib/` | Shared utilities | `common.sh`, `cache.sh`, `lock.sh` |
 
-### Modern CLI Wrappers
-`smart-ls.sh` `smart-diff.sh` `smart-cat.sh` `smart-find.sh` `smart-replace.sh`
-
-### Automation
-`claude-safe.sh` `claude-model.sh` `batch-process.sh` `fan-out.sh`
-
-### Git Workflow
-`git-prep.sh` `git-cleanup.sh`
-
-### Task Queue
-`task-queue.sh` `queue-runner.sh`
-
-### Reporting
-`usage-report.sh`
-
-### Diagnostics
-`health-check.sh` `validate-config.sh` `hook-benchmark.sh` `test-hooks.sh`
+Root-level: `statusline.sh`, `venv-setup.sh`, `usage-report.sh`
 
 ## Data Flow
 
 ```
 User Input
     │
-    ├─→ PreToolUse hooks (validate/modify)
+    ├─→ PreToolUse hooks (via pre_tool_dispatcher.py)
     │
     ├─→ Tool execution
     │       │
     │       ├─→ Task tool → Subagent (uses agents/*.md)
     │       ├─→ Skill tool → Load skill (skills/*/SKILL.md)
-    │       └─→ Bash tool → May use scripts/*.sh
+    │       └─→ Bash tool → May use scripts/**/*.sh
     │
-    ├─→ PostToolUse hooks (react/log)
+    ├─→ PostToolUse hooks (via post_tool_dispatcher.py)
     │
     └─→ Response
 ```
@@ -200,14 +204,23 @@ Hooks use an isolated venv at `~/.claude/venv/`. The PATH is set in `settings.js
 
 Dependencies: `requirements.txt` (currently: tiktoken, rapidfuzz)
 
+## Data Rotation
+
+Run `~/.claude/scripts/diagnostics/health-check.sh --cleanup` to:
+- Delete debug files older than 7 days
+- Delete file-history older than 30 days
+- Rotate hook-events.jsonl if > 10MB
+- Clean old temp files
+
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `settings.json` | Permissions, allowed tools, model preferences |
 | `requirements.txt` | Python dependencies for hooks |
-| `rules/*.md` | Auto-loaded instructions (7 files, ~660 lines) |
+| `rules/*.md` | Auto-loaded instructions (4 files) |
 | `data/task-queue.json` | Pending background tasks |
 | `data/token-usage.json` | Daily token tracking |
 | `data/exploration-cache.json` | Cached codebase exploration |
 | `data/usage-stats.json` | Agent/skill/command usage tracking |
+| `data/hook-events.jsonl` | Hook execution log |

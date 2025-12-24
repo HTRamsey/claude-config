@@ -1,4 +1,6 @@
-# Skill, Agent & Command Usage
+# Reference
+
+Skills, agents, and commands quick reference.
 
 ## Before Creating Configuration Files
 
@@ -9,7 +11,7 @@
 | Command (`~/.claude/commands/*.md`) | `command-creator` skill |
 | Skill (`~/.claude/skills/*/SKILL.md`) | `skill-creator` skill |
 
-## Slash Commands
+## Slash Commands (14)
 
 | Task | Command |
 |------|---------|
@@ -27,6 +29,9 @@
 | Git worktree | `/worktree` |
 | Task queue | `/queue` |
 | Claude flow | `/flow` |
+
+**Task Queue**: `/queue add "task" --agent TYPE` | `/queue daemon start|stop`
+**Orchestration**: `/flow <workflow> "objective"` (feature, security-review, refactor, quick-review, docs)
 
 ## Skills (16)
 
@@ -68,7 +73,7 @@
 
 ## Agents (23 custom + 3 built-in)
 
-### Built-in Agents (no file needed)
+### Built-in (no file needed)
 | Trigger | Agent |
 |---------|-------|
 | Codebase exploration | `Explore` |
@@ -121,7 +126,7 @@
 | Trigger | Agent |
 |---------|-------|
 | Complex git ops, history, merge conflicts | `git-expert` |
-| C++, Qt, embedded systems | `cpp-expert` |
+| C++, Qt (incl. Java/Python bindings), embedded | `cpp-expert` |
 | Context bloated | `context-optimizer` |
 | Similar changes across 3+ files | `batch-editor` |
 | Test failures, flaky tests, timing issues | `testing-debugger` |
