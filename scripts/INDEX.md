@@ -1,48 +1,59 @@
 # Script Index
 
-59 shell scripts for Claude Code optimization and automation.
+55 shell scripts organized into 9 subdirectories.
 
 ## Quick Reference
 
 | Need | Script |
 |------|--------|
-| Compress diff output | `compress-diff.sh` |
-| Compress build logs | `compress-build.sh` |
-| Compress test output | `compress-tests.sh` |
-| Search with limits | `offload-grep.sh` |
-| Find files by type | `offload-find.sh` |
-| Preview large files | `smart-preview.sh` |
-| Pre-commit checks | `git-prep.sh` |
-| Run in parallel | `parallel.sh` |
+| Compress diff output | `compress/compress-diff.sh` |
+| Compress build logs | `compress/compress-build.sh` |
+| Compress test output | `compress/compress-tests.sh` |
+| Search with limits | `search/offload-grep.sh` |
+| Find files by type | `search/offload-find.sh` |
+| Preview large files | `smart/smart-preview.sh` |
+| Pre-commit checks | `git/git-prep.sh` |
+| Run in parallel | `automation/parallel.sh` |
+| Health check | `diagnostics/health-check.sh` |
+
+## Directory Structure
+
+```
+scripts/
+├── search/        # Offloaded search operations
+├── compress/      # Output compression
+├── smart/         # Modern CLI wrappers
+├── analysis/      # Code analysis
+├── git/           # Git workflow
+├── queue/         # Task queue
+├── diagnostics/   # Health & testing
+├── automation/    # Batch operations
+├── lib/           # Shared utilities
+└── (root)         # Core utilities
+```
 
 ## Categories
 
-### Compression (9 scripts)
-Output compression for token efficiency.
-
-| Script | Purpose |
-|--------|---------|
-| `compress.sh` | Unified compression engine (diff/build/tests/stack/logs/json/list/errors) |
-| `compress-build.sh` | Build output - errors and warnings only |
-| `compress-diff.sh` | Git diff - file-level summary |
-| `compress-tests.sh` | Test failures (pytest/jest/cargo/go) |
-| `compress-stacktrace.sh` | Stack traces - filters framework frames |
-| `compress-logs.sh` | Log filtering - errors/warnings |
-| `compress-json.sh` | JSON field extraction |
-| `compress-list.sh` | List filtering with limits |
-| `dedup-errors.sh` | Error deduplication |
-
-### Search & Discovery (4 scripts)
+### search/ (2 scripts)
 Token-efficient search operations.
 
 | Script | Purpose |
 |--------|---------|
 | `offload-grep.sh` | Summarized grep with file counts |
 | `offload-find.sh` | Categorized find results |
-| `find-related.sh` | Find related code files |
-| `offload-api.sh` | API call offloading |
 
-### Smart Viewers (14 scripts)
+### compress/ (5 scripts)
+Output compression for token efficiency.
+
+| Script | Purpose |
+|--------|---------|
+| `compress.sh` | Unified compression engine |
+| `compress-build.sh` | Build output - errors and warnings only |
+| `compress-diff.sh` | Git diff - file-level summary |
+| `compress-tests.sh` | Test failures (pytest/jest/cargo/go) |
+| `compress-stacktrace.sh` | Stack traces - filters framework frames |
+
+### smart/ (15 scripts)
 Modern CLI tool wrappers with fallbacks.
 
 | Script | Purpose | Primary Tool |
@@ -50,7 +61,6 @@ Modern CLI tool wrappers with fallbacks.
 | `smart-ls.sh` | Directory listing | eza/lsd |
 | `smart-cat.sh` | File viewing with line ranges | bat |
 | `smart-diff.sh` | Git diff visualization | delta/difftastic |
-| `smart-difft.sh` | Structural diffs | difftastic |
 | `smart-find.sh` | Find results formatting | fd |
 | `smart-du.sh` | Disk usage | dust |
 | `smart-preview.sh` | Large file preview with structure | - |
@@ -59,32 +69,51 @@ Modern CLI tool wrappers with fallbacks.
 | `smart-yaml.sh` | YAML extraction | yq |
 | `smart-html.sh` | HTML extraction | htmlq |
 | `smart-http.sh` | HTTP response parsing | xh/curlie |
-| `smart-tree.sh` | Tree view | - |
 | `smart-replace.sh` | Find and replace | sd |
+| `smart-ast.sh` | Abstract syntax tree analysis | ast-grep |
+| `extract-signatures.sh` | Function/class signatures | - |
+| `summarize-file.sh` | File structure summaries | - |
 
-### Code Analysis (7 scripts)
-Code structure and signature extraction.
+### analysis/ (6 scripts)
+Code structure and project analysis.
 
 | Script | Purpose |
 |--------|---------|
-| `extract-signatures.sh` | Function/class signatures (8 languages) |
-| `summarize-file.sh` | File structure summaries |
-| `smart-ast.sh` | Abstract syntax tree analysis |
+| `find-related.sh` | Find related code files |
 | `project-overview.sh` | Project type detection |
 | `project-stats.sh` | Project statistics |
 | `token-tools.sh` | Token counting & estimation |
 | `impact-analysis.sh` | Change impact analysis |
+| `review-patterns.sh` | Code review patterns |
 
-### Git Workflow (2 scripts)
-Pre-commit and repository maintenance.
+### git/ (2 scripts)
+Git workflow helpers.
 
 | Script | Purpose |
 |--------|---------|
 | `git-prep.sh` | Pre-commit validation (conflicts, debug, secrets, lint, tests) |
 | `git-cleanup.sh` | Repository maintenance (branches, gc, prune) |
 
-### Execution & Control (5 scripts)
-Parallel execution, retries, and batching.
+### queue/ (2 scripts)
+Background task management.
+
+| Script | Purpose |
+|--------|---------|
+| `task-queue.sh` | Full task queue system |
+| `queue-runner.sh` | Task queue runner daemon |
+
+### diagnostics/ (4 scripts)
+Health checking and testing.
+
+| Script | Purpose |
+|--------|---------|
+| `health-check.sh` | Configuration diagnostics (use --cleanup for data rotation) |
+| `validate-config.sh` | Config validation |
+| `hook-benchmark.sh` | Hook latency profiling |
+| `test-hooks.sh` | Hook testing framework |
+
+### automation/ (9 scripts)
+Batch operations and Claude integration.
 
 | Script | Purpose |
 |--------|---------|
@@ -94,17 +123,12 @@ Parallel execution, retries, and batching.
 | `batch-process.sh` | Batch grep/read/lint/test |
 | `batch-annotate.sh` | Batch annotation tools |
 | `batch-select.sh` | Batch selection tools |
+| `claude-safe.sh` | Automation safeguards |
+| `claude-model.sh` | Model selection/management |
+| `claude-tmux.sh` | Tmux integration |
 
-### Task Queue (2 scripts)
-Background task management.
-
-| Script | Purpose |
-|--------|---------|
-| `task-queue.sh` | Full task queue system |
-| `queue-runner.sh` | Task queue runner daemon |
-
-### Utilities (8 scripts)
-Caching, locking, notifications, and helpers.
+### lib/ (4 scripts)
+Shared utilities (sourced by other scripts).
 
 | Script | Purpose |
 |--------|---------|
@@ -112,69 +136,55 @@ Caching, locking, notifications, and helpers.
 | `cache.sh` | TTL-based file caching |
 | `lock.sh` | File-based locking mechanism |
 | `notify.sh` | Desktop notifications |
-| `recall.sh` | Memory/history recall |
-| `quick-jump.sh` | Quick navigation |
+
+### Root Level (6 scripts)
+Core utilities that don't fit categories.
+
+| Script | Purpose |
+|--------|---------|
 | `statusline.sh` | Status line display |
-| `health-check.sh` | Configuration diagnostics |
-
-### Claude Integration (3 scripts)
-Safe Claude Code automation.
-
-| Script | Purpose |
-|--------|---------|
-| `claude-safe.sh` | Automation safeguards (max turns, timeout, token budget) |
-| `claude-model.sh` | Model selection/management |
-| `claude-tmux.sh` | Tmux integration |
-
-### Setup & Verification (3 scripts)
-Environment setup and verification.
-
-| Script | Purpose |
-|--------|---------|
 | `venv-setup.sh` | Python venv management |
+| `usage-report.sh` | Usage statistics report |
 | `init-project-rules.sh` | Project initialization |
-| `verify-optimizations.sh` | Optimization verification |
-
-### Analysis (1 script)
-Subscription and model analysis.
-
-| Script | Purpose |
-|--------|---------|
-| `evaluate-subscription.sh` | Model/subscription cost analysis |
+| `quick-jump.sh` | Quick navigation |
+| `recall.sh` | Memory/history recall |
 
 ## Common Patterns
 
 ### Using Compression Scripts
 ```bash
 # Compress git diff
-~/.claude/scripts/compress-diff.sh HEAD~3
+~/.claude/scripts/compress/compress-diff.sh HEAD~3
 
 # Compress build output
-make 2>&1 | ~/.claude/scripts/compress-build.sh
+make 2>&1 | ~/.claude/scripts/compress/compress-build.sh
 
 # Compress test output
-pytest -v 2>&1 | ~/.claude/scripts/compress-tests.sh
-
-# JSON output for automation
-~/.claude/scripts/compress.sh -t diff --json HEAD~3 | jq '.files'
+pytest -v 2>&1 | ~/.claude/scripts/compress/compress-tests.sh
 ```
 
 ### Using Search Scripts
 ```bash
 # Summarized grep (max 10 results)
-~/.claude/scripts/offload-grep.sh 'pattern' ./src 10
+~/.claude/scripts/search/offload-grep.sh 'pattern' ./src 10
 
 # Find by extension
-~/.claude/scripts/offload-find.sh ./src '*.ts'
+~/.claude/scripts/search/offload-find.sh ./src '*.ts'
 ```
 
 ### Using Parallel Execution
 ```bash
 # Run 3 commands in parallel
-~/.claude/scripts/parallel.sh 3 "npm test" "npm lint" "npm build"
+~/.claude/scripts/automation/parallel.sh 3 "npm test" "npm lint" "npm build"
 
 # With timeout and fail-fast
-~/.claude/scripts/parallel.sh --timeout 60 -f 4 "cmd1" "cmd2" "cmd3"
+~/.claude/scripts/automation/parallel.sh --timeout 60 -f 4 "cmd1" "cmd2" "cmd3"
+```
+
+### Data Rotation
+```bash
+# Clean up old data files
+~/.claude/scripts/diagnostics/health-check.sh --cleanup
 ```
 
 ## Dependencies
@@ -186,26 +196,17 @@ pytest -v 2>&1 | ~/.claude/scripts/compress-tests.sh
 ### Optional (for enhanced features)
 | Tool | Scripts | Fallback |
 |------|---------|----------|
-| `rg` (ripgrep) | offload-grep, parallel | grep |
-| `fd` | offload-find, smart-find | find |
-| `bat` | smart-cat | cat |
-| `eza` | smart-ls | ls |
-| `delta` | smart-diff | git diff |
-| `jq` | compress, smart-json, cache | passthrough |
-| `yq` | smart-yaml | - |
-| `htmlq` | smart-html | - |
-
-## Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CLAUDE_SCRIPTS` | `~/.claude/scripts` | Script directory |
-| `LOG_LEVEL` | `3` | Logging verbosity (1-4) |
-| `MAX_LINES` | `50` | Default line limit for compression |
-| `MAX_PARALLEL` | `4` | Default parallel job limit |
+| `rg` (ripgrep) | search/offload-grep, automation/parallel | grep |
+| `fd` | search/offload-find, smart/smart-find | find |
+| `bat` | smart/smart-cat | cat |
+| `eza` | smart/smart-ls | ls |
+| `delta` | smart/smart-diff | git diff |
+| `jq` | compress/*, smart/smart-json, lib/cache | passthrough |
+| `yq` | smart/smart-yaml | - |
+| `htmlq` | smart/smart-html | - |
 
 ## See Also
 
 - `~/.claude/rules/architecture.md` - Full configuration map
-- `~/.claude/rules/03-optimization.md` - Optimization guidelines
+- `~/.claude/rules/tooling.md` - Optimization guidelines
 - `~/.claude/hooks/` - Event-triggered hooks
