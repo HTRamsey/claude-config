@@ -20,6 +20,7 @@ Skills, agents, and commands quick reference.
 | Run tests | `/test` |
 | Debug issues | `/debug` |
 | Implement feature | `/implement` |
+| Lint changes | `/lint` |
 | Refactor safely | `/refactor` |
 | Generate docs | `/docs` |
 | Create PR | `/pr` |
