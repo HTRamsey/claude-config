@@ -32,6 +32,7 @@ projects/
 venv/
 
 # Backups
+backups/
 *.tar.gz
 *.bak
 
