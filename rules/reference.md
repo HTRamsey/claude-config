@@ -27,6 +27,7 @@ Skills, agents, and commands quick reference.
 | Fix CI | `/ci-fix` |
 | Track tech debt | `/tech-debt` |
 | Generate changelog | `/changelog` |
+| Audit config | `/config-audit` |
 | Quick health check | `/status` |
 | Save checkpoint | `/checkpoint` |
 | Git worktree | `/worktree` |
