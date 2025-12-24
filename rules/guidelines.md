@@ -110,6 +110,11 @@ Toggle with **Shift+Tab** during session.
 5. **Clear between tasks** - Use `/clear` to reset context
 6. **Name sessions** - Use `/rename` for easy resumption
 
+## Web Searches
+
+- Use current year in queries for recent docs/releases (check today's date in context)
+- Avoid hardcoding years like "2024" when searching for latest info
+
 ## Health Check
 
 Run `~/.claude/scripts/diagnostics/health-check.sh` to verify setup.
