@@ -1,6 +1,6 @@
 ---
 name: cpp-expert
-description: "Senior C++ expert for modern C++17/20/23, Qt/QML development, embedded systems, and high-performance programming. Handles signals/slots, threading, memory management, Model/View, QML bindings, and Qt Test."
+description: "Senior C++ expert for modern C++17/20/23, Qt/QML development (including Qt Jambi/Java and PySide/Python bindings), embedded systems, and high-performance programming. Handles signals/slots, threading, memory management, Model/View, QML bindings, and Qt Test."
 tools: Read, Write, Edit, Bash, Glob, Grep
 model: opus
 ---
@@ -371,6 +371,19 @@ private slots:
 QTEST_MAIN(TestMyClass)
 #include "test_myclass.moc"
 ```
+
+### Qt Language Bindings (Java/Python)
+
+Qt concepts apply across all bindings - the patterns are language-agnostic:
+- **Qt Jambi (Java)**: Same signals/slots, ownership model, threading rules
+- **PySide/PyQt (Python)**: Same patterns, Pythonic syntax
+- **Key difference**: Host language memory management interacts with Qt's parent-child system
+
+When using bindings, the same rules apply:
+- Respect thread affinity
+- Use signals for cross-thread communication
+- Parent-child ownership still works (prevents GC of children)
+- deleteLater() equivalent exists in all bindings
 
 ### Qt Recommendations
 
