@@ -1,6 +1,6 @@
 ---
 name: test-driven-development
-description: Use when implementing any feature or bugfix, before writing implementation code - write the test first, watch it fail, write minimal code to pass; ensures tests actually verify behavior by requiring failure first
+description: Use when implementing any feature or bugfix, adding tests, or fixing flaky tests - covers TDD workflow (red-green-refactor), condition-based waiting for async tests, and testing anti-patterns to avoid (mock testing, test pollution, incomplete mocks)
 ---
 
 # Test-Driven Development (TDD)
@@ -349,8 +349,196 @@ test('sort preserves elements', () => {
 3. If testing existing: acknowledge and document
 4. If test is wrong: delete and rewrite
 
+## Async Testing: Condition-Based Waiting
+
+Flaky tests often fail due to arbitrary timeouts. Replace guesses about timing with condition polling.
+
+### The Problem
+
+```typescript
+// BEFORE: Guessing at timing
+await new Promise(r => setTimeout(r, 50));
+expect(getResult()).toBeDefined();
+```
+
+Arbitrary delays are unreliable:
+- Fail under load
+- Fail on slow systems
+- Waste time with overestimated delays
+- Race conditions still pass sometimes
+
+### The Solution
+
+```typescript
+// AFTER: Waiting for the actual condition
+await waitFor(() => getResult() !== undefined);
+expect(getResult()).toBeDefined();
+```
+
+### Common Patterns
+
+| Scenario | Pattern |
+|----------|---------|
+| Wait for event | `waitFor(() => events.find(e => e.type === 'DONE'))` |
+| Wait for state | `waitFor(() => machine.state === 'ready')` |
+| Wait for count | `waitFor(() => items.length >= 5)` |
+| Wait for file | `waitFor(() => fs.existsSync(path))` |
+
+### Implementation
+
+```typescript
+async function waitFor<T>(
+  condition: () => T | undefined | null | false,
+  description: string,
+  timeoutMs = 5000
+): Promise<T> {
+  const startTime = Date.now();
+  while (true) {
+    const result = condition();
+    if (result) return result;
+    if (Date.now() - startTime > timeoutMs) {
+      throw new Error(`Timeout waiting for ${description} after ${timeoutMs}ms`);
+    }
+    await new Promise(r => setTimeout(r, 10)); // Poll every 10ms
+  }
+}
+```
+
+### When Arbitrary Timeout IS Correct
+
+```typescript
+await waitForEvent(manager, 'TOOL_STARTED'); // First: wait for condition
+await new Promise(r => setTimeout(r, 200));   // Then: known timing (2 ticks at 100ms)
+// ^^^ Document WHY with comment - e.g., "Allow debounce period"
+```
+
+### Common Mistakes
+
+| Mistake | Fix |
+|---------|-----|
+| Polling too fast (1ms) | Poll every 10ms - CPU waste |
+| No timeout | Always include timeout with clear error message |
+| Stale data (cache before loop) | Call getter inside condition loop each iteration |
+
+### When NOT to Use
+
+- Testing actual timing behavior (debounce, throttle) - use real timing
+- Synchronous code - condition-based waiting is for async
+- If condition never becomes true, escalate to `root-cause-tracing`
+
+## Anti-Patterns: What NOT to Do
+
+**Core principle:** Test what the code does, not what the mocks do.
+
+### The Iron Laws
+
+```
+1. NEVER test mock behavior
+2. NEVER add test-only methods to production classes
+3. NEVER mock without understanding dependencies
+```
+
+### Anti-Pattern 1: Testing Mock Behavior
+
+```typescript
+// BAD: Testing that the mock exists
+test('renders sidebar', () => {
+  render(<Page />);
+  expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument();
+});
+
+// GOOD: Test real component or don't mock it
+test('renders sidebar', () => {
+  render(<Page />);  // Don't mock sidebar
+  expect(screen.getByRole('navigation')).toBeInTheDocument();
+});
+```
+
+**Gate function:** Before asserting on any mock element, ask: "Am I testing real behavior or just mock existence?" If testing mock existence → Delete assertion or unmock.
+
+### Anti-Pattern 2: Test-Only Methods in Production
+
+```typescript
+// BAD: destroy() only used in tests
+class Session {
+  async destroy() {  // Looks like production API!
+    await this._workspaceManager?.destroyWorkspace(this.id);
+  }
+}
+afterEach(() => session.destroy());
+
+// GOOD: Test utilities handle cleanup
+// test-utils/session.ts
+export async function cleanupSession(session: Session) {
+  const workspace = session.getWorkspaceInfo();
+  if (workspace) {
+    await workspaceManager.destroyWorkspace(workspace.id);
+  }
+}
+afterEach(() => cleanupSession(session));
+```
+
+**Why this matters:** Production class pollution is dangerous. Methods only for tests shouldn't exist in production.
+
+### Anti-Pattern 3: Mocking Without Understanding
+
+```typescript
+// BAD: Mock breaks test logic
+test('detects duplicate server', () => {
+  // Mock prevents config write that test depends on!
+  vi.mock('ToolCatalog', () => ({
+    discoverAndCacheTools: vi.fn().mockResolvedValue(undefined)
+  }));
+  await addServer(config);
+  await addServer(config);  // Should throw - but won't!
+});
+
+// GOOD: Understand dependencies first
+test('detects duplicate server', () => {
+  // Mock only the slow part, preserve behavior test needs
+  vi.mock('MCPServerManager');
+
+  await addServer(config);  // Config written
+  await addServer(config);  // Duplicate detected
+});
+```
+
+**Gate function before mocking:**
+1. What side effects does the real method have?
+2. Does this test depend on any of those side effects?
+3. If yes → Mock at lower level, not the high-level method
+4. If unsure → Run with real implementation FIRST, then add minimal mocking
+
+### Anti-Pattern 4: Incomplete Mocks
+
+```typescript
+// BAD: Partial mock - only fields you think you need
+const mockResponse = {
+  status: 'success',
+  data: { userId: '123', name: 'Alice' }
+  // Missing: metadata that downstream code uses
+};
+
+// GOOD: Mirror real API completeness
+const mockResponse = {
+  status: 'success',
+  data: { userId: '123', name: 'Alice' },
+  metadata: { requestId: 'req-789', timestamp: 1234567890 }
+};
+```
+
+### Red Flags - Stop and Fix
+
+- Assertion checks for `*-mock` test IDs
+- Methods only called in test files
+- Mock setup is >50% of test
+- Test fails when you remove mock
+- Can't explain why mock is needed
+- Mocking "just to be safe"
+
+**Bottom line:** Mocks are tools to isolate, not things to test. If TDD reveals you're testing mock behavior, you've gone wrong.
+
 ## Related Skills
 
 - **verification-before-completion** - Verify tests actually pass before claiming done
 - **systematic-debugging** - When tests reveal unexpected failures
-- **testing-anti-patterns** - What NOT to do when writing tests

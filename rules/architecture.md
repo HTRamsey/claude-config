@@ -60,6 +60,7 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 | `tool_success_tracker` | all | Track failures, suggest alternatives |
 | `exploration_cache` | Task | Cache exploration results |
 | `agent_chaining` | Task | Suggest specialist follow-ups |
+| `usage_tracker` | Task, Skill | Track agent/skill/command usage |
 | `token_tracker` | all | Track daily token usage |
 | `output_size_monitor` | all | Warn about large outputs |
 
@@ -75,52 +76,66 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 | `suggest_subagent` | UserPromptSubmit | Suggest agent delegation |
 | `smart_permissions` | PermissionRequest | Context-aware auto-approval |
 
-## Agents (39) - Specialized Subagents
+## Agents (23) - Specialized Subagents
 
-### Quick Operations (Haiku - 10x cheaper)
-`quick-lookup` `error-explainer` `quick-researcher`
+### Quick Operations (Haiku)
+`quick-lookup` `error-explainer`
 
 ### Research
-`technical-researcher` (Sonnet)
+`technical-researcher`
 
-### Code Review & Quality (Opus)
-`code-reviewer` `security-reviewer` `perf-reviewer` `accessibility-reviewer`
+### Code Review & Quality
+`code-reviewer` `security-reviewer`
 
-### Architecture (Opus)
-`backend-architect` `database-architect` `ai-engineer` `threat-modeling-expert` `api-designer`
+### Architecture
+`backend-architect` `database-architect` `ai-engineer`
 
-### Operations (Sonnet)
-`devops-troubleshooter` `incident-responder` `observability-engineer`
+### Operations
+`devops-troubleshooter` `incident-responder` `migration-planner`
 
 ### Generation & Planning
-`test-generator` `doc-generator` `refactoring-planner` `orchestrator`
-
-### Analysis
-`dead-code-finder` `migration-planner` `impact-analyzer` `build-expert`
+`test-generator` `doc-generator` `orchestrator`
 
 ### Specialized
 `git-expert` `cpp-expert` `context-optimizer` `batch-editor` `testing-debugger`
+`cross-platform-tester` `import-optimizer` `protocol-analyzer` `real-time-systems`
 
-## Commands (16) - Slash Commands
+## Commands (14) - Slash Commands
 
 | Command | Purpose |
 |---------|---------|
-| `/review` | Pre-commit quality review |
 | `/commit` | Create formatted commit |
+| `/review` | Pre-commit quality review |
 | `/test` | Diagnose test failures |
-| `/refactor` | Plan refactoring |
-| `/docs` | Generate documentation |
+| `/debug` | Systematic debugging |
 | `/implement` | Structured feature work |
+| `/refactor` | Safe refactoring workflow |
+| `/docs` | Generate documentation |
+| `/pr` | Create pull request |
+| `/ci-fix` | Fix CI failures iteratively |
 | `/tech-debt` | Catalog technical debt |
 | `/checkpoint` | Save task state |
 | `/worktree` | Git worktree management |
 | `/queue` | Task queue management |
 | `/flow` | Claude-flow orchestration |
-| `/summarize` | Session summary |
-| `/pipeline` | Multi-stage feature workflow |
-| `/ci-fix` | Fix CI failures iteratively |
-| `/pr` | Create well-structured pull request |
-| `/debug` | Systematic debugging with root cause analysis |
+
+## Skills (16) - On-Demand Workflows
+
+### Core Workflows
+`systematic-debugging` `test-driven-development` `verification-before-completion` `security-audit`
+
+### Quality & Process
+`code-smell-detection` `receiving-code-review` `context-management`
+`batch-operations` `subagent-driven-development`
+
+### Git & Implementation
+`using-git-worktrees` `incremental-implementation`
+
+### Creators
+`hook-creator` `agent-creator` `command-creator` `skill-creator`
+
+### Specialized
+`memory-management-optimization`
 
 ## Scripts (57) - Shell Utilities
 
