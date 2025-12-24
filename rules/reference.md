@@ -71,7 +71,7 @@ Skills, agents, and commands quick reference.
 | Creating commands | `command-creator` |
 | Creating skills | `skill-creator` |
 
-## Agents (23 custom + 3 built-in)
+## Agents (24 custom + 3 built-in)
 
 ### Built-in (no file needed)
 | Trigger | Agent |
@@ -134,6 +134,11 @@ Skills, agents, and commands quick reference.
 | Import cleanup, circular deps | `import-optimizer` |
 | Binary protocols, serial, MAVLink | `protocol-analyzer` |
 | Timing, latency, real-time issues | `real-time-systems` |
+
+### Meta (Config Management)
+| Trigger | Agent |
+|---------|-------|
+| Audit/improve ~/.claude config, research Claude Code updates | `claude-config-expert` |
 
 ## Key Workflows
 

@@ -92,7 +92,7 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 | `research_cache` | PreToolUse/PostToolUse | Cache web research results |
 | `subagent_complete` | SubagentStop | Handle subagent completion |
 
-## Agents (23 custom + 3 built-in) - Specialized Subagents
+## Agents (24 custom + 3 built-in) - Specialized Subagents
 
 ### Built-in (no file needed)
 `Explore` `Plan` `claude-code-guide`
@@ -118,6 +118,9 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 ### Specialized
 `git-expert` `cpp-expert` `context-optimizer` `batch-editor` `testing-debugger`
 `cross-platform-tester` `import-optimizer` `protocol-analyzer` `real-time-systems`
+
+### Meta (Config Management)
+`claude-config-expert`
 
 ## Commands (14) - Slash Commands
 
