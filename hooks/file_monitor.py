@@ -182,7 +182,7 @@ def handle_read_pre(ctx: dict, state: dict) -> list[str]:
     if is_large:
         filename = Path(file_path).name
         messages.append(f"[Large File] {filename}: {reason}")
-        messages.append("  → Consider: Task(quick-lookup) or smart-preview.sh first")
+        messages.append("  → Consider: Task(quick-lookup) or smart-view.sh first")
 
     return messages
 

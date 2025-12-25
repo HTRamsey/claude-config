@@ -4,7 +4,7 @@ allowed-tools: Bash(gh:*), Bash(git:*), Read, Edit, Grep, Glob
 argument-hint: [pr-number]
 ---
 
-# CI Fix - Iteratively fix CI failures on PR
+# /ci-fix
 
 Automatically monitor, diagnose, and fix CI workflow failures until the PR passes.
 

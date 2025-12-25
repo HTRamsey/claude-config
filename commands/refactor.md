@@ -79,6 +79,23 @@ Grep pattern: "functionName" path: src/
 - If passes: Commit, next increment
 - If uncertain: Add test coverage first
 
+## Examples
+
+### Extract function
+```
+/refactor Extract telemetry parsing from Vehicle::handleMessage
+```
+
+### Rename variable across codebase
+```
+/refactor Rename vehicleState to telemetryState
+```
+
+### Simplify complex method
+```
+/refactor Simplify parseMAVLinkMessage (complexity 15)
+```
+
 ## When to Bail
 - No tests exist for target code → add tests first
 - Refactor scope too large (>3 files) → break down

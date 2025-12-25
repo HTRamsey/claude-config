@@ -182,6 +182,12 @@ Choose agent when: Task should be delegated to a subagent.
 | No anti-patterns | Add "Should NOT Attempt" |
 | No failure guidance | Add what to do when blocked |
 
+## Related Skills
+
+- **hook-creator**: Create hooks skills reference
+- **agent-creator**: Create agents skills invoke
+- **command-creator**: Create commands for skills
+
 ## When Blocked
 
 If unable to create a working skill:

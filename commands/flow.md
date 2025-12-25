@@ -4,7 +4,7 @@ allowed-tools: Bash(claude-flow:*)
 argument-hint: <workflow> "<objective>"
 ---
 
-# /flow - Claude Flow Orchestration
+# /flow
 
 Run claude-flow workflows for multi-agent task orchestration.
 

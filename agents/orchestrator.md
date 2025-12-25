@@ -44,23 +44,11 @@ Sequential flow:
 Task: Fix failing tests
 
 Loop:
-1. @error-explainer → Diagnose failure
+1. @quick-lookup → Diagnose failure
 2. Main agent → Apply fix
 3. Run tests
 4. If fail → repeat from 1
 5. If pass → @code-reviewer → Verify quality
-```
-
-### 4. Investigation Fan-Out
-```
-Task: Find root cause of bug
-
-Fan-out:
-├── @quick-lookup → Recent changes
-├── @quick-lookup → Related code paths
-└── @error-explainer → Error patterns
-
-Synthesize: Most likely cause + evidence
 ```
 
 ## Workflow Templates
@@ -71,21 +59,12 @@ Synthesize: Most likely cause + evidence
 - PR diff or file list
 
 ## Execution
-1. Categorize files (backend/frontend/infra/tests)
-2. Spawn appropriate reviewers in parallel:
-   - Backend → @security-reviewer, @code-reviewer
-   - Frontend → @code-reviewer
-   - All → @code-reviewer
-3. Collect results
-4. Deduplicate findings
-5. Prioritize by severity
+1. Categorize files by type
+2. Spawn reviewers in parallel (@security-reviewer, @code-reviewer)
+3. Deduplicate and prioritize findings
 
 ## Output
-Unified review with sections:
-- Critical (blocks merge)
-- High (should fix)
-- Medium (consider)
-- Positive observations
+Unified review: Critical → High → Medium → Positive
 ```
 
 ### Template: Feature Implementation
@@ -94,38 +73,13 @@ Unified review with sections:
 - Feature requirements
 
 ## Execution
-1. @backend-architect → Design API (if needed)
-2. Orchestrator → Plan changes (if modifying existing)
-3. Present plan for approval
-4. Implement in phases:
-   - Core logic
-   - Tests (via @test-generator guidance)
-   - Integration
-5. @code-reviewer → Final review
-6. @doc-generator → Update docs
+1. Design (if needed: @backend-architect)
+2. Plan changes with impact analysis
+3. Implement in phases with tests
+4. Review and document
 
 ## Output
-- Implementation complete
-- Tests passing
-- Documentation updated
-```
-
-### Template: Dependency Update
-```markdown
-## Input
-- Package(s) to update
-
-## Execution
-1. @migration-planner → Current vulnerabilities
-2. Analyze breaking changes (see Refactoring Planning)
-3. Update dependencies
-4. Run tests
-5. @code-reviewer → Check for newly unused code
-
-## Output
-- Updated packages
-- Resolved vulnerabilities
-- No regressions
+- Working implementation with passing tests and docs
 ```
 
 ### Template: Refactoring with ROI Analysis
@@ -176,39 +130,21 @@ Grep: 'TargetClass|targetFunction' --output_mode files_with_matches
 ### Refactoring Patterns
 
 #### Extract Function/Method
-1. Identify code block to extract
-2. Create new function with clear name
-3. Replace original with call
-4. Run tests
-5. Remove any duplication found
+1. Create new function, replace original with call, test
 
 #### Rename Symbol
-1. Find all usages (including strings, comments)
-2. Check for dynamic access (obj[name])
-3. Update in dependency order (interfaces first)
-4. Update tests
-5. Update documentation
+1. Find all usages (LSP or grep)
+2. Update in dependency order, then tests
 
 #### Move to New File
-1. Create new file
-2. Move code with all dependencies
-3. Add exports
-4. Update imports in consumers
-5. Remove from original
-6. Verify circular dependency free
+1. Create file, move code with dependencies
+2. Update imports, verify no circular dependencies
 
 #### Change Function Signature
-1. Add new parameter with default value
-2. Update all call sites (or use overload)
-3. Remove default once all updated
-4. Update tests
+1. Add parameter with default, update call sites, remove default
 
 #### Split Class/Module
-1. Identify cohesive groups of functionality
-2. Create new class/module for each group
-3. Move methods one at a time
-4. Update references
-5. Remove original once empty
+1. Identify cohesive groups, move one at a time
 
 ### Refactoring Output Format
 
@@ -323,43 +259,11 @@ curl -w "@curl-format.txt" -o /dev/null -s <url>
 
 ### Cost Analysis Patterns
 
-#### API/Cloud Costs
+#### Cost Example
 ```
-Current:
-- Requests/month: 1,000,000
-- Cost/request: $0.0001
-- Monthly cost: $100
-
-After optimization:
-- Requests reduced by 30% (caching)
-- New monthly cost: $70
-- Annual savings: $360
-```
-
-#### Compute Costs
-```
-Current:
-- Instance: m5.large ($0.096/hr)
-- Utilization: 80%
-- Monthly: $69
-
-After optimization:
-- Can use m5.medium ($0.048/hr)
-- Monthly: $35
-- Annual savings: $408
-```
-
-#### Database Costs
-```
-Current:
-- Queries/request: 5
-- Total queries/day: 5M
-- RDS cost: $X/month
-
-After optimization:
-- Queries/request: 2 (batch + cache)
-- Total queries/day: 2M
-- Projected savings: 60% on I/O costs
+Current: 1M requests/mo @ $0.0001 = $100/mo
+After: 700K requests (30% cache) = $70/mo
+Annual savings: $360
 ```
 
 ### Impact Analysis Output Format
@@ -416,24 +320,12 @@ After optimization:
 - 3-year ROI: 260%
 ```
 
-### Quick Reference: Latency Impact
-| Latency Increase | Bounce Rate | Conversion |
-|------------------|-------------|------------|
-| +100ms | +1% | -1% |
-| +500ms | +5% | -4% |
-| +1000ms | +10% | -7% |
-
-### Quick Reference: Scaling Impact
-| Reduction | Instance Savings |
-|-----------|------------------|
-| 30% memory | Can downsize 1 tier |
-| 50% CPU | Can halve instances |
-
-### Quick Reference: Query Optimization
-| Optimization | Typical Gain |
-|--------------|--------------|
-| Add index | 10-100x faster |
-| Batch queries | 2-5x fewer round trips |
+### Quick Reference
+| Metric | Rule of Thumb |
+|--------|---------------|
+| Latency +100ms | +1% bounce rate |
+| 30% memory reduction | Can downsize 1 tier |
+| Add index | 10-100x faster queries |
 | Add caching | 90%+ hit rate possible |
 
 ### Impact Analysis Rules
@@ -465,8 +357,7 @@ When receiving a complex task:
    | Documentation | @doc-generator |
    | Dependency issues | @migration-planner |
    | Dead code | @code-reviewer |
-   | Quick search | @quick-lookup |
-   | Error analysis | @error-explainer |
+   | Quick search/error analysis | @quick-lookup |
    | General review | @code-reviewer |
 
 3. **Order execution**

@@ -41,6 +41,19 @@ def save_state(session_id: str, state: dict):
     state_file = get_state_file(session_id)
     safe_save_json(state_file, state)
 
+def cleanup_old_batch_state():
+    """Delete batch-state files older than 24 hours."""
+    if not STATE_DIR.exists():
+        return
+
+    cutoff = time.time() - MAX_AGE_SECONDS
+    for state_file in STATE_DIR.glob("*.json"):
+        try:
+            if state_file.stat().st_mtime < cutoff:
+                state_file.unlink()
+        except (OSError, FileNotFoundError):
+            pass  # File already deleted or inaccessible
+
 def normalize_content(content: str) -> str:
     """Normalize content for comparison (remove whitespace variations)."""
     return re.sub(r'\s+', ' ', content.strip().lower())
@@ -116,6 +129,9 @@ def detect_batch(ctx: dict) -> dict | None:
 
     if tool_name not in ("Edit", "Write"):
         return None
+
+    # Clean up old state files
+    cleanup_old_batch_state()
 
     state = load_state(session_id)
     message = None

@@ -118,6 +118,11 @@ Use `Task(batch-editor)` instead of manual batching when:
 - Change requires understanding file context
 - Pattern-based replacement might have false positives
 
+## Related Skills
+
+- Use **batch-editor** agent for multi-file edits
+- **subagent-driven-development**: Parallelize independent work
+
 ## Integration
 
 - **batch-editor** agent - For complex multi-file changes requiring context

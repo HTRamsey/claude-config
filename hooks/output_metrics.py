@@ -149,7 +149,7 @@ def check_output_size(ctx: dict) -> dict | None:
         elif tool_name == "Grep":
             messages.append("  Tip: Use head_limit parameter or offload-grep.sh")
         elif tool_name == "Read":
-            messages.append("  Tip: Use smart-preview.sh or summarize-file.sh for large files")
+            messages.append("  Tip: Use smart-view.sh for large files")
     elif output_size >= warning_threshold:
         messages.append(f"[Output Monitor] {tool_name} output: ~{estimated_tokens:,} tokens")
 

@@ -72,6 +72,28 @@ $ARGUMENTS (test file, pattern, or empty for all tests)
 Next: Fix test_battery_voltage_parsing? (yes/skip)
 ```
 
+## Examples
+
+### Run all tests
+```
+/test
+```
+
+### Run specific test file
+```
+/test tests/test_vehicle.py
+```
+
+### Run tests matching pattern
+```
+/test battery
+```
+
+### Run tests in directory
+```
+/test src/api/
+```
+
 ## When to Bail
 - No test framework detected
 - Tests require external services not available

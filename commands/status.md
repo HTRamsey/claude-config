@@ -1,6 +1,9 @@
 ---
 description: Quick health check of current session, repository, and usage stats
+allowed-tools: Bash, Read, Grep, Glob
 ---
+
+# /status
 
 Show a quick status overview of the current session, repository, and usage stats.
 

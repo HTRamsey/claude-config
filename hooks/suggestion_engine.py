@@ -203,9 +203,9 @@ BASH_ALTERNATIVES = {
     r"^tree\s": ("smart-tree.sh", "uses eza --tree, respects .gitignore"),
     r"^sed\s": ("smart-replace.sh", "uses sd, simpler syntax"),
     r"^find\s.*-name": ("smart-find.sh", "uses fd, 10x faster, respects .gitignore"),
-    r"^cat\s": ("smart-cat.sh", "uses bat, syntax highlighting + line numbers"),
-    r"^head\s": ("smart-cat.sh", "uses bat with line range"),
-    r"^tail\s": ("smart-cat.sh", "uses bat with line range"),
+    r"^cat\s": ("smart/smart-view.sh", "unified viewer with syntax highlighting"),
+    r"^head\s": ("smart/smart-view.sh", "unified viewer with line range"),
+    r"^tail\s": ("smart/smart-view.sh", "unified viewer with line range"),
     r"^du\s": ("smart-du.sh", "uses dust, compact visual output"),
     r"^diff\s": ("smart-difft.sh", "uses difftastic, structural diff"),
     r"^git\s+blame": ("smart-blame.sh", "filters formatting commits, adds context"),
@@ -241,7 +241,7 @@ def suggest_optimization(ctx: dict) -> dict | None:
             if file_path and Path(file_path).exists():
                 size = Path(file_path).stat().st_size
                 if size > 50000:
-                    suggestion = "Large file - consider smart-preview.sh or summarize-file.sh"
+                    suggestion = "Large file - consider smart-view.sh"
         except Exception:
             pass
 

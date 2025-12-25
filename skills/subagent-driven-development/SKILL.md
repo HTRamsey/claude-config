@@ -155,6 +155,11 @@ Do NOT just increase timeouts. Return: summary of root cause and changes.
 2. Present blockers to user grouped by type
 3. Ask: which blocker to resolve first, or provide missing info?
 
+## Related Skills
+
+- **batch-operations**: Similar pattern for parallel work
+- **context-optimizer** agent: Each subagent has fresh context
+
 ## Escalation Triggers
 
 | Situation | Escalate To |

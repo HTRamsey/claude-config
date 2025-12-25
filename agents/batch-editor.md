@@ -28,8 +28,8 @@ Read file3.ts
 (all in same message)
 ```
 
-### 2. Pattern-Based Edits
-When the same change applies to multiple files:
+### 2. Pattern-Based Edits (Use Bash)
+For simple string/pattern replacements across files, use Bash tools:
 ```bash
 # Use sd for simple replacements
 sd 'oldPattern' 'newPattern' file1.ts file2.ts file3.ts
@@ -37,6 +37,7 @@ sd 'oldPattern' 'newPattern' file1.ts file2.ts file3.ts
 # Or sed for in-place
 sed -i 's/old/new/g' src/*.ts
 ```
+**When to use Edit instead**: AST-aware changes, logic modifications, or when replacement context matters.
 
 ### 3. AST-Based Refactoring
 For structural changes:

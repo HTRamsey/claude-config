@@ -3,6 +3,10 @@ set -euo pipefail
 # Batch processing wrapper - process multiple items efficiently
 # Instead of N separate operations, batches them to reduce token overhead
 
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/common.sh" 2>/dev/null || source "$HOME/.claude/scripts/lib/common.sh"
+
 usage() {
     cat << 'EOF'
 Usage: batch-process.sh <operation> <batch_size> <items...>

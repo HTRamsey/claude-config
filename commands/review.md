@@ -153,6 +153,23 @@ git diff --cached | grep -E "^\+.*(function|def|fn) \w+" | sort | uniq -d
 1 critical, 2 medium, 1 low. Fix critical before commit.
 ```
 
+## Examples
+
+### Review staged changes
+```
+/review
+```
+
+### Review specific file
+```
+/review src/api/auth.ts
+```
+
+### Review entire directory
+```
+/review src/handlers/
+```
+
 ## When to Bail
 - No staged changes and no path specified
 - Files too large to review effectively (>1000 lines)

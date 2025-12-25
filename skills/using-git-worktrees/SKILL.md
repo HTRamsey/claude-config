@@ -214,6 +214,10 @@ Ready to implement auth feature
 - **Dependency install fails:** Report error, warn tests may fail, proceed
 - **Tests fail:** Report failures, require explicit permission to continue
 
+## Related Skills
+
+- **incremental-implementation**: Deploy changes incrementally across worktrees
+
 ## Integration
 
 **Called by:**

@@ -1,6 +1,9 @@
 ---
 description: Generate changelog from git commits
+allowed-tools: Bash, Read, Grep, Glob
 ---
+
+# /changelog
 
 Generate a changelog from git commits between two points.
 

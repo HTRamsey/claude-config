@@ -12,6 +12,33 @@
 set -euo pipefail
 source "$HOME/.claude/scripts/lib/common.sh"
 
+usage() {
+    echo "Usage: $(basename "$0") [path] [depth] [pattern]"
+    echo ""
+    echo "Token-efficient directory listing with tree support"
+    echo ""
+    echo "Options:"
+    echo "  -h, --help    Show this help message"
+    echo ""
+    echo "Arguments:"
+    echo "  path          Directory to list (default: .)"
+    echo "  depth         Tree depth: 1=compact list, >1=tree view (default: 1)"
+    echo "  pattern       Regex filter for tree output"
+    echo ""
+    echo "Features:"
+    echo "  - Uses eza/lsd if available for enhanced output"
+    echo "  - Tree mode respects .gitignore"
+    echo "  - 75-87% smaller output than ls -la / tree"
+    echo "  - Auto-limits to 100 lines"
+    echo ""
+    echo "Examples:"
+    echo "  $(basename "$0")                  # Simple listing"
+    echo "  $(basename "$0") ./src 3          # Tree view, depth 3"
+    echo "  $(basename "$0") . 2 '\\.py$'     # Python files only"
+}
+
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { usage; exit 0; }
+
 path="${1:-.}"
 depth="${2:-1}"
 pattern="${3:-}"

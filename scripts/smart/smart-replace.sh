@@ -9,13 +9,38 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 
+usage() {
+    echo "Usage: $(basename "$0") <pattern> <replacement> <file-or-glob>"
+    echo ""
+    echo "Token-efficient search and replace using sd"
+    echo ""
+    echo "Options:"
+    echo "  -h, --help    Show this help message"
+    echo ""
+    echo "Arguments:"
+    echo "  pattern       Text pattern to search for"
+    echo "  replacement   Replacement text"
+    echo "  target        File path or glob pattern"
+    echo ""
+    echo "Features:"
+    echo "  - Uses sd if available (simpler syntax than sed)"
+    echo "  - No escaping needed for / or special characters"
+    echo "  - Preview mode by default (shows changes without applying)"
+    echo "  - Falls back to sed if sd not available"
+    echo ""
+    echo "Examples:"
+    echo "  $(basename "$0") 'oldFunc' 'newFunc' 'src/**/*.py'"
+    echo "  $(basename "$0") 'TODO' 'DONE' 'notes.txt'"
+}
+
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { usage; exit 0; }
+
 pattern="${1:-}"
 replacement="${2:-}"
 target="${3:-}"
 
 if [[ -z "$pattern" || -z "$replacement" || -z "$target" ]]; then
-    echo "Usage: smart-replace.sh <pattern> <replacement> <file-or-glob>"
-    echo "Example: smart-replace.sh 'oldFunc' 'newFunc' 'src/**/*.py'"
+    usage
     exit 1
 fi
 

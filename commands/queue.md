@@ -4,7 +4,7 @@ allowed-tools: Bash
 argument-hint: add|list|status|run|daemon|cancel|retry|clear
 ---
 
-# /queue - Task Queue Management
+# /queue
 
 Manage the lightweight task queue for Claude Code agents.
 

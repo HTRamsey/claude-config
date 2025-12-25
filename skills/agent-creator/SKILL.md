@@ -310,6 +310,12 @@ grep "^model:" ~/.claude/agents/my-agent.md
 - Using Opus for simple lookup tasks
 - Omitting tool restrictions for read-only agents
 
+## Related Skills
+
+- **hook-creator**: Create hooks for agent lifecycle
+- **skill-creator**: Create skills that use agents
+- **command-creator**: Create commands that invoke agents
+
 ## When Blocked
 
 If unable to design a good agent:

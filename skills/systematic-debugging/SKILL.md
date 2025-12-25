@@ -547,7 +547,7 @@ done
 - **test-driven-development** skill - REQUIRED for creating failing test case (Phase 4)
 
 **Complementary skills:**
-- **security-audit** skill - Multi-layer validation section for defense-in-depth
+- **security-reviewer** agent - Multi-layer validation section for defense-in-depth
 - **verification-before-completion** skill - Verify fix worked before claiming success
 
 **Techniques included in this skill:**
@@ -578,3 +578,8 @@ From debugging sessions:
 - Random fixes approach: 2-3 hours of thrashing
 - First-time fix rate: 95% vs 40%
 - New bugs introduced: Near zero vs common
+
+## Related Skills
+
+- **test-driven-development**: Write tests to prevent regression
+- **verification-before-completion**: Verify fix before claiming done

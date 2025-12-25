@@ -6,6 +6,10 @@
 
 set -euo pipefail
 
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/common.sh" 2>/dev/null || source "$HOME/.claude/scripts/lib/common.sh"
+
 CLAUDE_USER_RULES="$HOME/.claude/rules"
 PROJECT_RULES=".claude/rules"
 

@@ -366,6 +366,12 @@ head -30 ~/.claude/commands/my-command.md
 | No bail conditions | Add "When to Bail" section |
 | No anti-patterns | Add "Should NOT Do" section |
 
+## Related Skills
+
+- **hook-creator**: Create hooks for command events
+- **agent-creator**: Create agents commands invoke
+- **skill-creator**: Create skills commands reference
+
 ## When Blocked
 
 If unable to create a working command:

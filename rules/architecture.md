@@ -91,6 +91,8 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 | `subagent_start` | SubagentStart | Track subagent spawn time |
 | `subagent_complete` | SubagentStop | Handle subagent completion, calculate duration |
 
+**Note**: Some hooks handle multiple events (`suggestion_engine`, `file_monitor`, `state_saver`, `unified_cache`, `smart_permissions`) and appear in multiple tables above.
+
 ## Scripts
 
 Organized into subdirectories:
@@ -99,13 +101,14 @@ Organized into subdirectories:
 |-----------|---------|-------------|
 | `search/` (2) | Offloaded search | `offload-grep.sh`, `offload-find.sh` |
 | `compress/` (1) | Output compression | `compress.sh --type diff\|build\|tests\|stack\|logs\|json\|list\|errors` |
-| `smart/` (17) | Smart file viewing | `smart-view.sh` (unified viewer), `smart-analyze.sh` (unified analysis), `smart-preview.sh`, `smart-cat.sh`, `smart-diff.sh`, `smart-json.sh`, `smart-yaml.sh`, `smart-html.sh`, `smart-http.sh`, `smart-ast.sh`, `smart-blame.sh`, `smart-ls.sh`, `smart-du.sh`, `smart-find.sh`, `smart-replace.sh`, `extract-signatures.sh`, `summarize-file.sh` |
-| `analysis/` (7) | Code analysis | `dependency-graph.sh`, `find-related.sh`, `impact-analysis.sh`, `project-overview.sh`, `project-stats.sh`, `review-patterns.sh`, `token-tools.sh` |
+| `smart/` (14) | Smart file viewing | `smart-view.sh` (unified viewer), `smart-analyze.sh` (unified analysis), `smart-diff.sh`, `smart-json.sh`, `smart-yaml.sh`, `smart-html.sh`, `smart-http.sh`, `smart-ast.sh`, `smart-blame.sh`, `smart-ls.sh`, `smart-du.sh`, `smart-find.sh`, `smart-replace.sh`, `extract-signatures.sh` |
+| `analysis/` (3) | Code analysis | `project-stats.sh`, `review-patterns.sh`, `token-tools.sh` (use `smart/smart-analyze.sh` for deps/impact/project) |
 | `git/` (3) | Git workflow | `git-prep.sh`, `git-cleanup.sh`, `pre-commit-hook.sh` |
 | `queue/` (2) | Task queue | `task-queue.sh`, `queue-runner.sh` |
 | `diagnostics/` (9) | Health & testing | `health-check.sh`, `hook-benchmark.sh`, `hook-profiler.sh`, `validate-config.sh`, `test-hooks.sh`, `statusline.sh`, `venv-setup.sh`, `usage-report.sh`, `backup-config.sh` |
 | `automation/` (13) | Batch operations | `claude-safe.sh`, `batch-process.sh`, `parallel.sh`, `fan-out.sh`, `retry.sh`, `claude-model.sh`, `claude-tmux.sh`, `batch-annotate.sh`, `batch-select.sh`, `session-picker.sh`, `init-project-rules.sh`, `quick-jump.sh`, `recall.sh` |
 | `lib/` (4) | Shared utilities | `common.sh`, `cache.sh`, `lock.sh`, `notify.sh` |
+| `tests/` (1) | Validation | `smoke-test.sh` |
 
 Root-level: (none - all scripts organized into subdirectories)
 
@@ -163,3 +166,52 @@ Run `~/.claude/scripts/diagnostics/health-check.sh --cleanup` to:
 | `data/permission-patterns.json` | Learned permission patterns |
 | `data/hook-events.jsonl` | Hook execution log |
 | `data/session-history.json` | Session metadata for resumption |
+
+## MCP Servers
+
+Model Context Protocol servers extend Claude's capabilities with external integrations.
+
+### Configuration
+
+MCP servers are configured in `settings.json` under `allowedMcpServers`:
+
+```json
+"allowedMcpServers": [
+  {"serverName": "memory"},
+  {"serverName": "github"}
+]
+```
+
+### Recommended Servers
+
+| Server | Purpose | Use When |
+|--------|---------|----------|
+| **Brave Search** | Web search without WebFetch | Research, documentation lookup |
+| **GitHub** | Native repo operations | PR reviews, issue management |
+| **Puppeteer** | Browser automation | Testing, scraping, screenshots |
+| **Memory** | Persistent knowledge graph | Cross-session context |
+| **Filesystem** | File operations | Sandboxed file access |
+
+### Installation
+
+```bash
+# Example: Install Brave Search MCP
+claude mcp add brave-search
+
+# List configured servers
+claude mcp list
+
+# Remove a server
+claude mcp remove <server-name>
+```
+
+### Best Practices
+
+- **Prefer MCP over WebFetch** when available (native integration, better reliability)
+- **Limit scope** - Only enable servers you actively use
+- **Security** - Review server permissions before enabling
+- **Timeout config** - Set `MCP_TIMEOUT` and `MCP_TOOL_TIMEOUT` in settings.json env
+
+### Current Status
+
+Run `claude mcp list` or `~/.claude/scripts/diagnostics/health-check.sh` to see configured servers.

@@ -13,6 +13,31 @@
 set -euo pipefail
 source "$HOME/.claude/scripts/lib/common.sh"
 
+usage() {
+    echo "Usage: $(basename "$0") [OPTIONS] file1 [file2 ...]"
+    echo ""
+    echo "Extract function/class signatures without implementation"
+    echo ""
+    echo "Options:"
+    echo "  -h, --help        Show this help message"
+    echo "  -l, --lang LANG   Override language detection"
+    echo ""
+    echo "Supported languages:"
+    echo "  python, typescript, javascript, go, rust, java, c, cpp"
+    echo ""
+    echo "Features:"
+    echo "  - Extracts function signatures, class definitions, type definitions"
+    echo "  - Removes function bodies and implementation details"
+    echo "  - Saves 80-95% tokens while preserving API structure"
+    echo ""
+    echo "Examples:"
+    echo "  $(basename "$0") file.py"
+    echo "  $(basename "$0") src/*.ts"
+    echo "  $(basename "$0") --lang python file.py"
+}
+
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { usage; exit 0; }
+
 LANG=""
 FILES=()
 
@@ -31,8 +56,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
-    echo "Usage: extract-signatures.sh [--lang LANG] file1 [file2 ...]"
-    echo "Supported: python, typescript, javascript, go, rust, java, c, cpp"
+    usage
     exit 1
 fi
 

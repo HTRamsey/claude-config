@@ -340,6 +340,9 @@ detect_language() {
             *.md) echo "markdown" ;;
             *.json) echo "json" ;;
             *.yaml|*.yml) echo "yaml" ;;
+            *.html|*.htm) echo "html" ;;
+            *.css|*.scss|*.sass) echo "css" ;;
+            *.sql) echo "sql" ;;
             *.log) echo "log" ;;
             *) echo "unknown" ;;
         esac

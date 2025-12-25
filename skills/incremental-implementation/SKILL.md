@@ -116,6 +116,11 @@ Recommendation: [path forward]
 - "Part 1 of 3" where parts aren't independent
 - Features that "only work when everything is done"
 
+## Related Skills
+
+- **using-git-worktrees**: Isolate incremental work in worktrees
+- **test-driven-development**: TDD for each increment
+
 ## Integration
 
 - **using-git-worktrees** skill - Isolate each increment in worktree

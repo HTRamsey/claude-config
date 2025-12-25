@@ -75,7 +75,7 @@ ERROR_PATTERNS = {
 TOOL_ALTERNATIVES = {
     "Grep": "Consider Task(subagent_type=Explore) for complex searches",
     "Glob": "Try smart-find.sh with fd for faster, .gitignore-aware search",
-    "Read": "For large files, use smart-cat.sh with line ranges",
+    "Read": "For large files, use smart-view.sh",
     "Edit": "If edits keep failing, re-read file or check for concurrent modifications",
     "Bash": "For build/test commands, pipe through compress-*.sh scripts",
 }

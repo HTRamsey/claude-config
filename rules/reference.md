@@ -63,14 +63,12 @@ Skills, agents, and commands quick reference.
 | Bug, test failure, unexpected behavior | `systematic-debugging` |
 | Writing new feature/bugfix, adding tests | `test-driven-development` |
 | About to claim "done" or "fixed" | `verification-before-completion` |
-| Security review, vulnerability audit | `security-audit` |
 
 ### Quality & Process
 | Trigger | Skill |
 |---------|-------|
 | Before refactoring, complexity increases | `code-smell-detection` |
 | Received code review feedback | `receiving-code-review` |
-| Context bloated, before complex task | `context-management` |
 | 3+ similar operations | `batch-operations` |
 | 3+ independent issues to investigate | `subagent-driven-development` |
 
@@ -99,7 +97,7 @@ Skills, agents, and commands quick reference.
 - `Task(subagent_type="agent-name", prompt="...")` - programmatic
 - `@agent-name` in prompt - inline mention (Tab to accept suggestion)
 
-### Built-in (no file needed)
+### Built-in Agents (3)
 | Trigger | Agent |
 |---------|-------|
 | Codebase exploration | `Explore` |
@@ -162,6 +160,8 @@ Skills, agents, and commands quick reference.
 | Trigger | Agent |
 |---------|-------|
 | Audit/improve ~/.claude config, research Claude Code updates | `claude-config-expert` |
+
+**Total**: 21 custom agents + 3 built-in = 24 agents
 
 ## Key Workflows
 

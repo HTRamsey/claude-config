@@ -127,6 +127,11 @@ If detection cannot complete:
 - "It works, don't touch it" - Smells accumulate
 - Refactoring without tests - Recipe for regression
 
+## Related Skills
+
+- **receiving-code-review**: Both focus on code quality improvement
+- **verification-before-completion**: Verify fixes don't introduce new smells
+
 ## Integration
 
 - **orchestrator** agent - Plan safe refactoring after detecting smells

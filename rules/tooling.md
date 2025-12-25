@@ -21,8 +21,8 @@ Use for precise navigation instead of grep:
 |----------|----------|---------|
 | Search | `search/` | `offload-grep.sh`, `offload-find.sh` |
 | Compress | `compress/` | `compress.sh --type diff\|build\|tests\|stack\|logs\|json\|list\|errors` |
-| Smart View | `smart/` | `smart-view.sh` (unified viewer), `smart-analyze.sh` (unified analysis), `smart-preview.sh`, `smart-cat.sh`, `smart-diff.sh`, `smart-json.sh`, `smart-yaml.sh`, `smart-html.sh`, `smart-http.sh`, `smart-ast.sh`, `smart-blame.sh`, `smart-ls.sh`, `smart-du.sh`, `smart-find.sh`, `smart-replace.sh`, `extract-signatures.sh`, `summarize-file.sh` |
-| Analysis | `analysis/` | `find-related.sh`, `project-overview.sh`, `review-patterns.sh`, `impact-analysis.sh`, `project-stats.sh`, `token-tools.sh` |
+| Smart View | `smart/` | `smart-view.sh` (unified viewer), `smart-analyze.sh` (unified analysis), `smart-diff.sh`, `smart-json.sh`, `smart-yaml.sh`, `smart-html.sh`, `smart-http.sh`, `smart-ast.sh`, `smart-blame.sh`, `smart-ls.sh`, `smart-du.sh`, `smart-find.sh`, `smart-replace.sh`, `extract-signatures.sh` |
+| Analysis | `analysis/` | `project-stats.sh`, `review-patterns.sh`, `token-tools.sh` (use `smart-analyze.sh` for deps/impact) |
 | Git | `git/` | `git-prep.sh`, `git-cleanup.sh` |
 | Queue | `queue/` | `task-queue.sh`, `queue-runner.sh` |
 | Diagnostics | `diagnostics/` | `health-check.sh`, `validate-config.sh`, `hook-benchmark.sh`, `test-hooks.sh`, `statusline.sh`, `venv-setup.sh`, `usage-report.sh`, `backup-config.sh` |
@@ -127,53 +127,8 @@ Never read (waste tokens):
 
 ## MCP Servers
 
-Model Context Protocol servers extend Claude's capabilities with external integrations.
-
-### Configuration
-
-MCP servers are configured in `settings.json` under `allowedMcpServers`:
-
-```json
-"allowedMcpServers": [
-  {"serverName": "memory"},
-  {"serverName": "github"}
-]
-```
-
-### Recommended Servers
-
-| Server | Purpose | Use When |
-|--------|---------|----------|
-| **Brave Search** | Web search without WebFetch | Research, documentation lookup |
-| **GitHub** | Native repo operations | PR reviews, issue management |
-| **Puppeteer** | Browser automation | Testing, scraping, screenshots |
-| **Memory** | Persistent knowledge graph | Cross-session context |
-| **Filesystem** | File operations | Sandboxed file access |
-
-### Installation
-
-```bash
-# Example: Install Brave Search MCP
-claude mcp add brave-search
-
-# List configured servers
-claude mcp list
-
-# Remove a server
-claude mcp remove <server-name>
-```
-
-### Best Practices
-
-- **Prefer MCP over WebFetch** when available (native integration, better reliability)
-- **Limit scope** - Only enable servers you actively use
-- **Security** - Review server permissions before enabling
-- **Timeout config** - Set `MCP_TIMEOUT` and `MCP_TOOL_TIMEOUT` in settings.json env
-
-### Current Status
-
-Run `claude mcp list` or `~/.claude/scripts/diagnostics/health-check.sh` to see configured servers.
+See `architecture.md` for MCP server configuration.
 
 ## Plugins
 
-clangd (C++), pyright (Python)
+clangd (C++), pyright (Python - currently disabled)

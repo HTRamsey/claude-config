@@ -228,3 +228,7 @@ public:
 | "I'll add pooling everywhere" | Only pool when profiling shows benefit |
 | "Valgrind is too slow" | Use ASAN for development, Valgrind for releases |
 | "Python doesn't leak" | Reference cycles and caches leak constantly |
+
+## Related Skills
+
+- **systematic-debugging**: Debug memory issues methodically

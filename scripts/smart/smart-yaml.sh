@@ -9,17 +9,39 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 
+usage() {
+    echo "Usage: $(basename "$0") <file> [query] [options]"
+    echo ""
+    echo "YAML processor using yq (supports YAML, XML, TOML)"
+    echo ""
+    echo "Options:"
+    echo "  -h, --help    Show this help message"
+    echo ""
+    echo "Arguments:"
+    echo "  file          YAML/XML/TOML file to process"
+    echo "  query         yq query expression (default: .)"
+    echo "  options       Additional yq options (passed through)"
+    echo ""
+    echo "Features:"
+    echo "  - Uses yq for YAML/XML/TOML processing"
+    echo "  - Falls back to Python yaml module if yq not available"
+    echo "  - Supports jq-like query syntax"
+    echo ""
+    echo "Examples:"
+    echo "  $(basename "$0") config.yml                    # Pretty print"
+    echo "  $(basename "$0") config.yml '.services'        # Query path"
+    echo "  $(basename "$0") docker-compose.yml '.services | keys'"
+    echo "  $(basename "$0") config.xml -p=xml             # XML input"
+}
+
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { usage; exit 0; }
+
 file="${1:-}"
 query="${2:-.}"
 
 if [[ -z "$file" ]]; then
-    echo "Usage: smart-yaml.sh <file> [query]"
-    echo "Examples:"
-    echo "  smart-yaml.sh config.yml                    # Pretty print"
-    echo "  smart-yaml.sh config.yml '.services'        # Query path"
-    echo "  smart-yaml.sh docker-compose.yml '.services | keys'"
-    echo "  smart-yaml.sh config.xml -p=xml             # XML input"
-    exit 0
+    usage
+    exit 1
 fi
 
 # Find yq using common.sh

@@ -10,17 +10,39 @@
 
 set -euo pipefail
 
-file="$1"
+usage() {
+    echo "Usage: $(basename "$0") <file> [line] [context_lines]"
+    echo ""
+    echo "Git blame with context, skipping noise commits"
+    echo ""
+    echo "Options:"
+    echo "  -h, --help    Show this help message"
+    echo ""
+    echo "Arguments:"
+    echo "  file            File to blame"
+    echo "  line            Specific line number (default: entire file)"
+    echo "  context_lines   Lines of context around target line (default: 3)"
+    echo ""
+    echo "Features:"
+    echo "  - Shows surrounding context"
+    echo "  - Uses .git-blame-ignore-revs if present"
+    echo "  - Filters common noise patterns (formatting, lint fixes)"
+    echo "  - Compact output format"
+    echo ""
+    echo "Examples:"
+    echo "  $(basename "$0") src/main.py           # blame entire file"
+    echo "  $(basename "$0") src/main.py 42        # blame around line 42"
+    echo "  $(basename "$0") src/main.py 42 5      # line 42 with 5 lines context"
+}
+
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { usage; exit 0; }
+
+file="${1:-}"
 line="${2:-}"
 context="${3:-3}"
 
 if [[ -z "$file" ]]; then
-    echo "Usage: smart-blame.sh <file> [line] [context_lines]"
-    echo ""
-    echo "Examples:"
-    echo "  smart-blame.sh src/main.py           # blame entire file"
-    echo "  smart-blame.sh src/main.py 42        # blame around line 42"
-    echo "  smart-blame.sh src/main.py 42 5      # line 42 with 5 lines context"
+    usage
     exit 1
 fi
 

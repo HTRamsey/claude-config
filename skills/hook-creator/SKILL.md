@@ -300,6 +300,12 @@ python3 -m py_compile ~/.claude/hooks/my_hook.py
 | Printing debug output | Only print JSON result |
 | No exception handling | Wrap everything in try/except |
 
+## Related Skills
+
+- **skill-creator**: Create skills that use hooks
+- **agent-creator**: Create agents that complement hooks
+- **command-creator**: Create commands that trigger hooks
+
 ## When Blocked
 
 If unable to create a working hook:

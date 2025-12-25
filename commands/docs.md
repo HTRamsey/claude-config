@@ -11,7 +11,7 @@ $ARGUMENTS (file, function, or class to document)
 
 Generate or update documentation.
 
-## Use Cases
+## Examples
 - Document new functions/classes
 - Update README for new features
 - Create API documentation

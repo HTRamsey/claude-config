@@ -1,7 +1,7 @@
 ---
 name: claude-config-expert
 description: "Audit, improve, and maintain ~/.claude configuration. Research Claude Code release notes and documentation. Analyze usage patterns, suggest optimizations, fix inconsistencies, update documentation."
-tools: Read,Grep,Glob,Bash,Edit,Write,WebSearch,WebFetch
+tools: Read, Grep, Glob, Bash, Edit, Write, WebSearch, WebFetch
 model: opus
 ---
 

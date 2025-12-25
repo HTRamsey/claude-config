@@ -194,6 +194,48 @@ Low        │ Info   │ Low    │ Medium │
 4. **Data**: Encryption, access control
 5. **Monitoring**: Detection, response
 
+## Multi-Layer Validation Strategy
+
+**Core Principle:** Validate at EVERY layer data passes through. Make bugs structurally impossible.
+
+| Layer | Purpose | Example |
+|-------|---------|---------|
+| 1. Entry Point | Reject invalid input at API boundary | Check not empty, exists, is directory |
+| 2. Business Logic | Data makes sense for operation | Validate required fields for this action |
+| 3. Environment Guards | Prevent danger in specific contexts | Refuse git init outside tmpdir in tests |
+| 4. Debug Instrumentation | Capture context for forensics | Log directory, cwd, stack before risky ops |
+
+### Implementation Pattern
+```typescript
+// Layer 1: Entry validation
+function createProject(name: string, dir: string) {
+  if (!dir?.trim()) throw new Error('dir cannot be empty');
+  if (!existsSync(dir)) throw new Error(`dir not found: ${dir}`);
+}
+
+// Layer 2: Business logic
+function initWorkspace(projectDir: string) {
+  if (!projectDir) throw new Error('projectDir required');
+}
+
+// Layer 3: Environment guard
+async function gitInit(dir: string) {
+  if (process.env.NODE_ENV === 'test' && !dir.startsWith(tmpdir())) {
+    throw new Error(`Refusing git init outside temp: ${dir}`);
+  }
+}
+
+// Layer 4: Debug instrumentation
+logger.debug('About to git init', { dir, cwd: process.cwd(), stack: new Error().stack });
+```
+
+### When to Apply
+When you find a bug caused by invalid data:
+1. **Trace data flow** - Where does bad value originate?
+2. **Map checkpoints** - Every point data passes through
+3. **Add validation at each layer**
+4. **Test each layer** - Bypass layer 1, verify layer 2 catches it
+
 ## Detection Patterns
 
 ```bash

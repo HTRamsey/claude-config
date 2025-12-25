@@ -106,6 +106,23 @@ $ARGUMENTS (error message, symptom, or unexpected behavior)
 - [x] No regressions
 ```
 
+## Examples
+
+### Debug specific error message
+```
+/debug TypeError: Cannot read property 'voltage' of undefined
+```
+
+### Debug test failure
+```
+/debug test_battery_voltage_parsing failing intermittently
+```
+
+### Debug performance issue
+```
+/debug Message processing taking 500ms (expected <50ms)
+```
+
 ## Should NOT Do
 - Apply random fixes without understanding
 - Leave debug logging in code
