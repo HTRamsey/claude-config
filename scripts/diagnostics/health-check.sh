@@ -361,20 +361,9 @@ executable=$(find ~/.claude/scripts -name "*.sh" -type f -executable 2>/dev/null
 echo "  $executable/$total scripts executable"
 echo "  Subdirectories: search/, compress/, smart/, analysis/, git/, queue/, diagnostics/, automation/, lib/"
 
-# Manifest validation
-if [[ -f ~/.claude/scripts/manifest.json ]]; then
-    echo "  manifest.json: ✓ present"
-    if python3 -m json.tool ~/.claude/scripts/manifest.json > /dev/null 2>&1; then
-        echo "  manifest.json: ✓ valid JSON"
-    else
-        echo "  manifest.json: ✗ INVALID JSON"
-    fi
-else
-    echo "  manifest.json: ✗ MISSING"
-fi
 echo ""
 
-# Dependencies from manifest - use sorted array for consistent output
+# Dependencies - sorted list for consistent output
 echo "## Dependencies"
 
 # Define dependencies as sorted list for predictable output
