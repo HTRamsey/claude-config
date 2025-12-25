@@ -1,7 +1,0 @@
-pyproject.toml
-claude_hooks.egg-info/PKG-INFO
-claude_hooks.egg-info/SOURCES.txt
-claude_hooks.egg-info/dependency_links.txt
-claude_hooks.egg-info/requires.txt
-claude_hooks.egg-info/top_level.txt
-tests/test_file_access_tracker.py

@@ -73,7 +73,7 @@ gh run list --branch $(git branch --show-current) --status failure --limit 1 --j
 gh run view <run-id> --log-failed
 ```
 
-Use `~/.claude/scripts/compress-build.sh` or `~/.claude/scripts/compress-tests.sh` to reduce log output if verbose.
+Use `~/.claude/scripts/compress/compress.sh --type build` or `--type tests` to reduce log output if verbose.
 
 ### Step 4: Diagnose the Failure
 
@@ -126,6 +126,19 @@ gh run watch
 ```
 
 Return to Step 2 and repeat until all checks pass.
+
+## When to Bail
+- After 5 failed fix attempts → ask for human review
+- Flaky test detected → note and skip
+- Fix requires breaking API change → confirm first
+- Infrastructure issue (not code) → report and stop
+
+## Should NOT Do
+- Fix more than 5 iterations without asking
+- Refactor unrelated code
+- Make breaking API changes without confirmation
+- Keep retrying flaky tests
+- Disable or skip failing tests
 
 ## Guardrails
 

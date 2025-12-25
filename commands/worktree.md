@@ -35,13 +35,23 @@ Remove worktree safely:
 2. Run `git worktree remove <path>`
 3. Optionally delete the branch if requested
 
-## Rules
+## When to Bail
+- Not in a git repository
+- Branch doesn't exist (for add without -b)
+- Worktree has uncommitted changes (for remove)
+- Target directory already exists
 
-- Never remove a worktree with uncommitted changes without warning
+## Should NOT Do
+- Remove worktree with uncommitted changes without warning
+- Create worktree for non-existent branch without asking
+- Delete branch when removing worktree (unless asked)
+- Switch to worktree (just report path)
+
+## Rules
 - Always report the full path after creating a worktree
 - Check if branch exists before creating worktree
 
-## Output
+## Output Format
 
 ```
 Worktree created: /path/to/project-feature

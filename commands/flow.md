@@ -9,11 +9,11 @@ argument-hint: <workflow> "<objective>"
 Run claude-flow workflows for multi-agent task orchestration.
 
 ## Arguments
-$ARGUMENTS - Workflow name and options (e.g., "feature 'Add user auth'" or "quick-review ./src/auth")
+`$ARGUMENTS` - Workflow name (subcommand) and its arguments (e.g., "feature 'Add user auth'" or "quick-review ./src/auth")
 
-## Instructions
+## Workflow
 
-Parse arguments and execute claude-flow with appropriate options.
+Parse `$ARGUMENTS` to extract the workflow name and objective, then execute claude-flow with appropriate options.
 
 ### Available Workflows
 
@@ -73,7 +73,19 @@ claude-flow swarm "objective"         # Quick swarm
 claude-flow start --swarm             # Start with swarm intelligence
 ```
 
-### Output
+## When to Bail
+- claude-flow not installed or not in PATH
+- Invalid workflow name specified
+- Objective unclear (ask for clarification)
+- Previous workflow still running
+
+## Should NOT Do
+- Run workflows without confirming objective
+- Override default agents without reason
+- Run heavy workflows (feature, refactor) without worktree isolation
+- Interrupt running workflows
+
+### Output Format
 - Stream progress from claude-flow
 - Show agent transitions
 - Report final status and any generated artifacts

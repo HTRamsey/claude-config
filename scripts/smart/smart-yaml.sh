@@ -3,7 +3,11 @@
 # Usage: smart-yaml.sh <file> [query] [options]
 # Supports YAML, XML, TOML via yq
 
-set -e
+set -euo pipefail
+
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/common.sh"
 
 file="${1:-}"
 query="${2:-.}"
@@ -18,24 +22,14 @@ if [[ -z "$file" ]]; then
     exit 0
 fi
 
-# Find yq
-YQ=""
-if command -v yq &>/dev/null; then
-    YQ="yq"
-elif [[ -x "$HOME/.local/bin/yq" ]]; then
-    YQ="$HOME/.local/bin/yq"
-elif [[ -x /snap/bin/yq ]]; then
-    YQ="/snap/bin/yq"
-elif [[ -x "$HOME/go/bin/yq" ]]; then
-    YQ="$HOME/go/bin/yq"
-fi
+# Find yq using common.sh
+YQ=$(find_yq) || YQ=""
 
 if [[ -z "$YQ" ]]; then
-    echo "Error: yq not found. Install: snap install yq" >&2
+    log_warn "yq not found. Install: snap install yq"
     # Fallback: use Python for basic YAML parsing
-    # Use environment variable to safely pass filename (no shell injection)
-    if command -v python3 &>/dev/null; then
-        echo "Falling back to Python yaml module..." >&2
+    if has_command python3; then
+        log_info "Falling back to Python yaml module..."
         INPUT_FILE="$file" python3 -c '
 import yaml, os
 with open(os.environ["INPUT_FILE"]) as f:

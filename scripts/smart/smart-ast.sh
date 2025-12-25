@@ -7,7 +7,8 @@
 # - Common pattern shortcuts
 # - Compact output mode
 
-set -e
+set -euo pipefail
+source "$HOME/.claude/scripts/lib/common.sh"
 
 pattern="$1"
 path="${2:-.}"
@@ -61,36 +62,7 @@ EOF
 
 [[ -z "$pattern" || "$pattern" == "-h" || "$pattern" == "--help" ]] && show_help
 
-# Auto-detect language from path
-detect_language() {
-    local p="$1"
-    if [[ -d "$p" ]]; then
-        # Check for files by extension using find (more reliable than ls glob)
-        if find "$p" -maxdepth 1 -name "*.py" -print -quit 2>/dev/null | grep -q .; then echo "python"
-        elif find "$p" -maxdepth 1 -name "*.ts" -print -quit 2>/dev/null | grep -q .; then echo "typescript"
-        elif find "$p" -maxdepth 1 -name "*.js" -print -quit 2>/dev/null | grep -q .; then echo "javascript"
-        elif find "$p" -maxdepth 1 -name "*.rs" -print -quit 2>/dev/null | grep -q .; then echo "rust"
-        elif find "$p" -maxdepth 1 -name "*.go" -print -quit 2>/dev/null | grep -q .; then echo "go"
-        elif find "$p" -maxdepth 1 -name "*.cpp" -print -quit 2>/dev/null | grep -q .; then echo "cpp"
-        elif find "$p" -maxdepth 1 -name "*.java" -print -quit 2>/dev/null | grep -q .; then echo "java"
-        elif find "$p" -maxdepth 1 -name "*.rb" -print -quit 2>/dev/null | grep -q .; then echo "ruby"
-        fi
-    else
-        case "$p" in
-            *.py) echo "python" ;;
-            *.ts|*.tsx) echo "typescript" ;;
-            *.js|*.jsx|*.mjs) echo "javascript" ;;
-            *.rs) echo "rust" ;;
-            *.go) echo "go" ;;
-            *.c|*.h) echo "c" ;;
-            *.cpp|*.cc|*.hpp) echo "cpp" ;;
-            *.java) echo "java" ;;
-            *.rb) echo "ruby" ;;
-        esac
-    fi
-}
-
-# Use provided language or auto-detect
+# Use provided language or auto-detect (detect_language from common.sh)
 if [[ -z "$lang" ]]; then
     lang=$(detect_language "$path")
 fi

@@ -153,7 +153,7 @@ rg "http://"                                    # non-HTTPS
 | Threat model needed for complex feature | `security-reviewer` agent for STRIDE analysis |
 | Crypto/auth implementation | Flag for expert human review |
 | Dependency with known CVE | `migration-planner` agent for remediation |
-| Production incident suspected | `incident-responder` agent |
+| Production incident suspected | `devops-troubleshooter` agent |
 
 ## Failure Behavior
 

@@ -69,20 +69,55 @@ def graceful_main(hook_name: str):
         return wrapper
     return decorator
 
-def get_session_id(transcript_path: str) -> str:
-    """Get or generate a session ID from transcript path."""
-    if not transcript_path:
-        return "unknown"
-    return hashlib.md5(transcript_path.encode()).hexdigest()[:8]
+def get_session_id(ctx: dict = None, transcript_path: str = None) -> str:
+    """
+    Get consistent session ID from context or generate one.
 
-def is_new_session(transcript_path: str) -> bool:
+    Args:
+        ctx: Context dict (may contain session_id)
+        transcript_path: Transcript path to hash (fallback)
+
+    Returns:
+        Session ID string (never empty, defaults to "default")
+
+    Priority:
+        1. ctx["session_id"] if available
+        2. CLAUDE_SESSION_ID environment variable
+        3. Hash of transcript_path if provided
+        4. "default" as final fallback
+    """
+    import time
+
+    # Priority 1: Context session_id
+    if ctx and ctx.get("session_id"):
+        return ctx["session_id"]
+
+    # Priority 2: Environment variable
+    session_from_env = os.environ.get("CLAUDE_SESSION_ID")
+    if session_from_env:
+        return session_from_env
+
+    # Priority 3: Hash transcript_path
+    # Support both direct argument and ctx["transcript_path"]
+    path = transcript_path or (ctx.get("transcript_path") if ctx else None)
+    if path:
+        return hashlib.md5(path.encode()).hexdigest()[:8]
+
+    # Priority 4: Default fallback
+    return "default"
+
+def is_new_session(ctx: dict = None, transcript_path: str = None) -> bool:
     """
     Check if this is a new session (first message).
     Uses session state file to track seen sessions.
+
+    Args:
+        ctx: Context dict (preferred)
+        transcript_path: Transcript path (fallback)
     """
     try:
         ensure_data_dir()
-        session_id = get_session_id(transcript_path)
+        session_id = get_session_id(ctx, transcript_path)
 
         state = {}
         if SESSION_STATE_FILE.exists():
@@ -129,13 +164,14 @@ def update_session_state(updates: dict):
     except Exception:
         pass
 
-def backup_transcript(transcript_path: str, reason: str = "manual") -> str:
+def backup_transcript(transcript_path: str, reason: str = "manual", ctx: dict = None) -> str:
     """
     Backup transcript to data directory.
 
     Args:
         transcript_path: Path to transcript file
         reason: Reason for backup (pre_compact, checkpoint, etc.)
+        ctx: Context dict (optional, for session ID)
 
     Returns:
         Path to backup file, or empty string on failure
@@ -149,7 +185,7 @@ def backup_transcript(transcript_path: str, reason: str = "manual") -> str:
         backup_dir.mkdir(exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        session_id = get_session_id(transcript_path)
+        session_id = get_session_id(ctx, transcript_path)
         backup_name = f"{session_id}-{reason}-{timestamp}.jsonl"
         backup_path = backup_dir / backup_name
 
@@ -185,3 +221,68 @@ def output_message(message: str, to_stderr: bool = False):
     """Output message to appropriate stream."""
     stream = sys.stderr if to_stderr else sys.stdout
     print(message, file=stream)
+
+
+def safe_load_json(path: Path, default: dict = None) -> dict:
+    """
+    Load JSON file with graceful fallback.
+
+    Args:
+        path: Path to JSON file
+        default: Default value if file doesn't exist or is invalid
+
+    Returns:
+        Parsed JSON dict, or default on any error
+    """
+    if default is None:
+        default = {}
+    try:
+        if path.exists():
+            with open(path) as f:
+                return json.load(f)
+    except (json.JSONDecodeError, IOError, OSError):
+        pass
+    return default.copy() if isinstance(default, dict) else default
+
+
+def safe_save_json(path: Path, data: dict, indent: int = 2) -> bool:
+    """
+    Save JSON file with graceful error handling.
+
+    Args:
+        path: Path to save to
+        data: Dict to save
+        indent: JSON indent level
+
+    Returns:
+        True on success, False on any error
+    """
+    try:
+        ensure_data_dir()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, 'w') as f:
+            json.dump(data, f, indent=indent)
+        return True
+    except (IOError, OSError, TypeError):
+        return False
+
+
+def safe_append_jsonl(path: Path, entry: dict) -> bool:
+    """
+    Append entry to JSONL file with graceful error handling.
+
+    Args:
+        path: Path to JSONL file
+        entry: Dict to append as JSON line
+
+    Returns:
+        True on success, False on any error
+    """
+    try:
+        ensure_data_dir()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, 'a') as f:
+            f.write(json.dumps(entry) + "\n")
+        return True
+    except (IOError, OSError, TypeError):
+        return False

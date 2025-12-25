@@ -218,7 +218,7 @@ public:
 - Concurrency in allocators → `systematic-debugging` skill (concurrency section)
 - Architecture-level memory design → `backend-architect` agent
 - Qt/C++ specific issues → `cpp-expert` agent
-- Real-time allocation constraints → `real-time-systems` agent
+- Real-time allocation constraints → `cpp-expert` agent (handles embedded/real-time)
 
 ## Common Mistakes
 

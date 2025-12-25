@@ -153,10 +153,22 @@ git diff --cached | grep -E "^\+.*(function|def|fn) \w+" | sort | uniq -d
 1 critical, 2 medium, 1 low. Fix critical before commit.
 ```
 
+## When to Bail
+- No staged changes and no path specified
+- Files too large to review effectively (>1000 lines)
+- Binary or generated files only
+- For deep security analysis → use security-reviewer agent
+
+## Should NOT Do
+- Auto-fix issues without asking
+- Add AI attribution comments
+- Review files outside scope
+- Nitpick style when logic issues exist
+- Block on low-severity issues
+
 ## Rules
 - Show exact file:line locations
 - Explain **impact**, not just what's wrong
 - Suggest **specific fixes** with code when helpful
 - Prioritize by severity
-- Never add AI attribution comments
 - If breaking changes found, confirm intent with user

@@ -1,18 +1,31 @@
 #!/usr/bin/env bash
-# Fan-out processing - route to appropriate tool based on scale
-#
-# Usage:
-#   fan-out.sh <prompt> <file-pattern> [--parallel N] [--dry-run]
-#   fan-out.sh "Migrate to new API" "src/**/*.ts"
-#   fan-out.sh "Add error handling" "*.py" --parallel 4
-#   find . -name "*.js" | fan-out.sh "Convert to TypeScript" -
-#
-# Routes:
-#   1-2 files   → Direct Claude (inline)
-#   3-50 files  → batch-editor agent
-#   51+ files   → Headless fan-out (parallel Claude processes)
+set -euo pipefail
 
-set -e
+usage() {
+    cat << 'EOF'
+Usage: fan-out.sh <prompt> <file-pattern> [--parallel N] [--dry-run]
+
+Fan-out processing - route to appropriate tool based on scale.
+
+Routes:
+  1-2 files    Direct Claude (inline)
+  3-50 files   batch-editor agent
+  51+ files    Headless fan-out (parallel Claude processes)
+
+Options:
+  --parallel N  Number of parallel processes (default: 4)
+  --dry-run     Preview without executing
+  -h, --help    Show this help
+
+Examples:
+  fan-out.sh "Migrate to new API" "src/**/*.ts"
+  fan-out.sh "Add error handling" "*.py" --parallel 4
+  find . -name "*.js" | fan-out.sh "Convert to TypeScript" -
+EOF
+    exit 0
+}
+
+[[ "${1:-}" =~ ^(-h|--help)$ ]] && usage
 
 PROMPT="$1"
 PATTERN="$2"

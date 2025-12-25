@@ -1,17 +1,38 @@
 #!/usr/bin/env bash
-# claude-safe.sh - Run Claude Code with automation safeguards
-# Prevents runaway token consumption in automated/CI workflows
-#
-# Usage:
-#   claude-safe.sh "your prompt here"
-#   claude-safe.sh -f prompt.txt
-#   echo "prompt" | claude-safe.sh -
-#
-# Configuration (via environment or defaults):
-#   MAX_TURNS=25        - Maximum conversation turns
-#   TIMEOUT_MINUTES=10  - Total time limit
-#   MAX_TOKENS=100000   - Approximate token budget
-#   DRY_RUN=0           - Set to 1 to preview without running
+set -euo pipefail
+
+usage() {
+    cat << 'EOF'
+Usage: claude-safe.sh "prompt"
+       claude-safe.sh -f prompt.txt
+       echo "prompt" | claude-safe.sh -
+
+Run Claude Code with automation safeguards.
+Prevents runaway token consumption in automated/CI workflows.
+
+Environment Variables:
+  MAX_TURNS=25          Maximum conversation turns (default: 25)
+  TIMEOUT_MINUTES=10    Total time limit (default: 10)
+  MAX_TOKENS=100000     Approximate token budget (default: 100000)
+  DRY_RUN=0|1           Preview without running (default: 0)
+  OUTPUT_FORMAT=text    Output format: text or json (default: text)
+
+Options:
+  -h, --help    Show this help
+
+Examples:
+  claude-safe.sh "Fix the tests"
+  claude-safe.sh -f task.txt
+  echo "Refactor auth module" | claude-safe.sh -
+  MAX_TURNS=50 TIMEOUT_MINUTES=20 claude-safe.sh "Complex task"
+EOF
+    exit 0
+}
+
+[[ "${1:-}" =~ ^(-h|--help)$ ]] && usage
+
+# Load common utilities
+source "$(dirname "$0")/../lib/common.sh"
 
 # Defaults (can be overridden via environment)
 MAX_TURNS="${MAX_TURNS:-25}"
@@ -19,24 +40,6 @@ TIMEOUT_MINUTES="${TIMEOUT_MINUTES:-10}"
 MAX_TOKENS="${MAX_TOKENS:-100000}"
 DRY_RUN="${DRY_RUN:-0}"
 OUTPUT_FORMAT="${OUTPUT_FORMAT:-text}"  # text or json
-
-# Colors for output
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-GREEN='\033[0;32m'
-NC='\033[0m' # No Color
-
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1" >&2
-}
-
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1" >&2
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1" >&2
-}
 
 # Parse arguments
 PROMPT=""

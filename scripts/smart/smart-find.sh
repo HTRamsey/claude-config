@@ -3,21 +3,14 @@
 # Usage: smart-find.sh [pattern] [path] [limit]
 # fd is faster and has better defaults than find (respects .gitignore)
 
-set -e
+set -euo pipefail
+source "$HOME/.claude/scripts/lib/common.sh"
 
 pattern="${1:-}"
 path="${2:-.}"
 limit="${3:-30}"
 
-# Find fd (cargo or system)
-FD=""
-if command -v fd &>/dev/null; then
-    FD="fd"
-elif [[ -x "$HOME/.cargo/bin/fd" ]]; then
-    FD="$HOME/.cargo/bin/fd"
-elif command -v fdfind &>/dev/null; then
-    FD="fdfind"
-fi
+FD=$(find_fd)
 
 if [[ -n "$FD" ]]; then
     if [[ -n "$pattern" ]]; then

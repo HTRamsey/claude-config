@@ -20,6 +20,7 @@
 SCRIPT_VERSION="1.0.0"
 
 set -euo pipefail
+source "$HOME/.claude/scripts/lib/common.sh"
 
 # Defaults
 MAX_JOBS=4

@@ -1,3 +1,8 @@
+---
+description: Run linters on current changes or specified files
+allowed-tools: Bash, Glob, Read
+---
+
 # /lint
 
 Run linters on current changes or specified files.

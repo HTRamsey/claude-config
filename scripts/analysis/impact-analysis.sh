@@ -8,7 +8,8 @@
 # - Identifies related test files
 # - Works across Python, JS/TS, C/C++, Go, Rust
 
-set -e
+set -euo pipefail
+source "$HOME/.claude/scripts/lib/common.sh"
 
 file="$1"
 search_path="${2:-.}"
@@ -31,23 +32,24 @@ fi
 filename=$(basename "$file")
 name_no_ext="${filename%.*}"
 extension="${filename##*.}"
+lang=$(detect_language "$file")
 dir=$(dirname "$file")
 
-# Determine language and import patterns
-case "$extension" in
-    py)
+# Determine import patterns based on language
+case "$lang" in
+    python)
         # Python imports
         import_pattern="^(from|import)\s+.*$name_no_ext|^from\s+\.\s+import.*$name_no_ext"
         self_import_pattern="^(from|import)\s+"
         file_glob="*.py"
         ;;
-    js|jsx|ts|tsx|mjs)
+    typescript|javascript)
         # JavaScript/TypeScript imports
         import_pattern="(require|import).*['\"].*$name_no_ext['\"]|from\s+['\"].*$name_no_ext['\"]"
         self_import_pattern="^import\s+|require\s*\("
         file_glob="*.{js,jsx,ts,tsx,mjs}"
         ;;
-    c|h|cpp|cc|cxx|hpp|hxx)
+    c|cpp)
         # C/C++ includes
         import_pattern="#include.*$filename|#include.*$name_no_ext\.(h|hpp)"
         self_import_pattern="^#include"
@@ -59,7 +61,7 @@ case "$extension" in
         self_import_pattern="^import"
         file_glob="*.go"
         ;;
-    rs)
+    rust)
         # Rust imports
         import_pattern="use.*$name_no_ext|mod\s+$name_no_ext"
         self_import_pattern="^use\s+|^mod\s+"
@@ -87,13 +89,7 @@ echo ""
 
 # Find dependents using fd if available, otherwise find
 echo "## Dependents (files that use $filename):"
-if command -v fd &>/dev/null; then
-    FD="fd"
-elif [[ -x "$HOME/.cargo/bin/fd" ]]; then
-    FD="$HOME/.cargo/bin/fd"
-else
-    FD=""
-fi
+FD=$(find_fd)
 
 dependents_found=0
 # Use ripgrep if available (fastest), then grep -r

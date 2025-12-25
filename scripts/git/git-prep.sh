@@ -19,11 +19,8 @@ SCRIPT_VERSION="1.0.0"
 
 set -euo pipefail
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
+# Load common utilities
+source "$(dirname "$0")/../lib/common.sh"
 
 FIX_MODE=false
 STAGED_ONLY=false
@@ -159,14 +156,14 @@ echo "## Running linters..."
 
 # JavaScript/TypeScript
 if [[ -f "package.json" ]]; then
-    if $FIX_MODE && command -v npx &>/dev/null; then
+    if $FIX_MODE && has_command npx; then
         if [[ -f ".prettierrc" || -f "prettier.config.js" ]]; then
             log_info "Running prettier --write..."
             npx prettier --write "**/*.{js,ts,tsx,json}" 2>/dev/null || true
         fi
     fi
 
-    if command -v npx &>/dev/null && [[ -f ".eslintrc.js" || -f ".eslintrc.json" || -f "eslint.config.js" ]]; then
+    if has_command npx && [[ -f ".eslintrc.js" || -f ".eslintrc.json" || -f "eslint.config.js" ]]; then
         if npx eslint . --max-warnings=0 2>/dev/null; then
             log_pass "ESLint passed"
         else
@@ -179,12 +176,12 @@ fi
 if [[ -f "pyproject.toml" || -f "setup.py" ]]; then
     py_files=$(get_files "py")
     if [[ -n "$py_files" ]]; then
-        if $FIX_MODE && command -v black &>/dev/null; then
+        if $FIX_MODE && has_command black; then
             log_info "Running black..."
             echo "$py_files" | xargs black 2>/dev/null || true
         fi
 
-        if command -v ruff &>/dev/null; then
+        if has_command ruff; then
             if $FIX_MODE; then
                 echo "$py_files" | xargs ruff check --fix 2>/dev/null || true
             fi
@@ -193,7 +190,7 @@ if [[ -f "pyproject.toml" || -f "setup.py" ]]; then
             else
                 log_fail "Ruff found issues"
             fi
-        elif command -v pylint &>/dev/null; then
+        elif has_command pylint; then
             if echo "$py_files" | head -5 | xargs pylint --errors-only 2>/dev/null; then
                 log_pass "Pylint passed (errors only)"
             else
@@ -205,12 +202,12 @@ fi
 
 # Rust
 if [[ -f "Cargo.toml" ]]; then
-    if $FIX_MODE && command -v cargo &>/dev/null; then
+    if $FIX_MODE && has_command cargo; then
         log_info "Running cargo fmt..."
         cargo fmt 2>/dev/null || true
     fi
 
-    if command -v cargo &>/dev/null; then
+    if has_command cargo; then
         if cargo clippy --all-targets --all-features -- -D warnings 2>/dev/null; then
             log_pass "Clippy passed"
         else
@@ -221,12 +218,12 @@ fi
 
 # Go
 if [[ -f "go.mod" ]]; then
-    if $FIX_MODE && command -v gofmt &>/dev/null; then
+    if $FIX_MODE && has_command gofmt; then
         log_info "Running gofmt..."
         gofmt -w . 2>/dev/null || true
     fi
 
-    if command -v go &>/dev/null; then
+    if has_command go; then
         if go vet ./... 2>/dev/null; then
             log_pass "go vet passed"
         else
@@ -253,7 +250,7 @@ if ! $QUICK; then
             log_fail "cargo test failed"
         fi
     elif [[ -f "pyproject.toml" ]] || [[ -d "tests" ]]; then
-        if command -v pytest &>/dev/null; then
+        if has_command pytest; then
             if pytest --tb=short 2>/dev/null; then
                 log_pass "pytest passed"
             else

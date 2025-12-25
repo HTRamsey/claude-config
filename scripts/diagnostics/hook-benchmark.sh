@@ -6,17 +6,14 @@
 #   --save      Save results to data/hook-latency.json
 #   --compare   Compare against previous baseline
 
-set -e
+set -euo pipefail
+
+# Load common utilities
+source "$(dirname "$0")/../lib/common.sh"
 
 HOOKS_DIR="$HOME/.claude/hooks"
 DATA_DIR="$HOME/.claude/data"
 BASELINE_FILE="$DATA_DIR/hook-latency.json"
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
 
 SAVE=false
 COMPARE=""
@@ -155,7 +152,7 @@ fi
 if [[ -n "$COMPARE" && -f "$COMPARE" ]]; then
     echo ""
     echo "## Comparison to $(basename "$COMPARE")"
-    if command -v jq &>/dev/null; then
+    if has_jq; then
         for name in "${!RESULTS[@]}"; do
             old=$(jq -r ".hooks.\"$name\" // empty" "$COMPARE" 2>/dev/null)
             if [[ -n "$old" ]]; then

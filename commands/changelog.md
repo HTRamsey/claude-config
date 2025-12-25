@@ -7,7 +7,7 @@ Generate a changelog from git commits between two points.
 ## Arguments
 - `$ARGUMENTS` - Optional: tag range (e.g., "v1.0.0..v1.1.0") or "since:DATE"
 
-## Process
+## Workflow
 
 1. **Determine range**
    - If tag range provided: use it
@@ -42,6 +42,54 @@ Generate a changelog from git commits between two points.
    ### Other Changes
    - Description (commit hash)
    ```
+
+## Output Format
+```markdown
+## [v1.2.0] - 2025-01-15
+
+### Features
+- Add battery voltage display (a1b2c3d)
+- Support dark mode toggle (e4f5g6h)
+
+### Bug Fixes
+- Fix GPS timeout handling (i7j8k9l)
+
+### Documentation
+- Update installation guide (m0n1o2p)
+```
+
+## Example Output
+
+```markdown
+## [v2.3.0] - 2025-12-20
+
+### Features
+- Add parallel subagent execution to config-audit (5f8a2c1)
+- Support section-specific audit in /config-audit command (6d9b3e2)
+- Implement unified cache for exploration and research (7e0c4f3)
+
+### Bug Fixes
+- Fix hook timeout configuration validation (8f1d5a4)
+- Resolve duplicate hook registration in dispatcher (9g2e6b5)
+
+### Documentation
+- Update architecture.md with dispatcher workflow (0h3f7c6)
+
+### Maintenance
+- Refactor pre_tool_dispatcher.py for clarity (1i4g8d7)
+- Add health-check script tests (2j5h9e8)
+```
+
+## Should NOT Do
+- Edit or rewrite commit messages
+- Include merge commits
+- Add entries not from git history
+- Guess version numbers (ask user)
+
+## When to Bail
+- No commits in specified range
+- Unable to determine version/tag info (ask user)
+- Over 500 commits (ask to narrow range)
 
 ## Rules
 - Group commits by type

@@ -1,35 +1,41 @@
 #!/usr/bin/env bash
-# claude-model.sh - Smart model selection for Claude Code
-# Automatically selects the most cost-effective model based on task type
-#
-# Usage:
-#   claude-model.sh <task-type> "prompt"
-#   claude-model.sh auto "prompt"        # Auto-detect complexity
-#   claude-model.sh simple "quick question"
-#   claude-model.sh moderate "implement feature"
-#   claude-model.sh complex "architect system"
-#
-# Task types:
-#   simple   -> Haiku    (80% cheaper): Quick questions, simple lookups, formatting
-#   moderate -> Sonnet   (default): Feature implementation, debugging, code review
-#   complex  -> Opus     (most capable): Architecture, complex reasoning, planning
-#   auto     -> Auto-detect based on prompt analysis
+set -euo pipefail
 
-set -e
+usage() {
+    cat << 'EOF'
+Usage: claude-model.sh <task-type> "prompt"
 
-# Colors
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+Smart model selection for Claude Code.
+Automatically selects the most cost-effective model based on task type.
+
+Task Types:
+  simple    Haiku (80% cheaper) - Quick questions, simple lookups, formatting
+  moderate  Sonnet (default) - Feature implementation, debugging, code review
+  complex   Opus (most capable) - Architecture, complex reasoning, planning
+  auto      Auto-detect based on prompt analysis
+
+Options:
+  -h, --help    Show this help
+
+Examples:
+  claude-model.sh simple "What does this error mean?"
+  claude-model.sh auto "Refactor the authentication system"
+  claude-model.sh complex "Design a microservices architecture"
+  DRY_RUN=1 claude-model.sh auto "Preview model selection"
+EOF
+    exit 0
+}
+
+[[ "${1:-}" =~ ^(-h|--help)$ ]] && usage
+
+# Load common utilities
+source "$(dirname "$0")/../lib/common.sh"
 
 # Model mappings
 MODEL_HAIKU="claude-haiku-4-5-latest"
 MODEL_SONNET="claude-sonnet-4-5-latest"
 MODEL_OPUS="claude-opus-4-5-latest"
 
-log_info() { echo -e "${GREEN}[MODEL]${NC} $1" >&2; }
 log_model() { echo -e "${BLUE}[MODEL]${NC} Selected: $1" >&2; }
 
 # Keywords for complexity detection

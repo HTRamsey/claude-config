@@ -4,7 +4,8 @@
 #
 # Usage: validate-config.sh [--fix] [--verbose]
 
-set -e
+set -uo pipefail
+source "$HOME/.claude/scripts/lib/common.sh"
 
 CLAUDE_DIR="$HOME/.claude"
 SETTINGS="$CLAUDE_DIR/settings.json"
@@ -58,6 +59,34 @@ if [[ ! -f "$SETTINGS" ]]; then
 else
     if jq empty "$SETTINGS" 2>/dev/null; then
         pass "settings.json is valid JSON"
+
+        # Check required top-level fields
+        for field in "permissions" "env" "hooks"; do
+            if jq -e ".$field" "$SETTINGS" >/dev/null 2>&1; then
+                pass "settings.json has '$field' section"
+            else
+                warn "settings.json missing '$field' section"
+            fi
+        done
+
+        # Validate hook event names
+        VALID_EVENTS="PreToolUse PostToolUse Stop Notification UserPromptSubmit PermissionRequest SessionStart SessionEnd SubagentStart SubagentStop PreCompact"
+        CONFIGURED_EVENTS=$(jq -r '.hooks | keys[]' "$SETTINGS" 2>/dev/null)
+        for event in $CONFIGURED_EVENTS; do
+            if echo "$VALID_EVENTS" | grep -qw "$event"; then
+                pass "Valid event: $event"
+            else
+                warn "Unknown hook event: $event"
+            fi
+        done
+
+        # Check hook timeout values
+        TIMEOUTS=$(jq -r '.. | objects | select(.timeout?) | .timeout' "$SETTINGS" 2>/dev/null)
+        for timeout in $TIMEOUTS; do
+            if [[ "$timeout" -gt 30 ]]; then
+                warn "Hook timeout >30s may cause delays: ${timeout}s"
+            fi
+        done
     else
         fail "settings.json is invalid JSON"
     fi
@@ -93,9 +122,37 @@ for hook_file in "$CLAUDE_DIR/hooks"/*.py; do
     hook=$(basename "$hook_file")
     [[ "$hook" == "hook_utils.py" ]] && continue
     [[ "$hook" == "__init__.py" ]] && continue
+    [[ "$hook" == "__pycache__" ]] && continue
 
     if ! echo "$REGISTERED_HOOKS" | grep -q "^$hook$"; then
         warn "Orphan hook (not in settings.json): $hook"
+    fi
+done
+
+# Check dispatcher handler references
+section "Dispatcher Validation"
+
+for dispatcher in "$CLAUDE_DIR/hooks"/*_dispatcher.py; do
+    [[ -f "$dispatcher" ]] || continue
+    dname=$(basename "$dispatcher" .py)
+
+    # Extract handler names from ALL_HANDLERS list (looking for the array definition)
+    handlers=$(grep -A5 "^ALL_HANDLERS = \[" "$dispatcher" 2>/dev/null | grep -oP '"[a-z_]+"' | tr -d '"')
+    handler_count=0
+    handler_ok=0
+    for handler in $handlers; do
+        [[ -z "$handler" ]] && continue
+        handler_count=$((handler_count + 1))
+        # Check if handler has a corresponding .py file
+        if [[ -f "$CLAUDE_DIR/hooks/$handler.py" ]]; then
+            handler_ok=$((handler_ok + 1))
+            [[ "$VERBOSE" == true ]] && pass "$dname handler: $handler"
+        else
+            warn "$dname references missing handler: $handler"
+        fi
+    done
+    if [[ $handler_count -gt 0 && $handler_ok -eq $handler_count ]]; then
+        pass "$dname: all $handler_count handlers found"
     fi
 done
 
@@ -146,24 +203,32 @@ done
 
 section "Script Validation"
 
-# Check scripts are executable
-for script in "$CLAUDE_DIR/scripts"/*.sh; do
+# Check scripts are executable (all subdirectories)
+SCRIPT_ERRORS=0
+SCRIPT_OK=0
+while IFS= read -r script; do
     [[ -f "$script" ]] || continue
-    name=$(basename "$script")
+    rel_path="${script#$CLAUDE_DIR/scripts/}"
 
     if [[ ! -x "$script" ]]; then
         if [[ "$FIX" == true ]]; then
             chmod +x "$script"
-            warn "Fixed: made $name executable"
+            warn "Fixed: made $rel_path executable"
         else
-            warn "Script not executable: $name"
+            warn "Script not executable: $rel_path"
         fi
     elif ! bash -n "$script" 2>/dev/null; then
-        fail "Syntax error in script: $name"
+        fail "Syntax error in script: $rel_path"
+        SCRIPT_ERRORS=$((SCRIPT_ERRORS + 1))
     else
-        pass "Script OK: $name"
+        SCRIPT_OK=$((SCRIPT_OK + 1))
+        [[ "$VERBOSE" == true ]] && pass "Script OK: $rel_path"
     fi
-done
+done < <(find "$CLAUDE_DIR/scripts" -name "*.sh" -type f 2>/dev/null)
+
+if [[ $SCRIPT_ERRORS -eq 0 ]]; then
+    pass "All $SCRIPT_OK scripts have valid syntax"
+fi
 
 section "Python Environment"
 
@@ -200,11 +265,11 @@ fi
 section "Cross-Reference Check"
 
 # Check rules reference correct counts
-HOOK_COUNT=$(ls -1 "$CLAUDE_DIR/hooks"/*.py 2>/dev/null | grep -v hook_utils | grep -v __pycache__ | wc -l)
-AGENT_COUNT=$(ls -1 "$CLAUDE_DIR/agents"/*.md 2>/dev/null | wc -l)
-SKILL_COUNT=$(ls -1d "$CLAUDE_DIR/skills"/*/ 2>/dev/null | wc -l)
-COMMAND_COUNT=$(ls -1 "$CLAUDE_DIR/commands"/*.md 2>/dev/null | wc -l)
-SCRIPT_COUNT=$(ls -1 "$CLAUDE_DIR/scripts"/*.sh 2>/dev/null | wc -l)
+HOOK_COUNT=$(find "$CLAUDE_DIR/hooks" -maxdepth 1 -name "*.py" -type f 2>/dev/null | grep -v hook_utils | grep -v __pycache__ | grep -v __init__ | wc -l)
+AGENT_COUNT=$(find "$CLAUDE_DIR/agents" -maxdepth 1 -name "*.md" -type f 2>/dev/null | wc -l)
+SKILL_COUNT=$(find "$CLAUDE_DIR/skills" -maxdepth 1 -type d 2>/dev/null | tail -n +2 | wc -l)
+COMMAND_COUNT=$(find "$CLAUDE_DIR/commands" -maxdepth 1 -name "*.md" -type f 2>/dev/null | wc -l)
+SCRIPT_COUNT=$(find "$CLAUDE_DIR/scripts" -name "*.sh" -type f 2>/dev/null | wc -l)
 
 # Check architecture.md counts
 if [[ -f "$CLAUDE_DIR/rules/architecture.md" ]]; then

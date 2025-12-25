@@ -15,7 +15,7 @@ mv ~/.claude/commands/archive/needed-cmd.md ~/.claude/commands/
 ## Find Unused Commands
 
 ```bash
-~/.claude/scripts/usage-report.sh
+~/.claude/scripts/diagnostics/usage-report.sh
 ```
 
 ## Archival Criteria

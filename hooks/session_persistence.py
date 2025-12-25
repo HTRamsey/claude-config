@@ -15,17 +15,7 @@ from datetime import datetime
 
 # Import shared utilities
 sys.path.insert(0, str(Path(__file__).parent))
-try:
-    from hook_utils import graceful_main, log_event
-    HAS_UTILS = True
-except ImportError:
-    HAS_UTILS = False
-    def graceful_main(name):
-        def decorator(func):
-            return func
-        return decorator
-    def log_event(*args, **kwargs):
-        pass
+from hook_utils import graceful_main, log_event, get_session_id
 
 def extract_project_info(transcript_path: str) -> dict:
     """Extract project-related information from transcript."""
@@ -127,33 +117,13 @@ def extract_project_info(transcript_path: str) -> dict:
     return info
 
 def cleanup_old_session_files(max_age_hours: int = 24):
-    """Clean up old session state files from /tmp/claude-* directories."""
+    """Clean up old file-history snapshots."""
     import time
 
-    temp_dirs = [
-        "/tmp/claude-file-tracker",
-        "/tmp/claude-tool-tracker",
-        "/tmp/claude-batch-state",
-    ]
-
-    max_age_seconds = max_age_hours * 3600
     now = time.time()
     cleaned = 0
 
-    for dir_path in temp_dirs:
-        dir_obj = Path(dir_path)
-        if not dir_obj.exists():
-            continue
-
-        for file in dir_obj.glob("*.json"):
-            try:
-                if now - file.stat().st_mtime > max_age_seconds:
-                    file.unlink()
-                    cleaned += 1
-            except (OSError, IOError):
-                continue
-
-    # Also clean old file-history snapshots (30 days)
+    # Clean old file-history snapshots (30 days)
     file_history = Path.home() / ".claude" / "file-history"
     if file_history.exists():
         max_history_age = 30 * 24 * 3600  # 30 days
@@ -274,7 +244,7 @@ def main():
 
     transcript_path = ctx.get("transcript_path", "")
     stop_reason = ctx.get("stop_hook_reason", "unknown")
-    session_id = ctx.get("session_id", "")
+    session_id = get_session_id(ctx)
 
     # Extract information from transcript
     info = extract_project_info(transcript_path)

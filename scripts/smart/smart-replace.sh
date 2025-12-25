@@ -3,11 +3,15 @@
 # Usage: smart-replace.sh <pattern> <replacement> <file-or-glob>
 # sd has simpler syntax than sed - no escaping needed for / or special chars
 
-set -e
+set -euo pipefail
 
-pattern="$1"
-replacement="$2"
-target="$3"
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/common.sh"
+
+pattern="${1:-}"
+replacement="${2:-}"
+target="${3:-}"
 
 if [[ -z "$pattern" || -z "$replacement" || -z "$target" ]]; then
     echo "Usage: smart-replace.sh <pattern> <replacement> <file-or-glob>"
@@ -15,7 +19,9 @@ if [[ -z "$pattern" || -z "$replacement" || -z "$target" ]]; then
     exit 1
 fi
 
-if command -v sd &>/dev/null; then
+SD=$(find_sd) || SD=""
+
+if [[ -n "$SD" ]]; then
     # sd handles literal strings by default, use -f for fixed strings
     if [[ -d "$target" ]] || [[ "$target" == *"*"* ]]; then
         # Glob pattern - find files first
@@ -33,18 +39,18 @@ if command -v sd &>/dev/null; then
         echo "Preview (first match):"
         first_file=$(find "$search_dir" -type f -name "$file_pattern" 2>/dev/null | head -1)
         if [[ -n "$first_file" ]]; then
-            sd "$pattern" "$replacement" "$first_file" --preview 2>/dev/null | head -10
+            $SD "$pattern" "$replacement" "$first_file" --preview 2>/dev/null | head -10
         fi
     else
         # Single file
         echo "Preview:"
-        sd "$pattern" "$replacement" "$target" --preview 2>/dev/null | head -20
+        $SD "$pattern" "$replacement" "$target" --preview 2>/dev/null | head -20
         echo ""
         echo "Run without --preview to apply changes"
     fi
 else
     # Fallback to sed
-    echo "sd not available, using sed"
+    log_warn "sd not available, using sed"
     echo "Preview:"
     sed -n "s/$pattern/$replacement/gp" "$target" 2>/dev/null | head -20
 fi

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # Claude Code Status Line (v2.0.70+)
 #
 # Format: v2.0.76 | path | branch[•N] | Model | terse | 45% ⚡99% ⚠️ | +50/-10 | 79K↓ 68K↑ 5K/m | 10m API:15%

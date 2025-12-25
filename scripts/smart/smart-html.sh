@@ -3,7 +3,11 @@
 # Usage: smart-html.sh <file|-> <selector> [options]
 # Like jq but for HTML
 
-set -e
+set -euo pipefail
+
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/common.sh"
 
 input="${1:-}"
 selector="${2:-}"
@@ -20,20 +24,14 @@ if [[ -z "$input" ]] || [[ -z "$selector" ]]; then
     exit 0
 fi
 
-# Find htmlq
-HTMLQ=""
-if command -v htmlq &>/dev/null; then
-    HTMLQ="htmlq"
-elif [[ -x "$HOME/.cargo/bin/htmlq" ]]; then
-    HTMLQ="$HOME/.cargo/bin/htmlq"
-fi
+# Find htmlq using common.sh
+HTMLQ=$(find_htmlq) || HTMLQ=""
 
 if [[ -z "$HTMLQ" ]]; then
-    echo "Error: htmlq not found. Install: cargo install htmlq" >&2
+    log_warn "htmlq not found. Install: cargo install htmlq"
     # Fallback: use Python with beautifulsoup if available
     if python3 -c "import bs4" 2>/dev/null; then
-        echo "Falling back to BeautifulSoup..." >&2
-        # Use environment variables to safely pass values to Python (no shell injection)
+        log_info "Falling back to BeautifulSoup..."
         if [[ "$input" == "-" ]]; then
             SELECTOR="$selector" python3 -c '
 import os, sys

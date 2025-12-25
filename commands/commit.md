@@ -46,9 +46,30 @@ test(settings): add unit tests for AppSettings
 chore(deps): update Qt to 6.8.1
 ```
 
+## Output Format
+```
+Staged: 3 files (2 modified, 1 new)
+
+Commit: feat(auth): add OAuth2 token refresh
+
+[main abc1234] feat(auth): add OAuth2 token refresh
+ 3 files changed, 45 insertions(+), 12 deletions(-)
+```
+
+## Should NOT Do
+- Add "Co-authored-by" or AI attribution
+- Use emojis in commit messages
+- Commit unrelated changes together
+- Commit without reviewing staged changes
+- Force push without explicit request
+
+## When to Bail
+- No staged changes to commit
+- Staged changes include sensitive files (.env, credentials)
+- Unable to determine appropriate commit type
+- User rejects proposed message
+
 ## Rules
-- Never add "Co-authored-by" or AI attribution
-- Never use emojis
 - Keep subject line under 50 characters
 - Use present tense ("add" not "added")
 - Focus on what and why, not how

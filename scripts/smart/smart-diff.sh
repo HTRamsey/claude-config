@@ -4,20 +4,12 @@
 #    or: smart-diff.sh <file1> <file2>   # Direct file comparison
 #
 # Engines (with fallback chain):
-#   Default:      delta → compress-diff.sh → git diff
+#   Default:      delta → compress.sh --type diff → git diff
 #   --structural: difftastic (AST-aware) → delta → git diff
 #   File mode:    difft → diff -u
 
-set -e
-
-# Find difftastic
-find_difft() {
-    if command -v difft &>/dev/null; then
-        echo "difft"
-    elif [[ -x "$HOME/.cargo/bin/difft" ]]; then
-        echo "$HOME/.cargo/bin/difft"
-    fi
-}
+set -euo pipefail
+source "$HOME/.claude/scripts/lib/common.sh"
 
 # Direct file comparison mode (two files as arguments)
 if [[ -f "$1" && -f "$2" && $# -eq 2 ]]; then
@@ -46,11 +38,12 @@ if [[ "$STRUCTURAL" == true ]]; then
     echo "# difftastic not found, falling back to delta" >&2
 fi
 
-# Cache difft lookup
+# Cache tool lookups
 DIFFT=$(find_difft)
+DELTA=$(find_delta)
 
 # Standard diff mode with delta
-if command -v delta &>/dev/null; then
+if [[ -n "$DELTA" ]]; then
     git diff "$@" | delta \
         --no-gitconfig \
         --line-numbers \
@@ -65,9 +58,9 @@ if command -v delta &>/dev/null; then
 elif [[ -n "$DIFFT" ]]; then
     # Fall back to difftastic if delta not available
     GIT_EXTERNAL_DIFF="$DIFFT" git diff "$@" 2>/dev/null | head -200
-elif [[ -f "$HOME/.claude/scripts/compress/compress-diff.sh" ]]; then
+elif [[ -f "$HOME/.claude/scripts/compress/compress.sh" ]]; then
     # Fall back to compression script
-    git diff "$@" | "$HOME/.claude/scripts/compress/compress-diff.sh"
+    git diff "$@" | "$HOME/.claude/scripts/compress/compress.sh" --type diff
 else
     # Basic fallback
     git diff --stat "$@" 2>/dev/null

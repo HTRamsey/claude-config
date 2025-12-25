@@ -9,27 +9,28 @@
 #
 # 75-87% smaller output than ls -la / tree
 
-set -e
+set -euo pipefail
+source "$HOME/.claude/scripts/lib/common.sh"
 
 path="${1:-.}"
 depth="${2:-1}"
 pattern="${3:-}"
 
-# Find best tool
-if command -v eza &>/dev/null; then
+EZA=$(find_eza)
+if [[ -n "$EZA" ]]; then
     if [[ "$depth" -gt 1 ]]; then
         # Tree mode with git-ignore
         opts="--tree --level=$depth --icons=never --no-permissions --no-user --no-time --git-ignore"
         if [[ -n "$pattern" ]]; then
-            eza $opts "$path" 2>/dev/null | grep -E "$pattern|^[│├└─ ]*$" | head -100
+            $EZA $opts "$path" 2>/dev/null | grep -E "$pattern|^[│├└─ ]*$" | head -100
         else
-            eza $opts "$path" 2>/dev/null | head -100
+            $EZA $opts "$path" 2>/dev/null | head -100
         fi
     else
         # Compact one-line listing
-        eza --oneline --group-directories-first "$path" 2>/dev/null
+        $EZA --oneline --group-directories-first "$path" 2>/dev/null
     fi
-elif command -v lsd &>/dev/null && [[ "$depth" -gt 1 ]]; then
+elif has_command lsd && [[ "$depth" -gt 1 ]]; then
     # lsd fallback for tree mode
     lsd --tree --depth="$depth" --icon=never "$path" 2>/dev/null | head -100
 else

@@ -73,10 +73,34 @@ Follow conventional commits:
 - `test(scope): add tests`
 - `chore(scope): maintenance`
 
+## Output Format
+```
+Branch: feature/auth-oauth2
+Commits: 3 (ahead of main)
+Files: 5 changed
+
+Created PR #142: feat(auth): add OAuth2 support
+URL: https://github.com/owner/repo/pull/142
+
+CI checks started: build, test, lint
+```
+
+## When to Bail
+- On main/master branch (create feature branch first)
+- Uncommitted changes present
+- No remote configured
+- gh CLI not authenticated
+
+## Should NOT Do
+- Create PR with uncommitted changes
+- Force push to shared branches
+- Include AI attribution
+- Create PR without testing locally
+- Merge own PR without review
+
 ## Rules
 - Push commits before creating PR
 - Use meaningful title (< 72 chars)
 - Include testing instructions
 - Link related issues
-- Never include AI attribution
 - Add `--draft` flag for work-in-progress

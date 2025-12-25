@@ -20,7 +20,7 @@ Use for precise navigation instead of grep:
 | Category | Location | Scripts |
 |----------|----------|---------|
 | Search | `search/` | `offload-grep.sh`, `offload-find.sh` |
-| Compress | `compress/` | `compress.sh --type diff\|build\|tests\|stack` |
+| Compress | `compress/` | `compress.sh --type diff\|build\|tests\|stack\|logs\|json\|list\|errors` |
 | Smart View | `smart/` | `smart-view.sh` (unified viewer), `smart-analyze.sh` (unified analysis), `smart-preview.sh`, `smart-cat.sh`, `smart-diff.sh`, `smart-json.sh`, `smart-yaml.sh`, `smart-html.sh`, `smart-http.sh`, `smart-ast.sh`, `smart-blame.sh`, `smart-ls.sh`, `smart-du.sh`, `smart-find.sh`, `smart-replace.sh`, `extract-signatures.sh`, `summarize-file.sh` |
 | Analysis | `analysis/` | `find-related.sh`, `project-overview.sh`, `review-patterns.sh`, `impact-analysis.sh`, `project-stats.sh`, `token-tools.sh` |
 | Git | `git/` | `git-prep.sh`, `git-cleanup.sh` |
@@ -35,6 +35,10 @@ Use for precise navigation instead of grep:
 - Build logs: `compress/compress.sh --type build`
 - Test output: `compress/compress.sh --type tests`
 - Stack traces: `compress/compress.sh --type stack`
+- Log files: `compress/compress.sh --type logs`
+- JSON data: `compress/compress.sh --type json`
+- Long lists: `compress/compress.sh --type list`
+- Repeated errors: `compress/compress.sh --type errors`
 
 ## Modern CLI Tools
 

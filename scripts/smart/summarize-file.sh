@@ -3,6 +3,7 @@
 # Usage: summarize-file.sh <file> [max_lines]
 
 set -euo pipefail
+source "$HOME/.claude/scripts/lib/common.sh"
 
 file="${1:-}"
 max_lines="${2:-50}"
@@ -12,36 +13,36 @@ if [[ -z "$file" || ! -f "$file" ]]; then
     exit 1
 fi
 
-ext="${file##*.}"
+lang=$(detect_language "$file")
 lines=$(wc -l < "$file")
 size=$(du -h "$file" | cut -f1)
 
 echo "=== $file ($lines lines, $size) ==="
 echo ""
 
-case "$ext" in
-    py)
+case "$lang" in
+    python)
         echo "## Classes & Functions"
         grep -n "^class \|^def \|^async def " "$file" 2>/dev/null | head -"$max_lines" || true
         echo ""
         echo "## Imports"
         grep -n "^import \|^from .* import" "$file" 2>/dev/null | head -20 || true
         ;;
-    ts|tsx|js|jsx)
+    typescript|javascript)
         echo "## Exports & Classes"
         grep -n "^export \|^class \|^interface \|^type \|^function \|^const .* = (" "$file" 2>/dev/null | head -"$max_lines" || true
         echo ""
         echo "## Imports"
         grep -n "^import " "$file" 2>/dev/null | head -20 || true
         ;;
-    cpp|cc|c|h|hpp)
+    c|cpp)
         echo "## Classes & Functions"
         grep -n "^class \|^struct \|^enum \|^[a-zA-Z_].*(.*)[ ]*{$\|^[a-zA-Z_].*(.*)[ ]*$" "$file" 2>/dev/null | head -"$max_lines" || true
         echo ""
         echo "## Includes"
         grep -n "^#include" "$file" 2>/dev/null | head -20 || true
         ;;
-    java|kt)
+    java|kotlin)
         echo "## Classes & Methods"
         grep -n "^public \|^private \|^protected \|^class \|^interface " "$file" 2>/dev/null | head -"$max_lines" || true
         echo ""
@@ -55,7 +56,7 @@ case "$ext" in
         echo "## Imports"
         sed -n '/^import/,/)/p' "$file" 2>/dev/null | head -20 || true
         ;;
-    rs)
+    rust)
         echo "## Functions & Structs"
         grep -n "^pub \|^fn \|^struct \|^enum \|^impl " "$file" 2>/dev/null | head -"$max_lines" || true
         echo ""

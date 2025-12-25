@@ -81,56 +81,104 @@ strict_mode() {
 }
 
 #
-# Command detection with fallbacks
+# Command detection with fallbacks and caching
 #
 
-# Find command with fallbacks
+# Cache for tool lookups (persists for session)
+declare -A _TOOL_CACHE 2>/dev/null || true
+
+# Find command with fallbacks (cached)
 find_command() {
     local name="$1"
     shift
 
+    # Check cache first
+    local cache_key="tool:$name"
+    if [[ -n "${_TOOL_CACHE[$cache_key]:-}" ]]; then
+        echo "${_TOOL_CACHE[$cache_key]}"
+        return 0
+    fi
+
+    local result=""
+
     # Check primary name
     if command -v "$name" &>/dev/null; then
-        echo "$name"
-        return 0
-    fi
-
+        result="$name"
     # Check in cargo bin
-    if [[ -x "$HOME/.cargo/bin/$name" ]]; then
-        echo "$HOME/.cargo/bin/$name"
-        return 0
+    elif [[ -x "$HOME/.cargo/bin/$name" ]]; then
+        result="$HOME/.cargo/bin/$name"
+    # Check in go bin
+    elif [[ -x "$HOME/go/bin/$name" ]]; then
+        result="$HOME/go/bin/$name"
+    # Check in local bin
+    elif [[ -x "$HOME/.local/bin/$name" ]]; then
+        result="$HOME/.local/bin/$name"
+    # Check snap bin
+    elif [[ -x "/snap/bin/$name" ]]; then
+        result="/snap/bin/$name"
+    else
+        # Check fallbacks
+        for fallback in "$@"; do
+            if command -v "$fallback" &>/dev/null; then
+                result="$fallback"
+                break
+            fi
+        done
     fi
 
-    # Check fallbacks
-    for fallback in "$@"; do
-        if command -v "$fallback" &>/dev/null; then
-            echo "$fallback"
-            return 0
-        fi
-    done
+    if [[ -n "$result" ]]; then
+        _TOOL_CACHE[$cache_key]="$result"
+        echo "$result"
+        return 0
+    fi
 
     return 1
 }
 
-# Common tool lookups
-find_fd() { find_command fd fdfind find; }
-find_bat() { find_command bat batcat cat; }
-find_rg() { find_command rg grep; }
-find_eza() { find_command eza exa ls; }
-find_delta() { find_command delta diff; }
+# Common tool lookups (all cached via find_command)
+find_fd() { find_command fd fdfind; }
+find_bat() { find_command bat batcat; }
+find_rg() { find_command rg; }
+find_eza() { find_command eza exa; }
+find_delta() { find_command delta; }
+find_difft() { find_command difft; }
+find_dust() { find_command dust; }
+find_sd() { find_command sd; }
 find_yq() { find_command yq; }
+find_jq() { find_command jq; }
 find_htmlq() { find_command htmlq; }
 find_gron() { find_command gron; }
-find_sd() { find_command sd sed; }
+find_xh() { find_command xh curlie http curl; }
+find_tokei() { find_command tokei; }
+find_ast_grep() { find_command ast-grep sg; }
+find_fzf() { find_command fzf; }
+find_zoxide() { find_command zoxide; }
 
-# Check if tool exists
+# Check if tool exists (cached)
 has_command() {
-    command -v "$1" &>/dev/null
+    local cache_key="has:$1"
+    if [[ -n "${_TOOL_CACHE[$cache_key]:-}" ]]; then
+        [[ "${_TOOL_CACHE[$cache_key]}" == "1" ]]
+        return $?
+    fi
+
+    if command -v "$1" &>/dev/null; then
+        _TOOL_CACHE[$cache_key]="1"
+        return 0
+    else
+        _TOOL_CACHE[$cache_key]="0"
+        return 1
+    fi
 }
 
 # Require a command or die
 require_command() {
     has_command "$1" || die "Required command not found: $1"
+}
+
+# Clear tool cache (useful after installing new tools)
+clear_tool_cache() {
+    _TOOL_CACHE=()
 }
 
 #
@@ -257,6 +305,48 @@ git_branch() {
 }
 
 #
+# Language detection
+#
+
+# Detect programming language from file extension or directory contents
+detect_language() {
+    local p="$1"
+    if [[ -d "$p" ]]; then
+        # Check directory for common file types
+        if find "$p" -maxdepth 1 -name "*.py" -print -quit 2>/dev/null | grep -q .; then echo "python"
+        elif find "$p" -maxdepth 1 -name "*.ts" -print -quit 2>/dev/null | grep -q .; then echo "typescript"
+        elif find "$p" -maxdepth 1 -name "*.js" -print -quit 2>/dev/null | grep -q .; then echo "javascript"
+        elif find "$p" -maxdepth 1 -name "*.rs" -print -quit 2>/dev/null | grep -q .; then echo "rust"
+        elif find "$p" -maxdepth 1 -name "*.go" -print -quit 2>/dev/null | grep -q .; then echo "go"
+        elif find "$p" -maxdepth 1 -name "*.cpp" -print -quit 2>/dev/null | grep -q .; then echo "cpp"
+        elif find "$p" -maxdepth 1 -name "*.java" -print -quit 2>/dev/null | grep -q .; then echo "java"
+        elif find "$p" -maxdepth 1 -name "*.rb" -print -quit 2>/dev/null | grep -q .; then echo "ruby"
+        else echo "unknown"
+        fi
+    else
+        case "$p" in
+            *.py) echo "python" ;;
+            *.ts|*.tsx) echo "typescript" ;;
+            *.js|*.jsx|*.mjs) echo "javascript" ;;
+            *.rs) echo "rust" ;;
+            *.go) echo "go" ;;
+            *.c|*.h) echo "c" ;;
+            *.cpp|*.cc|*.cxx|*.hpp|*.hxx) echo "cpp" ;;
+            *.java) echo "java" ;;
+            *.kt|*.kts) echo "kotlin" ;;
+            *.rb) echo "ruby" ;;
+            *.sh|*.bash) echo "bash" ;;
+            *.qml) echo "qml" ;;
+            *.md) echo "markdown" ;;
+            *.json) echo "json" ;;
+            *.yaml|*.yml) echo "yaml" ;;
+            *.log) echo "log" ;;
+            *) echo "unknown" ;;
+        esac
+    fi
+}
+
+#
 # Output formatting
 #
 
@@ -364,6 +454,6 @@ export -f find_command find_fd find_bat find_rg find_eza find_delta find_yq find
 export -f has_command require_command
 export -f truncate truncate_lines format_bytes format_duration
 export -f is_terminal is_ci relative_path ensure_dir temp_file cleanup_temps
-export -f is_git_repo git_root git_branch
+export -f is_git_repo git_root git_branch detect_language
 export -f print_header print_section print_success print_failure print_warning
 export -f has_jq safe_jq json_field common_help

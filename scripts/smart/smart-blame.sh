@@ -8,7 +8,7 @@
 # - Filters common noise patterns (formatting, lint fixes)
 # - Compact output format
 
-set -e
+set -euo pipefail
 
 file="$1"
 line="${2:-}"

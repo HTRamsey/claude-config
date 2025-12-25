@@ -11,7 +11,11 @@
 #   smart-http.sh https://api.github.com/repos/owner/repo --fields name,stars
 #   smart-http.sh POST https://api.example.com/users name=john
 
-set -e
+set -euo pipefail
+
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/common.sh"
 
 # Parse --fields option
 FIELDS=""
@@ -30,23 +34,12 @@ while [[ $# -gt 0 ]]; do
 done
 set -- "${ARGS[@]}"
 
-# Find best available HTTP client
-HTTP_CLIENT=""
-if command -v xh &>/dev/null; then
-    HTTP_CLIENT="xh"
-elif [[ -x "$HOME/.cargo/bin/xh" ]]; then
-    HTTP_CLIENT="$HOME/.cargo/bin/xh"
-elif command -v curlie &>/dev/null; then
-    HTTP_CLIENT="curlie"
-elif [[ -x "$HOME/go/bin/curlie" ]]; then
-    HTTP_CLIENT="$HOME/go/bin/curlie"
-elif command -v http &>/dev/null; then
-    HTTP_CLIENT="http"  # httpie
-elif command -v curl &>/dev/null; then
-    HTTP_CLIENT="curl"
-else
-    echo "Error: No HTTP client found. Install xh: cargo install xh" >&2
-    exit 1
+# Find best available HTTP client using common.sh
+HTTP_CLIENT=$(find_xh) || HTTP_CLIENT=""
+
+if [[ -z "$HTTP_CLIENT" ]]; then
+    log_warn "xh not found. Install: cargo install xh"
+    die "No HTTP client available"
 fi
 
 # If no args, show usage
@@ -91,16 +84,16 @@ extract_fields() {
 execute_request() {
     local response
     case "$HTTP_CLIENT" in
-        xh|*/xh)
+        *xh)
             response=$($HTTP_CLIENT "$@" 2>/dev/null)
             ;;
-        curlie)
-            response=$(curlie "$@" 2>/dev/null)
+        *curlie)
+            response=$($HTTP_CLIENT "$@" 2>/dev/null)
             ;;
-        http)
-            response=$(http "$@" 2>/dev/null)
+        *http)
+            response=$($HTTP_CLIENT "$@" 2>/dev/null)
             ;;
-        curl)
+        *curl)
             # curl needs different syntax
             local method="GET"
             local url=""

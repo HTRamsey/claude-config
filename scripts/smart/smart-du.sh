@@ -3,18 +3,13 @@
 # Usage: smart-du.sh [path] [depth]
 # dust provides compact, visual disk usage output
 
-set -e
+set -euo pipefail
+source "$HOME/.claude/scripts/lib/common.sh"
 
 path="${1:-.}"
 depth="${2:-3}"
 
-# Find dust (cargo or system)
-DUST=""
-if command -v dust &>/dev/null; then
-    DUST="dust"
-elif [[ -x "$HOME/.cargo/bin/dust" ]]; then
-    DUST="$HOME/.cargo/bin/dust"
-fi
+DUST=$(find_dust)
 
 if [[ -n "$DUST" ]]; then
     # dust with limited depth and no color for smaller output

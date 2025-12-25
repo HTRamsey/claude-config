@@ -14,21 +14,11 @@ from pathlib import Path
 
 # Import shared utilities
 sys.path.insert(0, str(Path(__file__).parent))
-try:
-    from hook_utils import graceful_main, log_event
-    HAS_UTILS = True
-except ImportError:
-    HAS_UTILS = False
-    def graceful_main(name):
-        def decorator(func):
-            return func
-        return decorator
-    def log_event(*args, **kwargs):
-        pass
+from hook_utils import graceful_main, log_event, get_session_id, safe_load_json, safe_save_json
 
 # Configuration
-STATE_DIR = Path("/tmp/claude-batch-state")
-MAX_AGE_SECONDS = 3600  # Clear state after 1 hour
+STATE_DIR = Path.home() / ".claude/data/batch-state"
+MAX_AGE_SECONDS = 86400  # Clear state after 24 hours
 SIMILARITY_THRESHOLD = 3  # Suggest batching after 3 similar ops
 
 def get_state_file(session_id: str) -> Path:
@@ -39,26 +29,17 @@ def get_state_file(session_id: str) -> Path:
 def load_state(session_id: str) -> dict:
     """Load edit history state for session."""
     state_file = get_state_file(session_id)
-    if state_file.exists():
-        try:
-            with open(state_file) as f:
-                state = json.load(f)
-                if time.time() - state.get("last_update", 0) > MAX_AGE_SECONDS:
-                    return {"edits": [], "writes": [], "last_update": time.time()}
-                return state
-        except (json.JSONDecodeError, IOError):
-            pass
-    return {"edits": [], "writes": [], "last_update": time.time()}
+    default = {"edits": [], "writes": [], "last_update": time.time()}
+    state = safe_load_json(state_file, default)
+    if time.time() - state.get("last_update", 0) > MAX_AGE_SECONDS:
+        return default
+    return state
 
 def save_state(session_id: str, state: dict):
     """Save edit history state."""
     state["last_update"] = time.time()
     state_file = get_state_file(session_id)
-    try:
-        with open(state_file, "w") as f:
-            json.dump(state, f)
-    except IOError:
-        pass
+    safe_save_json(state_file, state)
 
 def normalize_content(content: str) -> str:
     """Normalize content for comparison (remove whitespace variations)."""
@@ -131,7 +112,7 @@ def detect_batch(ctx: dict) -> dict | None:
     """Handler function for dispatcher. Returns result dict or None."""
     tool_name = ctx.get("tool_name", "")
     tool_input = ctx.get("tool_input", {})
-    session_id = ctx.get("session_id", "default")
+    session_id = get_session_id(ctx)
 
     if tool_name not in ("Edit", "Write"):
         return None

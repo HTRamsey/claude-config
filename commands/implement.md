@@ -41,12 +41,41 @@ Implement a feature with a structured approach.
    - Verify (build/test)
    - Move to next step
 
+## When to Bail
+- Requirements unclear after clarification attempt
+- Would require architectural changes → use orchestrator
+- Build/tests fail repeatedly → use /debug
+- User rejects implementation plan
+
+## Should NOT Do
+- Implement without approval of plan
+- Skip build/test verification between steps
+- Refactor unrelated code
+- Add features beyond scope
+- Make architectural changes without discussion
+
 ## Rules
 - Keep steps small and focused
 - Build after each step
 - Test before moving on
-- Don't refactor unrelated code
 - Document non-obvious decisions
+
+## Output Format
+```
+## Implementation Plan: Add battery voltage display
+
+### Steps (5 total)
+1. [pending] Add voltage Fact to Vehicle class
+2. [pending] Update MAVLink handler for SYS_STATUS
+3. [pending] Add QML text field in FlightDisplay
+4. [pending] Bind QML to Vehicle.batteryVoltage
+5. [pending] Add unit test for voltage parsing
+
+Files: 4 modified, 1 new
+Estimated: 3 increments
+
+Proceed with step 1? (yes/no/modify)
+```
 
 ## Example Steps
 For "Add battery voltage to FlightDisplay":

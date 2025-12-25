@@ -1,12 +1,26 @@
 #!/usr/bin/env bash
-# Batch annotation helper - prepare multiple items for single-prompt processing
-# Formats items for efficient batch prompting (30%+ token savings)
-#
-# Usage:
-#   batch-annotate.sh <files...>
-#   find . -name "*.py" | batch-annotate.sh -
-#
-# Output format suitable for batch processing in a single prompt
+set -euo pipefail
+
+usage() {
+    cat << 'EOF'
+Usage: batch-annotate.sh <files...>
+       find . -name "*.py" | batch-annotate.sh -
+
+Batch annotation helper - prepare multiple items for single-prompt processing.
+Formats items for efficient batch prompting (30%+ token savings).
+
+Options:
+  -h, --help    Show this help
+
+Examples:
+  batch-annotate.sh file1.py file2.py file3.py
+  find . -name "*.py" | batch-annotate.sh -
+  fd -e ts | batch-annotate.sh -
+EOF
+    exit 0
+}
+
+[[ "${1:-}" =~ ^(-h|--help)$ ]] && usage
 
 ITEMS=()
 

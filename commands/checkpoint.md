@@ -63,6 +63,24 @@ To continue from checkpoint:
 Continue from checkpoint ~/.claude/data/checkpoints/<filename>.md
 ```
 
+## Output Format
+```
+Checkpoint saved: ~/.claude/data/checkpoints/20250115-143022-auth-refactor.md
+
+To resume: Continue from checkpoint ~/.claude/data/checkpoints/20250115-143022-auth-refactor.md
+```
+
+## Should NOT Do
+- Save entire file contents (just reference paths)
+- Include verbose error logs (summarize instead)
+- Create checkpoints for trivial tasks
+- Overwrite existing checkpoints without asking
+
+## When to Bail
+- Nothing meaningful to checkpoint (trivial task)
+- Unable to write to checkpoints directory
+- User cancels during summary review
+
 ## Rules
 - Keep checkpoint concise (< 500 words)
 - Focus on actionable context

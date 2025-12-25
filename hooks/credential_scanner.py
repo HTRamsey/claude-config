@@ -12,17 +12,7 @@ from pathlib import Path
 
 # Import shared utilities
 sys.path.insert(0, str(Path(__file__).parent))
-try:
-    from hook_utils import graceful_main, log_event
-    HAS_UTILS = True
-except ImportError:
-    HAS_UTILS = False
-    def graceful_main(name):
-        def decorator(func):
-            return func
-        return decorator
-    def log_event(*args, **kwargs):
-        pass
+from hook_utils import graceful_main, log_event
 
 # Patterns that suggest sensitive data
 # Note: Some patterns split to avoid self-triggering
@@ -83,8 +73,10 @@ SENSITIVE_PATTERNS = [
     (r'DefaultEndpointsProtocol=https.*AccountKey=[A-Za-z0-9+/=]+', "Azure connection string"),
     (r'(?i)azure[_-]?storage[_-]?key\s*[=:]\s*["\']?[A-Za-z0-9+/=]{80,}', "Azure storage key"),
 
-    # Database connection strings
-    (r'(?i)(postgres|mysql|mongodb)://[^:]+:[^@]+@', "Database connection string with password"),
+    # Database connection strings with embedded credentials
+    (r'(mysql|postgresql|postgres|mongodb|redis|amqp)://[^:]+:[^@]+@', "Database URI with password"),
+    (r'(mssql|sqlserver)://[^:]+:[^@]+@', "SQL Server URI with password"),
+    (r'mongodb\+srv://[^:]+:[^@]+@', "MongoDB SRV URI with password"),
 
     # Generic password patterns
     (r'(?i)password\s*[=:]\s*["\'][^"\']{8,}["\']', "Hardcoded password"),

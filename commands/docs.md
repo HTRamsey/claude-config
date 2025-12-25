@@ -57,9 +57,36 @@ Generate or update documentation.
    - Document edge cases
    - Note threading/timing concerns
 
+## Output Format
+```
+Updated documentation for: Vehicle::getBatteryVoltage()
+
+Added:
+- Function docstring with @brief, @param, @return
+- Example usage in header comment
+
+Files modified:
+- src/Vehicle.h:142 (added Doxygen comment)
+```
+
+## Should NOT Do
+- Document trivial getters/setters
+- Add redundant comments restating code
+- Create new doc files without asking
+- Change existing doc style/format
+
+## When to Bail
+- **Code too complex**: Logic too intricate to document meaningfully without deep domain knowledge
+- **No clear API surface**: No entry points, public interface, or exports to document
+- **Missing standards**: No existing doc style/convention and no style guide in project
+- **Target not found**: File, directory, function, or class doesn't exist
+- **Generated code**: Auto-generated files (protocol buffers, parsers, bindings) that shouldn't be manually documented
+- **Third-party code**: External libraries, vendored dependencies, or node_modules without local modifications
+- **Trivial code**: Simple getters/setters, obvious one-liners that would be over-documented
+- **Unstable code**: Prototype/experimental code marked for deletion or major refactoring
+
 ## Rules
 - Match existing doc style
-- Don't doc trivial getters/setters
 - Update docs when code changes
 - Use code blocks for examples
 - Keep it concise but complete

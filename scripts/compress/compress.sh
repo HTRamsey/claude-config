@@ -17,7 +17,8 @@
 # Short form:
 #   compress.sh -t diff -j HEAD~3
 
-set -e
+set -euo pipefail
+source "$HOME/.claude/scripts/lib/common.sh"
 
 SCRIPT_VERSION="1.1.0"
 

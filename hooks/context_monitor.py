@@ -1,10 +1,5 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.11"
-# dependencies = [
-#     "tiktoken>=0.7",
-# ]
-# ///
+#!/usr/bin/env python3
+# Requires: tiktoken (see ~/.claude/pyproject.toml)
 """
 Context Monitor Hook - Monitors conversation size and suggests compaction.
 Runs on UserPromptSubmit to warn when context is getting large.
@@ -22,26 +17,16 @@ from collections import defaultdict
 
 # Import shared utilities for backup
 sys.path.insert(0, str(Path(__file__).parent))
-try:
-    from hook_utils import backup_transcript, log_event, graceful_main
-    HAS_UTILS = True
-except ImportError:
-    HAS_UTILS = False
-    def graceful_main(name):
-        def decorator(func):
-            return func
-        return decorator
-    def log_event(*args, **kwargs):
-        pass
-    def backup_transcript(*args, **kwargs):
-        return None
+from hook_utils import backup_transcript, log_event, graceful_main, safe_load_json, safe_save_json
 
 # Configuration
 TOKEN_WARNING_THRESHOLD = 40000  # Warn at 40K tokens
 TOKEN_CRITICAL_THRESHOLD = 80000  # Strong warning at 80K
+CACHE_FILE = Path.home() / ".claude/data/context-cache.json"
 
 # Claude uses cl100k_base encoding (same as GPT-4)
 _encoder = None
+_token_cache = None
 
 def get_encoder():
     """Lazy-load encoder to avoid startup cost when not needed."""
@@ -57,10 +42,60 @@ def count_tokens(text: str) -> int:
         return 0
     return len(get_encoder().encode(text))
 
+def load_cache():
+    """Load token count cache from disk."""
+    global _token_cache
+    if _token_cache is not None:
+        return _token_cache
+    _token_cache = safe_load_json(CACHE_FILE, {})
+    return _token_cache
+
+def save_cache(cache):
+    """Save token count cache to disk."""
+    global _token_cache
+    _token_cache = cache
+    safe_save_json(CACHE_FILE, cache)
+
+def get_cached_count(transcript_path):
+    """Check cache for valid token count. Returns (tokens, messages) or None."""
+    cache = load_cache()
+    cached = cache.get("transcript")
+    if not cached or cached.get("path") != transcript_path:
+        return None
+    try:
+        stat = os.stat(transcript_path)
+        if cached.get("mtime") == stat.st_mtime and cached.get("size") == stat.st_size:
+            return cached.get("tokens", 0), cached.get("messages", 0)
+    except OSError:
+        pass
+    return None
+
+def update_cache(transcript_path, tokens, messages):
+    """Update cache with new token count."""
+    try:
+        stat = os.stat(transcript_path)
+        cache = {
+            "transcript": {
+                "path": transcript_path,
+                "mtime": stat.st_mtime,
+                "size": stat.st_size,
+                "tokens": tokens,
+                "messages": messages
+            }
+        }
+        save_cache(cache)
+    except OSError:
+        pass
+
 def get_transcript_size(transcript_path):
-    """Read transcript and count tokens accurately."""
+    """Read transcript and count tokens accurately, with caching."""
     if not transcript_path or not os.path.exists(transcript_path):
         return 0, 0
+
+    # Check cache first (avoids expensive recount if file unchanged)
+    cached = get_cached_count(transcript_path)
+    if cached:
+        return cached
 
     # Fast path: check file size first (avoid full scan for small files)
     # ~4 bytes per token on average, 40K tokens ≈ 160KB
@@ -95,6 +130,9 @@ def get_transcript_size(transcript_path):
                     continue
     except Exception:
         return 0, 0
+
+    # Cache the result for next time
+    update_cache(transcript_path, total_tokens, message_count)
 
     return total_tokens, message_count
 

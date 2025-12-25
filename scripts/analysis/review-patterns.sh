@@ -1,8 +1,33 @@
 #!/usr/bin/env bash
-# Code Review Detection Patterns
-# Reference for code-reviewer agent
+set -euo pipefail
 
-case "$1" in
+usage() {
+    cat << 'EOF'
+Usage: review-patterns.sh <category>
+
+Code review detection patterns.
+Reference for code-reviewer agent.
+
+Categories:
+  security        Hardcoded secrets, SQL injection, command injection, XSS, path traversal
+  performance     N+1 queries, nested loops, memory leaks
+  accessibility   Missing alt text, form labels, keyboard support
+  deadcode        Unreachable code, commented blocks, TODOs
+
+Options:
+  -h, --help      Show this help
+
+Examples:
+  review-patterns.sh security
+  review-patterns.sh performance
+  review-patterns.sh accessibility
+EOF
+    exit 0
+}
+
+[[ "${1:-}" =~ ^(-h|--help)$ ]] && usage
+
+case "${1:-}" in
   security)
     cat << 'EOF'
 # Hardcoded secrets

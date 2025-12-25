@@ -37,6 +37,24 @@ Skills, agents, and commands quick reference.
 **Task Queue**: `/queue add "task" --agent TYPE` | `/queue daemon start|stop`
 **Orchestration**: `/flow <workflow> "objective"` (feature, security-review, refactor, quick-review, docs)
 
+### Built-in Commands
+| Task | Command |
+|------|---------|
+| Clear context | `/clear` |
+| Compact context | `/compact` |
+| Rewind conversation | `/rewind` |
+| Rename session | `/rename` |
+| Get help | `/help` |
+| Show cost | `/cost` |
+| Diagnose issues | `/doctor` |
+| Switch model | `/model` |
+| Manage permissions | `/permissions` |
+| Resume session | `/resume` |
+| Add directory | `/add-dir` |
+| Manage MCP servers | `/mcp` |
+| View tasks | `/tasks` |
+| Login/Logout | `/login`, `/logout` |
+
 ## Skills
 
 ### Core Workflows

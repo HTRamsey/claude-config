@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # Token optimization tools - source this file to get helper functions
 # Usage: source ~/.claude/scripts/token-tools.sh
 

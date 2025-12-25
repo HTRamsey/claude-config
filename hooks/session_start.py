@@ -18,23 +18,8 @@ from pathlib import Path
 
 # Import shared utilities
 sys.path.insert(0, str(Path(__file__).parent))
-try:
-    from hook_utils import graceful_main, log_event, is_new_session, read_stdin_context
-except ImportError:
-    def graceful_main(name):
-        def decorator(func):
-            return func
-        return decorator
-    def log_event(*args, **kwargs):
-        pass
-    def is_new_session():
-        return True
-    def read_stdin_context():
-        import json
-        try:
-            return json.load(sys.stdin)
-        except:
-            return {}
+from hook_utils import graceful_main, log_event, is_new_session, read_stdin_context
+
 
 def run_cmd(cmd: list, cwd: str = None) -> str:
     """Run command and return output, or empty string on failure."""
@@ -129,6 +114,64 @@ def get_recent_errors() -> str:
 
     return ""
 
+
+def get_usage_summary() -> str:
+    """Get compact usage stats for today."""
+    from datetime import datetime, timedelta
+
+    parts = []
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # Count sessions today (files modified in last 24h)
+    projects_dir = Path.home() / ".claude" / "projects"
+    if projects_dir.exists():
+        try:
+            yesterday = datetime.now() - timedelta(days=1)
+            session_count = 0
+            for jsonl in projects_dir.rglob("*.jsonl"):
+                try:
+                    if datetime.fromtimestamp(jsonl.stat().st_mtime) > yesterday:
+                        session_count += 1
+                except Exception:
+                    continue
+            if session_count > 0:
+                parts.append(f"Sessions (24h): {session_count}")
+        except Exception:
+            pass
+
+    # Get agent/skill usage from usage-stats.json
+    usage_file = Path.home() / ".claude" / "data" / "usage-stats.json"
+    if usage_file.exists():
+        try:
+            with open(usage_file) as f:
+                usage = json.load(f)
+
+            daily = usage.get("daily", {}).get(today, {})
+            agent_count = daily.get("agents", 0)
+            skill_count = daily.get("skills", 0)
+            cmd_count = daily.get("commands", 0)
+
+            if agent_count or skill_count or cmd_count:
+                usage_parts = []
+                if agent_count:
+                    usage_parts.append(f"{agent_count} agents")
+                if skill_count:
+                    usage_parts.append(f"{skill_count} skills")
+                if cmd_count:
+                    usage_parts.append(f"{cmd_count} commands")
+                parts.append(f"Today: {', '.join(usage_parts)}")
+
+            # Top agent if any
+            agents = usage.get("agents", {})
+            if agents:
+                top_agent = max(agents.items(), key=lambda x: x[1].get("count", 0))
+                if top_agent[1].get("count", 0) > 2:
+                    parts.append(f"Top agent: {top_agent[0]} ({top_agent[1]['count']}x)")
+        except Exception:
+            pass
+
+    return ", ".join(parts) if parts else ""
+
 @graceful_main("session_start")
 def main():
     ctx = read_stdin_context()
@@ -151,10 +194,10 @@ def main():
     if todo_ctx:
         output_parts.append(todo_ctx)
 
-    # Recent errors (optional, only if there are some)
-    # errors = get_recent_errors()
-    # if errors:
-    #     output_parts.append(errors)
+    # Usage summary (sessions, agents, skills today)
+    usage = get_usage_summary()
+    if usage:
+        output_parts.append(usage)
 
     # Output if we have context
     if len(output_parts) > 1:

@@ -3,7 +3,8 @@
 # Usage: smart-cat.sh <file> [line-range]
 # bat provides syntax highlighting and line numbers built-in
 
-set -e
+set -euo pipefail
+source "$HOME/.claude/scripts/lib/common.sh"
 
 file="$1"
 range="${2:-}"
@@ -14,15 +15,7 @@ if [[ -z "$file" ]]; then
     exit 1
 fi
 
-# Find bat (cargo or system)
-BAT=""
-if command -v bat &>/dev/null; then
-    BAT="bat"
-elif [[ -x "$HOME/.cargo/bin/bat" ]]; then
-    BAT="$HOME/.cargo/bin/bat"
-elif command -v batcat &>/dev/null; then
-    BAT="batcat"
-fi
+BAT=$(find_bat)
 
 if [[ -n "$BAT" ]]; then
     opts="--style=numbers,changes --color=never --paging=never"

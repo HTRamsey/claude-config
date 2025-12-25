@@ -106,6 +106,13 @@ $ARGUMENTS (error message, symptom, or unexpected behavior)
 - [x] No regressions
 ```
 
+## Should NOT Do
+- Apply random fixes without understanding
+- Leave debug logging in code
+- Fix symptoms instead of root cause
+- Skip verification after fix
+- Change unrelated code while debugging
+
 ## Rules
 - Understand before fixing
 - One hypothesis at a time

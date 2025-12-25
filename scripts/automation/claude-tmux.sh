@@ -1,15 +1,31 @@
 #!/usr/bin/env bash
-# claude-tmux.sh - Multi-pane Claude Code workspace
-#
-# Usage: claude-tmux.sh [project-path]
-#
-# Layout:
-#  ┌──────────┬──────────┐
-#  │  Claude  │  Claude  │
-#  │  (main)  │ (review) │
-#  ├──────────┴──────────┤
-#  │   Build / Tests     │
-#  └─────────────────────┘
+set -euo pipefail
+
+usage() {
+    cat << 'EOF'
+Usage: claude-tmux.sh [project-path]
+
+Multi-pane Claude Code workspace using tmux.
+
+Layout:
+  ┌──────────┬──────────┐
+  │  Claude  │  Claude  │
+  │  (main)  │ (review) │
+  ├──────────┴──────────┤
+  │   Build / Tests     │
+  └─────────────────────┘
+
+Options:
+  -h, --help    Show this help
+
+Examples:
+  claude-tmux.sh
+  claude-tmux.sh ~/projects/myapp
+EOF
+    exit 0
+}
+
+[[ "${1:-}" =~ ^(-h|--help)$ ]] && usage
 
 SESSION="claude-dev"
 PROJECT="${1:-$(pwd)}"

@@ -4,7 +4,7 @@ description: Quick health check of current session, repository, and usage stats
 
 Show a quick status overview of the current session, repository, and usage stats.
 
-## Process
+## Workflow
 
 Run these checks and display a concise summary:
 
@@ -24,7 +24,7 @@ git log --oneline -5
 
 ### 3. Usage Stats
 ```bash
-~/.claude/scripts/usage-report.sh --json
+~/.claude/scripts/diagnostics/usage-report.sh --json
 ```
 Parse `~/.claude/data/usage-stats.json` and show:
 - Top 3 agents by usage count
@@ -72,9 +72,50 @@ Parse `~/.claude/data/usage-stats.json` and show:
 ⚠ Consider /compact (context is large)
 ```
 
+## Example Output
+
+```
+## Status
+
+**Branch**: main (3 ahead of origin)
+**Uncommitted**: 5 files modified
+**Stashes**: 0
+
+**Recent commits**:
+- 8f3e2a1 Update status.md with example output
+- 7d2c1b9 Fix config-audit formatting
+- 6c1a0f8 Add health-check improvements
+
+**Top Usage**:
+| Type | Name | Uses |
+|------|------|------|
+| Agent | Explore | 87 |
+| Agent | code-reviewer | 34 |
+| Skill | test-driven-development | 21 |
+| Command | /commit | 52 |
+
+**Today**: 8 agents, 3 skills, 12 commands
+
+**Health**:
+✓ No hook errors
+✓ Config valid
+✓ Data files OK
+```
+
+## When to Bail
+- Not in a git repository
+- Scripts missing (health-check.sh, usage-report.sh)
+- For detailed analysis → suggest specific command
+
+## Should NOT Do
+- Show excessive detail (keep to one screen)
+- Modify any files or state
+- Run expensive commands (full test suite, etc.)
+- Suggest fixes proactively (just report status)
+
 ## Rules
 - Keep output concise (fit in one screen)
 - Highlight actionable items (uncommitted changes, stashes)
 - Only show warnings if there are actual issues
 - Skip usage section if no data exists yet
-- For full usage report, suggest `~/.claude/scripts/usage-report.sh`
+- For full usage report, suggest `~/.claude/scripts/diagnostics/usage-report.sh`

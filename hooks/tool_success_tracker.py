@@ -13,20 +13,10 @@ from pathlib import Path
 
 # Import shared utilities
 sys.path.insert(0, str(Path(__file__).parent))
-try:
-    from hook_utils import graceful_main, log_event
-    HAS_UTILS = True
-except ImportError:
-    HAS_UTILS = False
-    def graceful_main(name):
-        def decorator(func):
-            return func
-        return decorator
-    def log_event(*args, **kwargs):
-        pass
+from hook_utils import graceful_main, log_event, get_session_id
 
 # Configuration
-STATE_DIR = Path("/tmp/claude-tool-tracker")
+STATE_DIR = Path.home() / ".claude/data/tool-tracker"
 MAX_AGE_SECONDS = 3600  # Clear state after 1 hour
 FAILURE_THRESHOLD = 2  # Suggest alternative after 2 failures
 
@@ -58,13 +48,13 @@ ERROR_PATTERNS = {
     # Build failures
     r"build failed|compilation error|make.*error": {
         "tool": "Bash",
-        "suggestion": "Pipe through compress-build.sh to focus on errors",
+        "suggestion": "Pipe through compress.sh --type build to focus on errors",
         "action": "compress_output"
     },
     # Test failures
     r"test.*failed|assertion.*error|pytest.*failed": {
         "tool": "Bash",
-        "suggestion": "Pipe through compress-tests.sh to focus on failures",
+        "suggestion": "Pipe through compress.sh --type tests to focus on failures",
         "action": "compress_output"
     },
     # Git errors
@@ -157,7 +147,7 @@ def track_success(ctx: dict) -> dict | None:
     """Handler function for dispatcher. Returns result dict or None."""
     tool_name = ctx.get("tool_name", "")
     tool_result = ctx.get("tool_result", {})
-    session_id = ctx.get("session_id", "default")
+    session_id = get_session_id(ctx)
 
     if not tool_name:
         return None

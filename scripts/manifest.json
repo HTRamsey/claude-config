@@ -93,29 +93,11 @@
       "fallback": "head -50 FILE && echo '...' && tail -20 FILE",
       "savings": "99%"
     },
-    "compress-diff.sh": {
-      "description": "Compress git diffs to summary",
+    "compress.sh": {
+      "description": "Unified output compression (--type diff|build|tests|stack|logs|json|list|errors)",
       "dependencies": ["git"],
-      "fallback": "git diff --stat",
+      "fallback": "grep -E '(error|warning|FAIL)' | head -50",
       "savings": "80-95%"
-    },
-    "compress-build.sh": {
-      "description": "Extract errors/warnings from build logs",
-      "dependencies": [],
-      "fallback": "grep -E '(error|warning|Error|Warning)' | head -50",
-      "savings": "Errors only"
-    },
-    "compress-tests.sh": {
-      "description": "Extract test failures",
-      "dependencies": [],
-      "fallback": "grep -E '(FAIL|ERROR|failed)' | head -30",
-      "savings": "Failures only"
-    },
-    "compress-stacktrace.sh": {
-      "description": "Filter stacktrace to app frames",
-      "dependencies": [],
-      "fallback": "grep -v 'node_modules\\|site-packages' | head -30",
-      "savings": "App frames only"
     },
     "compress-json.sh": {
       "description": "Extract specific JSON fields",

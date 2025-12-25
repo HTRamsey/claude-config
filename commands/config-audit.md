@@ -1,3 +1,8 @@
+---
+description: Audit ~/.claude config for issues and improvements
+allowed-tools: Task, Read, Grep, Glob, Edit
+---
+
 # /config-audit
 
 Comprehensive review of ~/.claude config using parallel subagents for each section.
@@ -456,6 +461,41 @@ Generated: {date}
 
 ## New Backlog Items
 {Items to add to backlog/improvements.md}
+```
+
+## Example Output
+
+```markdown
+# Config Audit Report
+
+Generated: 2025-12-25
+
+## Summary
+- Total findings: 12
+- P1 (Critical): 1 | P2 (High): 3 | P3 (Medium): 6 | P4 (Low): 2
+
+## Agents (3 findings)
+| Priority | Issue Type | Agent(s) | Finding | Recommendation | Complexity |
+|----------|-----------|----------|---------|----------------|------------|
+| P2 | model-fit | quick-lookup | Opus assigned but handles simple lookups | Downgrade to Haiku | S |
+| P3 | overlap | code-reviewer, security-reviewer | Both review code quality | Clarify triggers (security vs general) | M |
+| P4 | description | test-generator | Missing trigger phrase for "add tests" | Update description with triggers | S |
+
+## Commands (4 findings)
+| Priority | Issue Type | Command(s) | Finding | Recommendation | Complexity |
+|----------|-----------|------------|---------|----------------|------------|
+| P2 | missing-section | status.md, config-audit.md | No "Example Output" section | Add realistic examples (8-15 lines) | S |
+| P3 | structure | refactor.md | "When to Bail" section vague | Add concrete bailout conditions | S |
+
+## Rules (2 findings)
+| Priority | Issue Type | File(s) | Finding | Recommendation | Complexity |
+|----------|-----------|---------|---------|----------------|------------|
+| P1 | accuracy | reference.md | Lists 27 agents but only 24 exist | Update counts to match actual files | S |
+
+## New Backlog Items
+- [S] Add Example Output to 2 commands (status.md, config-audit.md)
+- [M] Clarify overlapping code-reviewer vs security-reviewer triggers
+- [S] Update reference.md agent counts (27 claimed vs 24 actual)
 ```
 
 ## Should NOT Do

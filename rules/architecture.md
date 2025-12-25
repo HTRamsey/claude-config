@@ -99,12 +99,12 @@ Organized into subdirectories:
 |-----------|---------|-------------|
 | `search/` (2) | Offloaded search | `offload-grep.sh`, `offload-find.sh` |
 | `compress/` (1) | Output compression | `compress.sh --type diff\|build\|tests\|stack\|logs\|json\|list\|errors` |
-| `smart/` (15) | Smart file viewing | `smart-preview.sh`, `smart-cat.sh`, `smart-diff.sh`, `smart-json.sh`, `smart-yaml.sh`, `smart-html.sh`, `smart-http.sh`, `smart-ast.sh`, `smart-blame.sh`, `smart-ls.sh`, `smart-du.sh`, `smart-find.sh`, `smart-replace.sh`, `extract-signatures.sh`, `summarize-file.sh` |
-| `analysis/` (6) | Code analysis | `find-related.sh`, `impact-analysis.sh`, `project-overview.sh`, `project-stats.sh`, `review-patterns.sh`, `token-tools.sh` |
+| `smart/` (17) | Smart file viewing | `smart-view.sh` (unified viewer), `smart-analyze.sh` (unified analysis), `smart-preview.sh`, `smart-cat.sh`, `smart-diff.sh`, `smart-json.sh`, `smart-yaml.sh`, `smart-html.sh`, `smart-http.sh`, `smart-ast.sh`, `smart-blame.sh`, `smart-ls.sh`, `smart-du.sh`, `smart-find.sh`, `smart-replace.sh`, `extract-signatures.sh`, `summarize-file.sh` |
+| `analysis/` (7) | Code analysis | `dependency-graph.sh`, `find-related.sh`, `impact-analysis.sh`, `project-overview.sh`, `project-stats.sh`, `review-patterns.sh`, `token-tools.sh` |
 | `git/` (3) | Git workflow | `git-prep.sh`, `git-cleanup.sh`, `pre-commit-hook.sh` |
 | `queue/` (2) | Task queue | `task-queue.sh`, `queue-runner.sh` |
-| `diagnostics/` (8) | Health & testing | `health-check.sh`, `validate-config.sh`, `hook-benchmark.sh`, `test-hooks.sh`, `statusline.sh`, `venv-setup.sh`, `usage-report.sh`, `backup-config.sh` |
-| `automation/` (12) | Batch operations | `claude-safe.sh`, `batch-process.sh`, `parallel.sh`, `fan-out.sh`, `retry.sh`, `claude-model.sh`, `claude-tmux.sh`, `batch-annotate.sh`, `batch-select.sh`, `init-project-rules.sh`, `quick-jump.sh`, `recall.sh` |
+| `diagnostics/` (9) | Health & testing | `health-check.sh`, `hook-benchmark.sh`, `hook-profiler.sh`, `validate-config.sh`, `test-hooks.sh`, `statusline.sh`, `venv-setup.sh`, `usage-report.sh`, `backup-config.sh` |
+| `automation/` (13) | Batch operations | `claude-safe.sh`, `batch-process.sh`, `parallel.sh`, `fan-out.sh`, `retry.sh`, `claude-model.sh`, `claude-tmux.sh`, `batch-annotate.sh`, `batch-select.sh`, `session-picker.sh`, `init-project-rules.sh`, `quick-jump.sh`, `recall.sh` |
 | `lib/` (4) | Shared utilities | `common.sh`, `cache.sh`, `lock.sh`, `notify.sh` |
 
 Root-level: (none - all scripts organized into subdirectories)

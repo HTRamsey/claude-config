@@ -12,17 +12,7 @@ from pathlib import Path
 
 # Import shared utilities
 sys.path.insert(0, str(Path(__file__).parent))
-try:
-    from hook_utils import graceful_main, log_event
-    HAS_UTILS = True
-except ImportError:
-    HAS_UTILS = False
-    def graceful_main(name):
-        def decorator(func):
-            return func
-        return decorator
-    def log_event(*args, **kwargs):
-        pass
+from hook_utils import graceful_main, log_event
 
 # Minimum duration (seconds) to trigger notification
 MIN_DURATION_SECS = 30

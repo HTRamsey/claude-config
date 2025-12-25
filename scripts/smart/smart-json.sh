@@ -8,7 +8,7 @@
 # - Compact output by default
 # - Handles common patterns easily
 
-set -e
+set -euo pipefail
 
 source="$1"
 filter="${2:-.}"

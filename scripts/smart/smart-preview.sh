@@ -9,7 +9,8 @@
 # Shows: Head, tail, structure (functions/classes), and size info
 # Saves: 90%+ tokens while providing useful context
 
-set -e
+set -euo pipefail
+source "$HOME/.claude/scripts/lib/common.sh"
 
 LINES=10
 STRUCTURE=false

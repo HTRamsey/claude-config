@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # lock.sh - File-based locking/semaphore for scripts
 #
 # Usage:
@@ -15,16 +16,13 @@
 
 set -uo pipefail
 
+# Load common utilities
+source "$(dirname "$0")/common.sh"
+
 # Defaults
 LOCK_DIR="${CLAUDE_LOCK_DIR:-${TMPDIR:-/tmp}/claude-locks}"
 TIMEOUT=0
 STALE_THRESHOLD=3600
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
 
 mkdir -p "$LOCK_DIR"
 

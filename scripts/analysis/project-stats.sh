@@ -8,7 +8,7 @@
 # - Filter by language
 # - JSON output for processing
 
-set -e
+set -euo pipefail
 
 path="${1:-.}"
 option="${2:-}"

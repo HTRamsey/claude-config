@@ -15,7 +15,7 @@ mv ~/.claude/skills/archive/needed-skill ~/.claude/skills/
 ## Find Unused Skills
 
 ```bash
-~/.claude/scripts/usage-report.sh
+~/.claude/scripts/diagnostics/usage-report.sh
 ```
 
 ## Archival Criteria

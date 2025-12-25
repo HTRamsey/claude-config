@@ -3,6 +3,7 @@
 # Usage: find-related.sh <file> [search_dir]
 
 set -euo pipefail
+source "$HOME/.claude/scripts/lib/common.sh"
 
 file="${1:-}"
 search_dir="${2:-.}"
@@ -14,28 +15,28 @@ fi
 
 filename=$(basename "$file")
 name_no_ext="${filename%.*}"
-ext="${filename##*.}"
+lang=$(detect_language "$file")
 
 echo "=== Related files for: $file ==="
 echo ""
 
 # What this file imports/includes
 echo "## This file imports:"
-case "$ext" in
-    py)
+case "$lang" in
+    python)
         grep -h "^import \|^from .* import" "$file" 2>/dev/null | sed 's/import //;s/from //;s/ import.*//' | sort -u || true
         ;;
-    ts|tsx|js|jsx)
+    typescript|javascript)
         grep -h "^import .* from \|require(" "$file" 2>/dev/null | sed "s/.*from ['\"]//;s/['\"].*//;s/.*require(['\"]//;s/['\"]).*//;" | sort -u || true
         ;;
-    cpp|cc|c|h|hpp)
+    c|cpp)
         grep -h "^#include" "$file" 2>/dev/null | sed 's/#include [<"]//;s/[>"]$//' | sort -u || true
         ;;
     go)
         sed -n '/^import/,/)/p' "$file" 2>/dev/null | grep -v "import\|)\|^$" | tr -d '\t"' | sort -u || true
         ;;
     *)
-        echo "(import detection not supported for .$ext)"
+        echo "(import detection not supported for $lang)"
         ;;
 esac
 

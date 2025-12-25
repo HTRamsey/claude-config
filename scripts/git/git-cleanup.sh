@@ -13,12 +13,8 @@ SCRIPT_VERSION="1.0.0"
 
 set -euo pipefail
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+# Load common utilities
+source "$(dirname "$0")/../lib/common.sh"
 
 # Protected branches (never delete)
 PROTECTED="main master develop release"

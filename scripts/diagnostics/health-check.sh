@@ -1,26 +1,52 @@
 #!/usr/bin/env bash
 # Claude Code configuration health check
-# Usage: health-check.sh [--cleanup]
+# Usage: health-check.sh [--cleanup] [--dry-run]
 #
 # Options:
-#   --cleanup    Rotate old data files (debug/, file-history/, transcript-backups/, backups/, logs)
+#   --cleanup    Rotate old data files (debug/, file-history/, projects/, transcript-backups/, backups/, session state dirs)
+#   --dry-run    Preview what --cleanup would delete without actually deleting
 
-SCRIPT_VERSION="1.2.0"
+SCRIPT_VERSION="1.3.0"
 
-set -euo pipefail
+set -uo pipefail
+source "$HOME/.claude/scripts/lib/common.sh"
 
 CLEANUP=false
-[[ "${1:-}" == "--cleanup" ]] && CLEANUP=true
+DRY_RUN=false
+
+for arg in "$@"; do
+    case "$arg" in
+        --cleanup) CLEANUP=true ;;
+        --dry-run) DRY_RUN=true; CLEANUP=true ;;
+    esac
+done
+
+# Helper: delete files (respects DRY_RUN)
+safe_delete() {
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "[dry-run] would delete: $*" | head -3
+        return 0
+    fi
+    rm -f "$@" 2>/dev/null
+}
 
 # Data rotation function
 do_cleanup() {
-    echo "=== Data Rotation ==="
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "=== Data Rotation (DRY RUN) ==="
+    else
+        echo "=== Data Rotation ==="
+    fi
 
     # Rotate debug files > 7 days
     old_debug=$(find ~/.claude/debug -type f -mtime +7 2>/dev/null | wc -l)
     if [[ $old_debug -gt 0 ]]; then
-        find ~/.claude/debug -type f -mtime +7 -delete 2>/dev/null
-        echo "  debug/: deleted $old_debug files older than 7 days"
+        if [[ "$DRY_RUN" == true ]]; then
+            echo "  debug/: would delete $old_debug files older than 7 days"
+        else
+            find ~/.claude/debug -type f -mtime +7 -delete 2>/dev/null
+            echo "  debug/: deleted $old_debug files older than 7 days"
+        fi
     else
         echo "  debug/: ✓ clean"
     fi
@@ -28,8 +54,12 @@ do_cleanup() {
     # Rotate file-history > 30 days
     old_history=$(find ~/.claude/file-history -type f -mtime +30 2>/dev/null | wc -l)
     if [[ $old_history -gt 0 ]]; then
-        find ~/.claude/file-history -type f -mtime +30 -delete 2>/dev/null
-        echo "  file-history/: deleted $old_history files older than 30 days"
+        if [[ "$DRY_RUN" == true ]]; then
+            echo "  file-history/: would delete $old_history files older than 30 days"
+        else
+            find ~/.claude/file-history -type f -mtime +30 -delete 2>/dev/null
+            echo "  file-history/: deleted $old_history files older than 30 days"
+        fi
     else
         echo "  file-history/: ✓ clean"
     fi
@@ -40,10 +70,29 @@ do_cleanup() {
         if [[ $file_count -gt 10 ]]; then
             total_size=$(du -sh ~/.claude/data/transcript-backups 2>/dev/null | cut -f1 || echo "?")
             deleted=$((file_count - 10))
-            ls -1t ~/.claude/data/transcript-backups/*.jsonl 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null
-            echo "  transcript-backups/: trimmed to 10 files (deleted $deleted, was $total_size)"
+            if [[ "$DRY_RUN" == true ]]; then
+                echo "  transcript-backups/: would trim to 10 files (delete $deleted, size $total_size)"
+            else
+                ls -1t ~/.claude/data/transcript-backups/*.jsonl 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null
+                echo "  transcript-backups/: trimmed to 10 files (deleted $deleted, was $total_size)"
+            fi
         else
             echo "  transcript-backups/: ✓ clean ($file_count files)"
+        fi
+    fi
+
+    # Rotate error-backups > 7 days
+    if [[ -d ~/.claude/data/error-backups ]]; then
+        old_errors=$(find ~/.claude/data/error-backups -type f -mtime +7 2>/dev/null | wc -l)
+        if [[ $old_errors -gt 0 ]]; then
+            if [[ "$DRY_RUN" == true ]]; then
+                echo "  error-backups/: would delete $old_errors files older than 7 days"
+            else
+                find ~/.claude/data/error-backups -type f -mtime +7 -delete 2>/dev/null
+                echo "  error-backups/: deleted $old_errors files older than 7 days"
+            fi
+        else
+            echo "  error-backups/: ✓ clean"
         fi
     fi
 
@@ -51,10 +100,13 @@ do_cleanup() {
     if [[ -f ~/.claude/data/hook-events.jsonl ]]; then
         size=$(stat -f%z ~/.claude/data/hook-events.jsonl 2>/dev/null || stat -c%s ~/.claude/data/hook-events.jsonl 2>/dev/null || echo 0)
         if [[ $size -gt 10485760 ]]; then
-            # Keep last 5000 lines
-            tail -5000 ~/.claude/data/hook-events.jsonl > ~/.claude/data/hook-events.jsonl.tmp
-            mv ~/.claude/data/hook-events.jsonl.tmp ~/.claude/data/hook-events.jsonl
-            echo "  hook-events.jsonl: rotated (was $(numfmt --to=iec $size 2>/dev/null || echo "${size}B"))"
+            if [[ "$DRY_RUN" == true ]]; then
+                echo "  hook-events.jsonl: would rotate (currently $(numfmt --to=iec $size 2>/dev/null || echo "${size}B"))"
+            else
+                tail -5000 ~/.claude/data/hook-events.jsonl > ~/.claude/data/hook-events.jsonl.tmp
+                mv ~/.claude/data/hook-events.jsonl.tmp ~/.claude/data/hook-events.jsonl
+                echo "  hook-events.jsonl: rotated (was $(numfmt --to=iec $size 2>/dev/null || echo "${size}B"))"
+            fi
         else
             echo "  hook-events.jsonl: ✓ under 10MB"
         fi
@@ -64,20 +116,102 @@ do_cleanup() {
     if [[ -d ~/.claude/backups ]]; then
         old_backups=$(find ~/.claude/backups -type f -mtime +30 2>/dev/null | wc -l)
         if [[ $old_backups -gt 0 ]]; then
-            find ~/.claude/backups -type f -mtime +30 -delete 2>/dev/null
-            echo "  backups/: deleted $old_backups files older than 30 days"
+            if [[ "$DRY_RUN" == true ]]; then
+                echo "  backups/: would delete $old_backups files older than 30 days"
+            else
+                find ~/.claude/backups -type f -mtime +30 -delete 2>/dev/null
+                echo "  backups/: deleted $old_backups files older than 30 days"
+            fi
         else
             echo "  backups/: ✓ clean"
         fi
     fi
 
+
+    # Clean session state directories > 7 days
+    for state_dir in batch-state file-tracker tool-tracker; do
+        if [[ -d ~/.claude/data/$state_dir ]]; then
+            old_state=$(find ~/.claude/data/$state_dir -type f -mtime +7 2>/dev/null | wc -l)
+            if [[ $old_state -gt 0 ]]; then
+                if [[ "$DRY_RUN" == true ]]; then
+                    echo "  data/$state_dir/: would delete $old_state files older than 7 days"
+                else
+                    find ~/.claude/data/$state_dir -type f -mtime +7 -delete 2>/dev/null
+                    echo "  data/$state_dir/: deleted $old_state files older than 7 days"
+                fi
+            else
+                echo "  data/$state_dir/: ✓ clean"
+            fi
+        fi
+    done
     # Clean old temp files
     old_temp=$(find /tmp -maxdepth 2 -name "claude-*" -type f -mtime +7 2>/dev/null | wc -l)
     if [[ $old_temp -gt 0 ]]; then
-        find /tmp -maxdepth 2 -name "claude-*" -type f -mtime +7 -delete 2>/dev/null
-        echo "  /tmp/claude-*: deleted $old_temp files older than 7 days"
+        if [[ "$DRY_RUN" == true ]]; then
+            echo "  /tmp/claude-*: would delete $old_temp files older than 7 days"
+        else
+            find /tmp -maxdepth 2 -name "claude-*" -type f -mtime +7 -delete 2>/dev/null
+            echo "  /tmp/claude-*: deleted $old_temp files older than 7 days"
+        fi
     else
         echo "  /tmp/: ✓ clean"
+    fi
+
+    # Rotate session transcripts in projects/ (keep 20 per project, delete > 30 days)
+    if [[ -d ~/.claude/projects ]]; then
+        echo ""
+        echo "  Session transcripts:"
+        total_deleted=0
+
+        for project_dir in ~/.claude/projects/*/; do
+            [[ ! -d "$project_dir" ]] && continue
+
+            project_name=$(basename "$project_dir")
+            session_count=$(find "$project_dir" -name "*.jsonl" -type f 2>/dev/null | wc -l)
+
+            # Skip if few sessions or none
+            [[ -z "$session_count" || "$session_count" -le 20 ]] && continue
+
+            # Delete sessions older than 30 days, but keep at least 20 most recent
+            old_sessions=$(find "$project_dir" -name "*.jsonl" -type f -mtime +30 2>/dev/null)
+            if [[ -n "$old_sessions" ]]; then
+                recent_count=$(find "$project_dir" -name "*.jsonl" -type f -mtime -30 2>/dev/null | wc -l)
+
+                if [[ $recent_count -ge 20 ]]; then
+                    old_count=$(echo "$old_sessions" | wc -l)
+                    old_size=$(echo "$old_sessions" | xargs du -ch 2>/dev/null | tail -1 | cut -f1)
+                    if [[ "$DRY_RUN" == true ]]; then
+                        echo "    $project_name: would delete $old_count old sessions ($old_size)"
+                    else
+                        echo "$old_sessions" | xargs rm -f 2>/dev/null
+                        echo "    $project_name: deleted $old_count old sessions ($old_size)"
+                    fi
+                    ((total_deleted += old_count)) || true
+                else
+                    to_delete=$((session_count - 20))
+                    if [[ $to_delete -gt 0 ]]; then
+                        deleted_size=$(ls -1t "$project_dir"/*.jsonl 2>/dev/null | tail -n +21 | xargs du -ch 2>/dev/null | tail -1 | cut -f1)
+                        if [[ "$DRY_RUN" == true ]]; then
+                            echo "    $project_name: would trim to 20 sessions (delete $to_delete, free $deleted_size)"
+                        else
+                            ls -1t "$project_dir"/*.jsonl 2>/dev/null | tail -n +21 | xargs rm -f 2>/dev/null
+                            echo "    $project_name: trimmed to 20 sessions (deleted $to_delete, freed $deleted_size)"
+                        fi
+                        ((total_deleted += to_delete)) || true
+                    fi
+                fi
+            fi
+        done
+
+        if [[ $total_deleted -gt 0 ]]; then
+            if [[ "$DRY_RUN" == true ]]; then
+                echo "    Total: would delete $total_deleted session files"
+            else
+                echo "    Total: deleted $total_deleted session files"
+            fi
+        else
+            echo "    ✓ all projects clean"
+        fi
     fi
 
     echo ""
@@ -297,7 +431,7 @@ echo ""
 
 # Statusline
 echo "## Statusline"
-if [[ -x ~/.claude/scripts/statusline.sh ]]; then
+if [[ -x ~/.claude/scripts/diagnostics/statusline.sh ]]; then
     echo "  statusline.sh: ✓ executable"
 else
     echo "  statusline.sh: ✗ not executable or missing"

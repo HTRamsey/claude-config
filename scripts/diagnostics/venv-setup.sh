@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Setup/update the Claude Code Python venv
-set -e
+set -euo pipefail
 
 VENV_DIR="$HOME/.claude/venv"
 HOOKS_DIR="$HOME/.claude/hooks"

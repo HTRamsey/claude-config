@@ -10,7 +10,8 @@
 # Removes: Function bodies, implementation details
 # Saves: 80-95% tokens while preserving API structure
 
-set -e
+set -euo pipefail
+source "$HOME/.claude/scripts/lib/common.sh"
 
 LANG=""
 FILES=()
@@ -34,21 +35,6 @@ if [[ ${#FILES[@]} -eq 0 ]]; then
     echo "Supported: python, typescript, javascript, go, rust, java, c, cpp"
     exit 1
 fi
-
-detect_lang() {
-    local file="$1"
-    case "$file" in
-        *.py) echo "python" ;;
-        *.ts|*.tsx) echo "typescript" ;;
-        *.js|*.jsx) echo "javascript" ;;
-        *.go) echo "go" ;;
-        *.rs) echo "rust" ;;
-        *.java) echo "java" ;;
-        *.c|*.h) echo "c" ;;
-        *.cpp|*.hpp|*.cc) echo "cpp" ;;
-        *) echo "unknown" ;;
-    esac
-}
 
 extract_python() {
     awk '
@@ -160,7 +146,7 @@ for file in "${FILES[@]}"; do
         continue
     fi
 
-    FILE_LANG="${LANG:-$(detect_lang "$file")}"
+    FILE_LANG="${LANG:-$(detect_language "$file")}"
     TOTAL_LINES=$(wc -l < "$file")
 
     echo "=== $file ($FILE_LANG) ==="

@@ -1,19 +1,5 @@
 {
   "cleanupPeriodDays": 30,
-  "sandbox": {
-    "enabled": true,
-    "autoAllowBashIfSandboxed": true,
-    "excludedCommands": ["docker", "git", "gh", "npm", "node"],
-    "allowUnsandboxedCommands": true
-  },
-  "enableAllProjectMcpServers": false,
-  "allowedMcpServers": [
-    {"serverName": "memory"},
-    {"serverName": "github"}
-  ],
-  "deniedMcpServers": [
-    {"serverName": "filesystem"}
-  ],
   "env": {
     "DISABLE_PROMPT_CACHING": "0",
     "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
@@ -22,11 +8,9 @@
     "MCP_TIMEOUT": "10000",
     "MCP_TOOL_TIMEOUT": "120000",
     "BASH_DEFAULT_TIMEOUT_MS": "120000",
-    "BASH_MAX_TIMEOUT_MS": "7200000",
+    "BASH_MAX_TIMEOUT_MS": "600000",
     "MAX_THINKING_TOKENS": "16000",
-    "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR": "1",
-    "DISABLE_TELEMETRY": "1",
-    "DISABLE_ERROR_REPORTING": "1"
+    "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR": "1"
   },
   "attribution": {
     "commit": "",
@@ -161,11 +145,6 @@
       "Read(~/.claude/data/token-usage.json)",
       "Read(~/.claude/data/usage-stats.json)"
     ],
-    "ask": [
-      "Bash(curl:*)",
-      "Bash(wget:*)",
-      "Bash(node:*)"
-    ],
     "deny": [
       "Read(.env)",
       "Read(**/.env.*)",
@@ -194,9 +173,28 @@
       "Write(**/id_rsa*)",
       "Write(**/*.pem)",
       "Write(**/*.key)"
+    ],
+    "ask": [
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(node:*)"
     ]
   },
   "model": "opus",
+  "enableAllProjectMcpServers": false,
+  "allowedMcpServers": [
+    {
+      "serverName": "memory"
+    },
+    {
+      "serverName": "github"
+    }
+  ],
+  "deniedMcpServers": [
+    {
+      "serverName": "filesystem"
+    }
+  ],
   "hooks": {
     "SessionStart": [
       {
@@ -225,7 +223,7 @@
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/usage_tracker.py",
-            "timeout": 1
+            "timeout": 3
           }
         ]
       }
@@ -237,7 +235,7 @@
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/smart_permissions.py",
-            "timeout": 1
+            "timeout": 2
           }
         ]
       }
@@ -293,7 +291,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/precompact_save.py",
+            "command": "$HOME/.claude/hooks/state_saver.py",
             "timeout": 5
           }
         ]
@@ -304,7 +302,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/subagent_start.py",
+            "command": "$HOME/.claude/hooks/subagent_lifecycle.py",
             "timeout": 2
           }
         ]
@@ -315,7 +313,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/subagent_complete.py",
+            "command": "$HOME/.claude/hooks/subagent_lifecycle.py",
             "timeout": 3
           }
         ]
@@ -324,14 +322,26 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "~/.claude/scripts/statusline.sh",
+    "command": "~/.claude/scripts/diagnostics/statusline.sh",
     "padding": 0
   },
   "enabledPlugins": {
-    "pyright@claude-code-lsps": true,
+    "pyright@claude-code-lsps": false,
     "clangd-lsp@claude-plugins-official": true
   },
   "outputStyle": "terse",
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "allowUnsandboxedCommands": true,
+    "excludedCommands": [
+      "docker",
+      "git",
+      "gh",
+      "npm",
+      "node"
+    ]
+  },
   "spinnerTipsEnabled": false,
   "alwaysThinkingEnabled": true
 }

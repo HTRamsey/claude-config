@@ -42,9 +42,9 @@ Task(subagent_type=quick-lookup, prompt="Where are API endpoints defined?")
 
 ### 2. Compress Large Outputs
 ```bash
-~/.claude/scripts/compress-diff.sh HEAD~3
-~/.claude/scripts/compress-build.sh < build.log
-~/.claude/scripts/compress-tests.sh < test.log
+~/.claude/scripts/compress/compress.sh --type diff HEAD~3
+~/.claude/scripts/compress/compress.sh --type build < build.log
+~/.claude/scripts/compress/compress.sh --type tests < test.log
 ```
 
 ### 3. Limit Tool Output
@@ -62,7 +62,7 @@ After reading files, summarize findings rather than quoting large sections.
 |--------------|--------|---------------------|
 | File reads | 100 lines | ~/.claude/scripts/smart-preview.sh |
 | Search results | 20 matches | head_limit |
-| Diffs | Summary only | compress-diff.sh |
+| Diffs | Summary only | compress.sh --type diff |
 | Build/test output | Errors only | compress scripts |
 
 ## Anti-Patterns

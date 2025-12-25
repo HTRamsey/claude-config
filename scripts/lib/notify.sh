@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # notify.sh - Desktop notification when tasks complete
 #
 # Usage:

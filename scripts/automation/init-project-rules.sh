@@ -4,7 +4,7 @@
 #   --all       Symlink all rules (not just critical ones)
 #   --gitignore Add .claude/rules/ to .gitignore
 
-set -e
+set -euo pipefail
 
 CLAUDE_USER_RULES="$HOME/.claude/rules"
 PROJECT_RULES=".claude/rules"

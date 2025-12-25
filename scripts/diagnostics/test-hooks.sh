@@ -1,21 +1,49 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Hook Testing Framework
 # Tests hooks with mock input data and validates output format
 set -euo pipefail
 
+# Load common utilities
+source "$(dirname "$0")/../lib/common.sh"
+
 HOOKS_DIR="${HOME}/.claude/hooks"
 VENV_PYTHON="${HOME}/.claude/venv/bin/python3"
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-NC='\033[0m'
 
 # Test results
 PASSED=0
 FAILED=0
 SKIPPED=0
+
+show_help() {
+  cat << 'EOF'
+Usage: test-hooks.sh [HOOK_NAME]
+
+Test Claude Code hooks for correct behavior and error handling.
+
+Arguments:
+  HOOK_NAME      Specific hook to test (default: all)
+                 Valid values: all, file_protection, credential_scanner,
+                               dangerous_command_blocker, exploration_cache,
+                               or any hook name without .py extension
+
+Tests performed:
+  - Graceful handling (empty input, invalid JSON, empty objects)
+  - Specific behavior tests (blocking protected files, dangerous commands, etc.)
+  - JSON output validation (when applicable)
+  - Exit code verification
+
+Examples:
+  test-hooks.sh                    # Test all hooks
+  test-hooks.sh all                # Test all hooks (explicit)
+  test-hooks.sh file_protection    # Test file_protection hook only
+  test-hooks.sh credential_scanner # Test credential_scanner hook only
+
+Exit codes:
+  0  All tests passed
+  1  One or more tests failed or hook not found
+EOF
+  exit 0
+}
 
 log_pass() { echo -e "${GREEN}✓${NC} $1"; ((PASSED++)); }
 log_fail() { echo -e "${RED}✗${NC} $1"; ((FAILED++)); }
@@ -198,12 +226,7 @@ run_tests() {
 # Main
 case "${1:-}" in
     -h|--help)
-        echo "Usage: $0 [hook_name|all]"
-        echo ""
-        echo "Examples:"
-        echo "  $0              # Run all tests"
-        echo "  $0 all          # Run all tests"
-        echo "  $0 file_protection  # Test specific hook"
+        show_help
         ;;
     *)
         run_tests "${1:-all}"

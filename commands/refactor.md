@@ -79,12 +79,44 @@ Grep pattern: "functionName" path: src/
 - If passes: Commit, next increment
 - If uncertain: Add test coverage first
 
+## When to Bail
+- No tests exist for target code → add tests first
+- Refactor scope too large (>3 files) → break down
+- Build fails after change → rollback
+- User rejects refactoring plan
+
+## Should NOT Do
+- Mix refactoring with feature changes
+- Refactor without baseline tests
+- Change behavior during refactoring
+- Skip build verification
+- Refactor more than 3 files at once
+
 ## Rules
-- Refactor max 3 files per increment
-- Don't mix refactoring with features
 - Keep diffs small (< 100 lines per increment)
 - Always build after refactoring
 - One transformation at a time
+
+## Output Format
+```
+## Refactoring: Extract telemetry parsing
+
+### Current State
+- Target: Vehicle::handleMessage() (85 lines)
+- Call sites: 3
+- Test coverage: 72%
+
+### Proposed Change
+Extract lines 42-78 into TelemetryParser::parse()
+- Before: 1 file, 85 lines
+- After: 2 files, 45 + 48 lines
+
+### Impact
+- Vehicle.cpp: Reduced complexity
+- TelemetryParser.cpp: New file
+
+Proceed with refactoring? (yes/no)
+```
 
 ## Success Metrics
 - All tests pass

@@ -5,7 +5,7 @@ Usage Tracker Hook - Tracks skill, agent, and command usage.
 PreToolUse: Tracks Task (agents) and Skill tool invocations
 UserPromptSubmit: Tracks slash command usage
 
-Stores usage data in ~/.claude/data/usage-stats.json
+Uses state_manager for centralized state handling.
 """
 import json
 import sys
@@ -14,14 +14,15 @@ from pathlib import Path
 
 # Import shared utilities
 sys.path.insert(0, str(Path(__file__).parent))
-try:
-    from hook_utils import graceful_main
-except ImportError:
-    def graceful_main(name):
-        def decorator(func):
-            return func
-        return decorator
+from hook_utils import graceful_main
 
+try:
+    from state_manager import get_state_manager
+    HAS_STATE_MANAGER = True
+except ImportError:
+    HAS_STATE_MANAGER = False
+
+# Fallback for when state_manager not available
 DATA_DIR = Path.home() / ".claude" / "data"
 USAGE_FILE = DATA_DIR / "usage-stats.json"
 
@@ -32,7 +33,9 @@ BUILTIN_COMMANDS = {
     "add-dir", "pr-comments", "ide", "rename", "rewind", "tasks"
 }
 
-def load_usage():
+
+def _load_usage_fallback():
+    """Fallback loader when state_manager unavailable."""
     try:
         if USAGE_FILE.exists():
             with open(USAGE_FILE) as f:
@@ -41,7 +44,9 @@ def load_usage():
         pass
     return {"agents": {}, "skills": {}, "commands": {}, "daily": {}, "first_seen": datetime.now().isoformat()}
 
-def save_usage(data):
+
+def _save_usage_fallback(data):
+    """Fallback saver when state_manager unavailable."""
     try:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         data["last_updated"] = datetime.now().isoformat()
@@ -50,7 +55,9 @@ def save_usage(data):
     except IOError:
         pass
 
+
 def increment_usage(data, category, name):
+    """Increment usage counter for a category/name."""
     if category not in data:
         data[category] = {}
     if name not in data[category]:
@@ -73,8 +80,7 @@ def increment_usage(data, category, name):
 
 def track_usage(ctx: dict) -> dict | None:
     """Handler function for dispatcher. Returns None (tracking only, no output)."""
-    usage = load_usage()
-    tracked = False
+    tracked_items = []
 
     tool_name = ctx.get("tool_name", "")
     tool_input = ctx.get("tool_input", {})
@@ -82,23 +88,32 @@ def track_usage(ctx: dict) -> dict | None:
     if tool_name == "Task":
         agent_type = tool_input.get("subagent_type", "")
         if agent_type:
-            increment_usage(usage, "agents", agent_type)
-            tracked = True
+            tracked_items.append(("agents", agent_type))
     elif tool_name == "Skill":
         skill_name = tool_input.get("skill", "")
         if skill_name:
-            increment_usage(usage, "skills", skill_name)
-            tracked = True
+            tracked_items.append(("skills", skill_name))
 
     user_prompt = ctx.get("user_prompt", "") or ctx.get("prompt", "")
     if user_prompt and user_prompt.strip().startswith("/"):
         parts = user_prompt.strip()[1:].split(None, 1)
         if parts and parts[0].lower() not in BUILTIN_COMMANDS:
-            increment_usage(usage, "commands", parts[0].lower())
-            tracked = True
+            tracked_items.append(("commands", parts[0].lower()))
 
-    if tracked:
-        save_usage(usage)
+    if not tracked_items:
+        return None
+
+    # Use state_manager if available
+    if HAS_STATE_MANAGER:
+        sm = get_state_manager()
+        for category, name in tracked_items:
+            sm.record_usage(category, name)
+    else:
+        # Fallback to direct file access
+        usage = _load_usage_fallback()
+        for category, name in tracked_items:
+            increment_usage(usage, category, name)
+        _save_usage_fallback(usage)
 
     return None  # Tracking only, no output
 

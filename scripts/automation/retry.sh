@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # retry.sh - Retry flaky commands with exponential backoff
 #
 # Usage:
@@ -14,7 +15,8 @@
 
 SCRIPT_VERSION="1.0.0"
 
-set -uo pipefail
+# Load common utilities
+source "$(dirname "$0")/../lib/common.sh"
 
 # Defaults
 DELAY=1
@@ -23,12 +25,6 @@ MAX_DELAY=60
 ON_RETRY=""
 MAX_ATTEMPTS=3
 QUIET=false
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
 
 show_help() {
     cat << 'EOF'
@@ -119,7 +115,7 @@ calc_delay() {
     local delay
 
     # Use bc for float math if available, otherwise use integer approximation
-    if command -v bc &>/dev/null; then
+    if has_command bc; then
         delay=$(echo "$DELAY * $BACKOFF ^ ($attempt - 1)" | bc 2>/dev/null)
         # Cap at max delay
         if [[ $(echo "$delay > $MAX_DELAY" | bc 2>/dev/null) -eq 1 ]]; then

@@ -26,7 +26,7 @@ mv ~/.claude/agents/archive/needed-agent.md ~/.claude/agents/
 
 Run the usage report:
 ```bash
-~/.claude/scripts/usage-report.sh
+~/.claude/scripts/diagnostics/usage-report.sh
 ```
 
 This shows which agents haven't been used recently.

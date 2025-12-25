@@ -53,6 +53,37 @@ $ARGUMENTS (test file, pattern, or empty for all tests)
    - Name files to inspect
    - Don't propose code unless asked
 
+## Output Format
+```
+## Test Results
+
+✓ 47 passed, ✗ 2 failed, ○ 1 skipped
+
+### Failures
+
+✗ test_battery_voltage_parsing
+  Expected: 12.6
+  Actual: 0.0
+  File: tests/test_vehicle.py:89
+
+  Likely cause: MAVLink message not being parsed
+  Check: src/Vehicle.cpp:handleMessage()
+
+Next: Fix test_battery_voltage_parsing? (yes/skip)
+```
+
+## When to Bail
+- No test framework detected
+- Tests require external services not available
+- For flaky test diagnosis → use testing-debugger agent
+- Test suite too slow (>10 min) → ask to narrow scope
+
+## Should NOT Do
+- Show full test output (compress it)
+- Auto-fix failing tests without asking
+- Run entire suite when specific test requested
+- Rerun tests repeatedly without changes
+
 ## Rules
 - Keep output concise (< 200 tokens)
 - Only show failures, not full output
@@ -60,5 +91,5 @@ $ARGUMENTS (test file, pattern, or empty for all tests)
 - Don't rerun tests unless asked
 - Use compression scripts for verbose output:
   ```bash
-  ~/.claude/scripts/compress-tests.sh < test-output.log
+  ~/.claude/scripts/compress/compress.sh --type tests < test-output.log
   ```

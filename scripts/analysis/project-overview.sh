@@ -3,6 +3,7 @@
 # Usage: project-overview.sh [directory]
 
 set -euo pipefail
+source "$HOME/.claude/scripts/lib/common.sh"
 
 dir="${1:-.}"
 

@@ -92,6 +92,18 @@ rg -n "if.*if.*if|else.*else.*else" $ARGUMENTS
 3. [P2] Add tests for payment flow
 ```
 
+## When to Bail
+- Path doesn't exist or is empty
+- Too many files to scan (>1000) → ask to narrow scope
+- For fixing debt → use /refactor instead
+- No significant debt found (good news!)
+
+## Should NOT Do
+- Fix debt while cataloging (just report)
+- Prioritize aesthetics over impact
+- Report every minor issue (focus on significant)
+- Create issues without asking
+
 ## Rules
 - Don't fix debt during cataloging
 - Focus on impact, not aesthetics

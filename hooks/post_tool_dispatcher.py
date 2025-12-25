@@ -5,9 +5,9 @@ PostToolUse Dispatcher - Consolidates all PostToolUse hooks into single process.
 STATUS: READY - All hooks export handler functions.
 
 Benefits:
-- Single Python process startup instead of 8+
+- Consolidates 10 handlers into single process, avoiding 9 Python interpreter startups
 - Shared state and caching
-- Faster hook execution (80-200ms savings)
+- Typical handler latency: 20-70ms per handler
 
 Dispatches to handler functions based on tool name matching.
 """
@@ -39,30 +39,33 @@ def get_handler(name: str):
             if name == "notify_complete":
                 from notify_complete import check_notify
                 _handlers[name] = check_notify
-            elif name == "file_access_tracker":
-                from file_access_tracker import track_post_access
-                _handlers[name] = track_post_access
+            elif name == "file_monitor":
+                from file_monitor import track_file_post
+                _handlers[name] = track_file_post
             elif name == "batch_operation_detector":
                 from batch_operation_detector import detect_batch
                 _handlers[name] = detect_batch
             elif name == "tool_success_tracker":
                 from tool_success_tracker import track_success
                 _handlers[name] = track_success
-            elif name == "exploration_cache":
-                from exploration_cache import handle_post_tool_use as cache_store
-                _handlers[name] = cache_store
-            elif name == "agent_chaining":
-                from agent_chaining import suggest_chain
+            elif name == "unified_cache":
+                from unified_cache import handle_exploration_post, handle_research_post
+                _handlers[name] = (handle_exploration_post, handle_research_post)
+            elif name == "suggestion_engine":
+                from suggestion_engine import suggest_chain
                 _handlers[name] = suggest_chain
-            elif name == "research_cache":
-                from research_cache import handle_post_tool_use as research_store
-                _handlers[name] = research_store
-            elif name == "token_tracker":
-                from token_tracker import track_tokens
-                _handlers[name] = track_tokens
-            elif name == "output_size_monitor":
-                from output_size_monitor import check_output_size
-                _handlers[name] = check_output_size
+            elif name == "output_metrics":
+                from output_metrics import track_output_metrics
+                _handlers[name] = track_output_metrics
+            elif name == "build_analyzer":
+                from build_analyzer import analyze_build_post
+                _handlers[name] = analyze_build_post
+            elif name == "smart_permissions":
+                from smart_permissions import smart_permissions_post
+                _handlers[name] = smart_permissions_post
+            elif name == "state_saver":
+                from state_saver import handle_post_tool_use
+                _handlers[name] = handle_post_tool_use
             else:
                 _handlers[name] = None
         except ImportError as e:
@@ -71,30 +74,77 @@ def get_handler(name: str):
     return _handlers.get(name)
 
 
+# All handler names for validation
+ALL_HANDLERS = [
+    "notify_complete", "file_monitor", "batch_operation_detector",
+    "tool_success_tracker", "unified_cache", "suggestion_engine",
+    "output_metrics", "build_analyzer", "smart_permissions", "state_saver"
+]
+
+def validate_handlers():
+    """Validate all handlers can be imported. Called once at startup."""
+    failed = []
+    for name in ALL_HANDLERS:
+        handler = get_handler(name)
+        if handler is None and name in _handlers:
+            failed.append(name)
+    if failed:
+        log_event("post_tool_dispatcher", "startup_validation", {
+            "failed_handlers": failed,
+            "count": len(failed)
+        })
+        print(f"[post_tool_dispatcher] Warning: {len(failed)} handlers failed to import: {', '.join(failed)}", file=sys.stderr)
+
+
 # Tool-to-handler mapping
 TOOL_HANDLERS = {
-    "Bash": ["notify_complete", "tool_success_tracker", "token_tracker", "output_size_monitor"],
-    "Grep": ["file_access_tracker", "tool_success_tracker", "token_tracker", "output_size_monitor"],
-    "Glob": ["file_access_tracker", "tool_success_tracker", "token_tracker", "output_size_monitor"],
-    "Read": ["file_access_tracker", "tool_success_tracker", "token_tracker", "output_size_monitor"],
-    "Edit": ["batch_operation_detector", "tool_success_tracker", "token_tracker", "output_size_monitor"],
-    "Write": ["batch_operation_detector", "tool_success_tracker", "token_tracker", "output_size_monitor"],
-    "Task": ["exploration_cache", "agent_chaining", "token_tracker", "output_size_monitor"],
-    "WebFetch": ["research_cache"],
+    "Bash": ["notify_complete", "tool_success_tracker", "output_metrics", "build_analyzer", "state_saver"],
+    "Grep": ["file_monitor", "tool_success_tracker", "output_metrics"],
+    "Glob": ["file_monitor", "tool_success_tracker", "output_metrics"],
+    "Read": ["file_monitor", "tool_success_tracker", "output_metrics", "smart_permissions"],
+    "Edit": ["batch_operation_detector", "tool_success_tracker", "output_metrics", "smart_permissions"],
+    "Write": ["batch_operation_detector", "tool_success_tracker", "output_metrics", "smart_permissions"],
+    "Task": ["unified_cache", "suggestion_engine", "output_metrics"],
+    "WebFetch": ["unified_cache"],
 }
 
 
 def run_handler(name: str, ctx: dict) -> dict | None:
     """Run a single handler and return its result."""
+    import time
     handler = get_handler(name)
     if handler is None:
         return None
 
+    start_time = time.perf_counter()
+    result = None
+    error = None
+
     try:
-        return handler(ctx)
+        # Special handling for unified_cache (has separate handlers for Task vs WebFetch)
+        if name == "unified_cache":
+            exploration_handler, research_handler = handler
+            tool_name = ctx.get("tool_name", "")
+            if tool_name == "Task":
+                result = exploration_handler(ctx)
+            elif tool_name == "WebFetch":
+                result = research_handler(ctx)
+        else:
+            result = handler(ctx)
     except Exception as e:
-        log_event("post_tool_dispatcher", "handler_error", {"handler": name, "error": str(e)})
-        return None
+        error = str(e)
+        log_event("post_tool_dispatcher", "handler_error", {"handler": name, "error": error})
+
+    # Log timing
+    elapsed_ms = (time.perf_counter() - start_time) * 1000
+    log_event("post_tool_dispatcher", "handler_timing", {
+        "handler": name,
+        "elapsed_ms": round(elapsed_ms, 2),
+        "tool": ctx.get("tool_name", ""),
+        "success": error is None
+    })
+
+    return result
 
 
 def dispatch(ctx: dict) -> dict | None:
@@ -128,8 +178,15 @@ def dispatch(ctx: dict) -> dict | None:
     return None
 
 
+_validated = False
+
 @graceful_main("post_tool_dispatcher")
 def main():
+    global _validated
+    if not _validated:
+        validate_handlers()
+        _validated = True
+
     try:
         ctx = json.load(sys.stdin)
     except json.JSONDecodeError:

@@ -1,14 +1,34 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # Batch processing wrapper - process multiple items efficiently
 # Instead of N separate operations, batches them to reduce token overhead
-#
-# Usage:
-#   batch-process.sh <operation> <batch_size> <items...>
-#   batch-process.sh grep 10 pattern file1 file2 file3 ...
-#   batch-process.sh read 5 file1 file2 file3 ...
-#   cat filelist.txt | batch-process.sh grep 10 pattern -
-#
-# Operations: grep, read, lint, test
+
+usage() {
+    cat << 'EOF'
+Usage: batch-process.sh <operation> <batch_size> <items...>
+
+Batch processing wrapper - process multiple items efficiently.
+Instead of N separate operations, batches them to reduce token overhead.
+
+Operations:
+  grep    Search pattern across multiple files
+  read    Show summary of multiple files
+  lint    Run linter on batch of files
+  test    Run tests on batch of files
+  stat    Show file statistics
+
+Options:
+  -h, --help    Show this help
+
+Examples:
+  batch-process.sh grep 10 pattern file1 file2 file3
+  batch-process.sh read 5 file1 file2 file3
+  cat filelist.txt | batch-process.sh grep 10 pattern -
+EOF
+    exit 0
+}
+
+[[ "${1:-}" =~ ^(-h|--help)$ ]] && usage
 
 OPERATION="$1"
 BATCH_SIZE="${2:-10}"
