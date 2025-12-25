@@ -8,7 +8,7 @@ Map of Claude Code customizations at `~/.claude/`.
 ~/.claude/
 ├── CLAUDE.md              # Entry point, references rules
 ├── settings.json          # Permissions, model config
-├── requirements.txt       # Python dependencies for hooks
+├── pyproject.toml         # Python dependencies for hooks
 ├── venv/                  # Python venv (auto-used via PATH)
 ├── rules/                 # Auto-loaded instruction files (4 files)
 │   ├── guidelines.md      # Style, security, verification
@@ -21,14 +21,15 @@ Map of Claude Code customizations at `~/.claude/`.
 ├── skills/                # Loaded-on-demand workflows
 ├── scripts/               # Shell utilities (organized)
 │   ├── search/            # offload-grep, offload-find
-│   ├── compress/          # compress-diff, compress-build, etc.
+│   ├── compress/          # compress.sh (unified)
 │   ├── smart/             # smart-*, summarize-file, extract-signatures
 │   ├── analysis/          # find-related, project-overview, etc.
 │   ├── git/               # git-prep, git-cleanup
 │   ├── queue/             # task-queue, queue-runner
 │   ├── diagnostics/       # health-check, validate-config, etc.
 │   ├── automation/        # claude-safe, batch-process, etc.
-│   └── lib/               # common, cache, lock, notify
+│   ├── lib/               # common, cache, lock, notify
+│   └── tests/             # smoke-test, validation scripts
 └── data/                  # Runtime data (caches, logs)
 ```
 
@@ -59,23 +60,23 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 | `credential_scanner` | Bash (git commit) | Detect secrets in staged changes |
 | `tdd_guard` | Write, Edit | Warn if no tests for code changes |
 | `dangerous_command_blocker` | Bash | Block destructive commands |
-| `suggest_tool_optimization` | Bash, Grep, Read | Suggest better alternatives |
-| `file_access_tracker` | Read, Edit | Detect stale context |
-| `preread_summarize` | Read | Suggest summarization for large files |
-| `context_checkpoint` | Edit, Write | Save state before risky edits |
+| `suggestion_engine` | Write, Edit, Bash, Grep, Glob, Read | Unified suggestions (skills, subagents, tool optimization) |
+| `file_monitor` | Read, Edit | Track reads, detect stale context, suggest summarization |
+| `state_saver` | Edit, Write | Save checkpoint before risky edits |
 
 ### PostToolUse (react after execution)
 | Hook | Watches | Purpose |
 |------|---------|---------|
 | `notify_complete` | Bash | Desktop notification for long commands |
-| `file_access_tracker` | Grep, Glob, Read | Track file access patterns |
+| `file_monitor` | Grep, Glob, Read | Detect duplicate searches/reads |
 | `batch_operation_detector` | Edit, Write | Suggest batching similar edits |
 | `tool_success_tracker` | all | Track failures, suggest alternatives |
-| `exploration_cache` | Task | Cache exploration results |
-| `agent_chaining` | Task | Suggest specialist follow-ups |
+| `unified_cache` | Task, WebFetch | Cache exploration and research results |
+| `suggestion_engine` | Task | Suggest specialist follow-ups (agent chaining) |
 | `usage_tracker` | Task, Skill | Track agent/skill/command usage |
-| `token_tracker` | all | Track daily token usage |
-| `output_size_monitor` | all | Warn about large outputs |
+| `output_metrics` | all | Track tokens and warn about large outputs |
+| `build_analyzer` | Bash | Parse build failures, summarize errors, suggest fixes |
+| `smart_permissions` | Read, Edit, Write | Learn permission patterns for auto-approval |
 
 ### Other Events
 | Hook | Event | Purpose |
@@ -85,11 +86,8 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 | `session_persistence` | SessionEnd | Auto-save session insights |
 | `uncommitted_reminder` | Stop | Remind about uncommitted changes |
 | `start_viewer` | SessionStart | Start claude-code-viewer |
-| `skill_suggester` | UserPromptSubmit | Suggest relevant skills |
-| `suggest_subagent` | UserPromptSubmit | Suggest agent delegation |
-| `smart_permissions` | PermissionRequest | Context-aware auto-approval |
-| `precompact_save` | PreCompact | Save state before compaction |
-| `research_cache` | PreToolUse/PostToolUse | Cache web research results |
+| `smart_permissions` | PermissionRequest | Context-aware auto-approval with learning |
+| `state_saver` | PreCompact | Backup transcript before compaction |
 | `subagent_start` | SubagentStart | Track subagent spawn time |
 | `subagent_complete` | SubagentStop | Handle subagent completion, calculate duration |
 
@@ -99,17 +97,17 @@ Organized into subdirectories:
 
 | Directory | Purpose | Key Scripts |
 |-----------|---------|-------------|
-| `search/` | Offloaded search | `offload-grep.sh`, `offload-find.sh` |
-| `compress/` | Output compression | `compress-diff.sh`, `compress-build.sh`, `compress-tests.sh` |
-| `smart/` | Smart file viewing | `smart-preview.sh`, `smart-diff.sh`, `summarize-file.sh` |
-| `analysis/` | Code analysis | `find-related.sh`, `project-overview.sh`, `review-patterns.sh` |
-| `git/` | Git workflow | `git-prep.sh`, `git-cleanup.sh` |
-| `queue/` | Task queue | `task-queue.sh`, `queue-runner.sh` |
-| `diagnostics/` | Health & testing | `health-check.sh`, `validate-config.sh`, `hook-benchmark.sh` |
-| `automation/` | Batch operations | `claude-safe.sh`, `batch-process.sh`, `parallel.sh` |
-| `lib/` | Shared utilities | `common.sh`, `cache.sh`, `lock.sh` |
+| `search/` (2) | Offloaded search | `offload-grep.sh`, `offload-find.sh` |
+| `compress/` (1) | Output compression | `compress.sh --type diff\|build\|tests\|stack\|logs\|json\|list\|errors` |
+| `smart/` (15) | Smart file viewing | `smart-preview.sh`, `smart-cat.sh`, `smart-diff.sh`, `smart-json.sh`, `smart-yaml.sh`, `smart-html.sh`, `smart-http.sh`, `smart-ast.sh`, `smart-blame.sh`, `smart-ls.sh`, `smart-du.sh`, `smart-find.sh`, `smart-replace.sh`, `extract-signatures.sh`, `summarize-file.sh` |
+| `analysis/` (6) | Code analysis | `find-related.sh`, `impact-analysis.sh`, `project-overview.sh`, `project-stats.sh`, `review-patterns.sh`, `token-tools.sh` |
+| `git/` (3) | Git workflow | `git-prep.sh`, `git-cleanup.sh`, `pre-commit-hook.sh` |
+| `queue/` (2) | Task queue | `task-queue.sh`, `queue-runner.sh` |
+| `diagnostics/` (8) | Health & testing | `health-check.sh`, `validate-config.sh`, `hook-benchmark.sh`, `test-hooks.sh`, `statusline.sh`, `venv-setup.sh`, `usage-report.sh`, `backup-config.sh` |
+| `automation/` (12) | Batch operations | `claude-safe.sh`, `batch-process.sh`, `parallel.sh`, `fan-out.sh`, `retry.sh`, `claude-model.sh`, `claude-tmux.sh`, `batch-annotate.sh`, `batch-select.sh`, `init-project-rules.sh`, `quick-jump.sh`, `recall.sh` |
+| `lib/` (4) | Shared utilities | `common.sh`, `cache.sh`, `lock.sh`, `notify.sh` |
 
-Root-level: `statusline.sh`, `venv-setup.sh`, `usage-report.sh`
+Root-level: (none - all scripts organized into subdirectories)
 
 ## Data Flow
 
@@ -135,11 +133,11 @@ Hooks use an isolated venv at `~/.claude/venv/`. The PATH is set in `settings.js
 
 | Task | Command |
 |------|---------|
-| Check status | `~/.claude/scripts/venv-setup.sh check` |
-| Update deps | `~/.claude/scripts/venv-setup.sh update` |
-| Recreate | `~/.claude/scripts/venv-setup.sh create` |
+| Check status | `~/.claude/scripts/diagnostics/venv-setup.sh check` |
+| Update deps | `~/.claude/scripts/diagnostics/venv-setup.sh update` |
+| Recreate | `~/.claude/scripts/diagnostics/venv-setup.sh create` |
 
-Dependencies: `requirements.txt` (currently: tiktoken, rapidfuzz)
+Dependencies: `pyproject.toml` (currently: tiktoken, rapidfuzz)
 
 ## Data Rotation
 
@@ -155,11 +153,13 @@ Run `~/.claude/scripts/diagnostics/health-check.sh --cleanup` to:
 | File | Purpose |
 |------|---------|
 | `settings.json` | Permissions, allowed tools, model preferences |
-| `requirements.txt` | Python dependencies for hooks |
+| `pyproject.toml` | Python dependencies for hooks |
 | `rules/*.md` | Auto-loaded instructions (4 files) |
 | `data/task-queue.json` | Pending background tasks |
 | `data/token-usage.json` | Daily token tracking |
-| `data/exploration-cache.json` | Cached codebase exploration |
+| `data/exploration-cache.json` | Cached codebase exploration (unified_cache) |
+| `data/research-cache.json` | Cached web research (unified_cache) |
 | `data/usage-stats.json` | Agent/skill/command usage tracking |
+| `data/permission-patterns.json` | Learned permission patterns |
 | `data/hook-events.jsonl` | Hook execution log |
 | `data/session-history.json` | Session metadata for resumption |
