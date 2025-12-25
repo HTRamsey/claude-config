@@ -233,7 +233,7 @@ def handle_post_tool_use(ctx: dict) -> dict | None:
 
 
 def handle_pre_compact(ctx: dict) -> dict | None:
-    """Backup transcript before compaction."""
+    """Backup transcript before compaction and remind about learnings."""
     transcript_path = ctx.get("transcript_path", "")
 
     if not transcript_path:
@@ -247,6 +247,18 @@ def handle_pre_compact(ctx: dict) -> dict | None:
             "last_compact_time": datetime.now().isoformat()
         })
         log_event("state_saver", "pre_compact_backup", {"backup_path": backup_path})
+
+    # Output learning reminder
+    learnings_dir = Path.home() / ".claude/learnings"
+    if learnings_dir.exists():
+        categories = [f.stem for f in learnings_dir.glob("*.md") if f.stem != "README"]
+        categories_str = ", ".join(categories[:5])
+        return {
+            "result": "continue",
+            "message": f"[Learning Reminder] Before compacting, consider capturing any insights from this session. "
+                       f"Categories: {categories_str}. "
+                       f"Format: ## [Date] Title\\n**Context:** ...\\n**Learning:** ...\\n**Application:** ..."
+        }
 
     return None
 
@@ -263,7 +275,9 @@ def main():
     # Detect event type
     if "transcript_path" in ctx and tool_name == "":
         # PreCompact event
-        handle_pre_compact(ctx)
+        result = handle_pre_compact(ctx)
+        if result:
+            print(json.dumps(result))
     elif tool_name in ("Edit", "Write"):
         # PreToolUse event
         result = handle_pre_tool_use(ctx)

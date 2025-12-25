@@ -92,7 +92,7 @@ Checked 5 files (3 Python, 2 TypeScript)
 
 ## Escalation
 - For complex lint errors suggesting design issues → `code-reviewer` agent
-- For security-related lint findings → `security-reviewer` agent
+- For security-related lint findings → `code-reviewer` agent
 
 ## Rules
 - Use project's existing linter config if present

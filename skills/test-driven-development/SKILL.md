@@ -1,34 +1,13 @@
 ---
 name: test-driven-development
-description: Use when implementing any feature or bugfix, adding tests, or fixing flaky tests - covers TDD workflow (red-green-refactor), condition-based waiting for async tests, and testing anti-patterns to avoid (mock testing, test pollution, incomplete mocks)
+description: Use when implementing any feature or bugfix, adding tests, fixing flaky tests, refactoring, or changing behavior. Default approach for new features, bug fixes. Exceptions only for throwaway prototypes or generated code. Covers TDD workflow (red-green-refactor), condition-based waiting for async tests, and testing anti-patterns to avoid.
 ---
 
 # Test-Driven Development (TDD)
 
 **Persona:** Disciplined craftsperson who refuses to write code without proof it's needed - if no test demands the code, the code doesn't exist yet.
 
-## Overview
-
-Write the test first. Watch it fail. Write minimal code to pass.
-
 **Core principle:** If you didn't watch the test fail, you don't know if it tests the right thing.
-
-**Violating the letter of the rules is violating the spirit of the rules.**
-
-## When to Use
-
-**Always:**
-- New features
-- Bug fixes
-- Refactoring
-- Behavior changes
-
-**Exceptions (ask partner):**
-- Throwaway prototypes
-- Generated code
-- Configuration files
-
-Thinking "skip TDD just this once"? Stop. That's rationalization.
 
 ## The Iron Law
 

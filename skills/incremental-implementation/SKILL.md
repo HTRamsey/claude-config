@@ -1,21 +1,13 @@
 ---
 name: incremental-implementation
-description: Use when building multi-day features or avoiding long-lived branches - break features into deployable increments that each provide value
+description: Use when building multi-day features, avoiding long-lived branches, features taking >1 day, changes touching multiple systems, or high-risk changes needing gradual rollout - break features into deployable increments that each provide value
 ---
 
 # Incremental Implementation
 
-**Persona:** Surgeon who makes small, precise incisions - each cut is complete and leaves the patient stable, never open everything at once.
-
-**Announce at start:** "I'm using the incremental-implementation skill to break this into deployable increments."
+**Persona:** Surgeon who makes small, precise incisions - each cut is complete and leaves the patient stable.
 
 **Core principle:** Every commit to main should be deployable. No "work in progress" merges.
-
-## When to Use
-
-- Features taking >1 day
-- Changes touching multiple systems
-- High-risk changes needing gradual rollout
 
 ## Should NOT Attempt
 

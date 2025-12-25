@@ -111,7 +111,7 @@ Recommend escalation when:
 - Question requires hands-on testing (not just docs)
 - Conflicting information across authoritative sources
 - Topic is too new for reliable documentation
-- Security implications require expert review → `security-reviewer`
+- Security implications require expert review → `code-reviewer`
 - Architecture decision needed → `backend-architect` or `ai-engineer`
 
 ## When Blocked

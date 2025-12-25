@@ -9,7 +9,7 @@ argument-hint: add|list|status|run|daemon|cancel|retry|clear
 Manage the lightweight task queue for Claude Code agents.
 
 ## Arguments
-`$ARGUMENTS` - Subcommand and its options (e.g., "add 'Review auth' --agent security-reviewer" or "list --status pending")
+`$ARGUMENTS` - Subcommand and its options (e.g., "add 'Review auth' --agent code-reviewer" or "list --status pending")
 
 - `add "<task>" [--agent TYPE] [--after ID] [--priority N] [--worktree]` - Add task to queue
   - Default agent: general-purpose (built-in)
@@ -38,7 +38,7 @@ Parse `$ARGUMENTS` to extract the subcommand and execute the appropriate task-qu
 
 ### Examples
 
-User: `/queue add "Review authentication module for security issues" --agent security-reviewer`
+User: `/queue add "Review authentication module for security issues" --agent code-reviewer`
 → Add security review task
 
 User: `/queue add "Generate unit tests" --after abc123 --agent test-generator`
@@ -55,7 +55,7 @@ User: `/queue status`
 
 ### Agent Types
 Use any agent from `~/.claude/agents/`:
-- `security-reviewer`, `code-reviewer`
+- `code-reviewer`, `code-reviewer`
 - `test-generator`, `doc-generator`
 - `quick-lookup`, `error-explainer`
 - `batch-editor`, `orchestrator`

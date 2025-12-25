@@ -8,6 +8,7 @@
 | **Tools, scripts, context** | `rules/tooling.md` |
 | **Skills, agents, commands** | `rules/reference.md` |
 | **Full architecture** | `rules/architecture.md` |
+| **Config anti-patterns** | `docs/config-patterns.md` |
 
 ## Rules (auto-loaded from `~/.claude/rules/`)
 

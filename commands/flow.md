@@ -22,9 +22,9 @@ From `~/.claude-flow/config.yaml`:
 | Workflow | Description | Agents |
 |----------|-------------|--------|
 | `feature` | Full implementation pipeline | orchestrator → batch-editor → code-reviewer → test-generator |
-| `security-review` | Deep security analysis | security-reviewer + migration-planner → report |
+| `security-review` | Security analysis | code-reviewer + migration-planner → report |
 | `refactor` | Safe refactoring | orchestrator → code-reviewer → batch-editor → verify |
-| `quick-review` | Parallel specialist review | security-reviewer + code-reviewer (parallel) |
+| `quick-review` | Fast code review | code-reviewer |
 | `docs` | Documentation generation | technical-researcher → doc-generator |
 
 ### Usage Patterns

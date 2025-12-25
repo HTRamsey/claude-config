@@ -269,7 +269,7 @@ CHAIN_RULES = [
             r"(?i)(insecure|vulnerable).*(crypto|random|hash)",
             r"(?i)🔴.*security",
         ],
-        "agent": "security-reviewer",
+        "agent": "code-reviewer",
         "reason": "Security vulnerability detected - deep security analysis recommended",
     },
     {

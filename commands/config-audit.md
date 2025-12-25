@@ -478,7 +478,7 @@ Generated: 2025-12-25
 | Priority | Issue Type | Agent(s) | Finding | Recommendation | Complexity |
 |----------|-----------|----------|---------|----------------|------------|
 | P2 | model-fit | quick-lookup | Opus assigned but handles simple lookups | Downgrade to Haiku | S |
-| P3 | overlap | code-reviewer, security-reviewer | Both review code quality | Clarify triggers (security vs general) | M |
+| P3 | overlap | code-reviewer, code-reviewer | Both review code quality | Clarify triggers (security vs general) | M |
 | P4 | description | test-generator | Missing trigger phrase for "add tests" | Update description with triggers | S |
 
 ## Commands (4 findings)
@@ -494,7 +494,7 @@ Generated: 2025-12-25
 
 ## New Backlog Items
 - [S] Add Example Output to 2 commands (status.md, config-audit.md)
-- [M] Clarify overlapping code-reviewer vs security-reviewer triggers
+- [M] Clarify overlapping code-reviewer vs code-reviewer triggers
 - [S] Update reference.md agent counts (27 claimed vs 24 actual)
 ```
 

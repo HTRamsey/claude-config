@@ -174,7 +174,7 @@ git diff --cached | grep -E "^\+.*(function|def|fn) \w+" | sort | uniq -d
 - No staged changes and no path specified
 - Files too large to review effectively (>1000 lines)
 - Binary or generated files only
-- For deep security analysis → use security-reviewer agent
+- For deep security analysis → use code-reviewer agent
 
 ## Should NOT Do
 - Auto-fix issues without asking

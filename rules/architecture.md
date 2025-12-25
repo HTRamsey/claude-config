@@ -10,11 +10,26 @@ Map of Claude Code customizations at `~/.claude/`.
 ├── settings.json          # Permissions, model config
 ├── pyproject.toml         # Python dependencies for hooks
 ├── venv/                  # Python venv (auto-used via PATH)
-├── rules/                 # Auto-loaded instruction files (4 files)
+├── rules/                 # Auto-loaded instruction files
 │   ├── guidelines.md      # Style, security, verification
 │   ├── tooling.md         # Tools, scripts, context
 │   ├── reference.md       # Skills, agents, commands
 │   └── architecture.md    # This file
+├── docs/                  # Reference docs (not auto-loaded)
+│   └── config-patterns.md # Anti-patterns, best practices
+├── resources/             # External reference materials
+│   ├── anthropic/         # Official Anthropic resources
+│   │   └── skill-creator/ # Definitive skill creation guide
+│   └── agentskills/       # AgentSkills SDK and spec
+│       ├── skills-ref/    # Reference SDK source
+│       └── docs/          # Specification docs
+├── learnings/             # Accumulated insights (not auto-loaded)
+│   ├── skills.md          # Skill design patterns
+│   ├── hooks.md           # Hook implementation lessons
+│   ├── agents.md          # Subagent patterns
+│   ├── debugging.md       # Debugging insights
+│   ├── workflows.md       # Process improvements
+│   └── anti-patterns.md   # What NOT to do
 ├── hooks/                 # Event-triggered Python scripts
 ├── agents/                # Task tool subagent definitions
 ├── commands/              # Slash command definitions
@@ -53,6 +68,22 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 **Shared Utilities**: `hook_utils.py` provides graceful degradation, JSON logging, session state.
 **Dispatchers (ACTIVE)**: `pre_tool_dispatcher.py` and `post_tool_dispatcher.py` consolidate all PreToolUse/PostToolUse hooks into single processes. ~200ms latency savings per tool call.
 
+### Async Hooks
+
+Shell hooks can run asynchronously by outputting JSON config as the first line:
+
+```bash
+#!/usr/bin/env bash
+echo '{"async":true,"asyncTimeout":15000}'  # Run async with 15s timeout
+
+# Rest of hook logic runs without blocking
+```
+
+Use async for hooks that:
+- Perform network requests
+- Run slow initialization checks
+- Don't need to block tool execution
+
 ### PreToolUse (block/modify before execution)
 | Hook | Watches | Purpose |
 |------|---------|---------|
@@ -67,7 +98,7 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 ### PostToolUse (react after execution)
 | Hook | Watches | Purpose |
 |------|---------|---------|
-| `notify_complete` | Bash | Desktop notification for long commands |
+| `notify_complete_async.sh` | Bash | Desktop notification for long commands (async) |
 | `file_monitor` | Grep, Glob, Read | Detect duplicate searches/reads |
 | `batch_operation_detector` | Edit, Write | Suggest batching similar edits |
 | `tool_success_tracker` | all | Track failures, suggest alternatives |
@@ -87,7 +118,7 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 | `uncommitted_reminder` | Stop | Remind about uncommitted changes |
 | `start_viewer` | SessionStart | Start claude-code-viewer |
 | `smart_permissions` | PermissionRequest | Context-aware auto-approval with learning |
-| `state_saver` | PreCompact | Backup transcript before compaction |
+| `state_saver` | PreCompact | Backup transcript, remind to capture learnings |
 | `subagent_start` | SubagentStart | Track subagent spawn time |
 | `subagent_complete` | SubagentStop | Handle subagent completion, calculate duration |
 
@@ -99,16 +130,16 @@ Organized into subdirectories:
 
 | Directory | Purpose | Key Scripts |
 |-----------|---------|-------------|
-| `search/` (2) | Offloaded search | `offload-grep.sh`, `offload-find.sh` |
-| `compress/` (1) | Output compression | `compress.sh --type diff\|build\|tests\|stack\|logs\|json\|list\|errors` |
-| `smart/` (14) | Smart file viewing | `smart-view.sh` (unified viewer), `smart-analyze.sh` (unified analysis), `smart-diff.sh`, `smart-json.sh`, `smart-yaml.sh`, `smart-html.sh`, `smart-http.sh`, `smart-ast.sh`, `smart-blame.sh`, `smart-ls.sh`, `smart-du.sh`, `smart-find.sh`, `smart-replace.sh`, `extract-signatures.sh` |
-| `analysis/` (3) | Code analysis | `project-stats.sh`, `review-patterns.sh`, `token-tools.sh` (use `smart/smart-analyze.sh` for deps/impact/project) |
-| `git/` (3) | Git workflow | `git-prep.sh`, `git-cleanup.sh`, `pre-commit-hook.sh` |
-| `queue/` (2) | Task queue | `task-queue.sh`, `queue-runner.sh` |
-| `diagnostics/` (9) | Health & testing | `health-check.sh`, `hook-benchmark.sh`, `hook-profiler.sh`, `validate-config.sh`, `test-hooks.sh`, `statusline.sh`, `venv-setup.sh`, `usage-report.sh`, `backup-config.sh` |
-| `automation/` (13) | Batch operations | `claude-safe.sh`, `batch-process.sh`, `parallel.sh`, `fan-out.sh`, `retry.sh`, `claude-model.sh`, `claude-tmux.sh`, `batch-annotate.sh`, `batch-select.sh`, `session-picker.sh`, `init-project-rules.sh`, `quick-jump.sh`, `recall.sh` |
-| `lib/` (4) | Shared utilities | `common.sh`, `cache.sh`, `lock.sh`, `notify.sh` |
-| `tests/` (1) | Validation | `smoke-test.sh` |
+| `search/` | Offloaded search | `offload-grep.sh`, `offload-find.sh` |
+| `compress/` | Output compression | `compress.sh --type diff\|build\|tests\|stack\|logs\|json\|list\|errors` |
+| `smart/` | Smart file viewing | `smart-view.sh`, `smart-analyze.sh`, `smart-diff.sh`, `smart-json.sh`, `smart-yaml.sh`, `smart-html.sh`, `smart-http.sh`, `smart-ast.sh`, `smart-blame.sh`, `smart-ls.sh`, `smart-du.sh`, `smart-find.sh`, `smart-replace.sh`, `extract-signatures.sh` |
+| `analysis/` | Code analysis | `project-stats.sh`, `review-patterns.sh`, `token-tools.sh` |
+| `git/` | Git workflow | `git-prep.sh`, `git-cleanup.sh`, `pre-commit-hook.sh` |
+| `queue/` | Task queue | `task-queue.sh`, `queue-runner.sh` |
+| `diagnostics/` | Health & testing | `health-check.sh`, `hook-benchmark.sh`, `hook-profiler.sh`, `validate-config.sh`, `test-hooks.sh`, `statusline.sh`, `venv-setup.sh`, `usage-report.sh`, `backup-config.sh`, `skills-ref.sh` |
+| `automation/` | Batch operations | `claude-safe.sh`, `batch-process.sh`, `parallel.sh`, `fan-out.sh`, `retry.sh`, `claude-model.sh`, `claude-tmux.sh`, `batch-annotate.sh`, `batch-select.sh`, `session-picker.sh`, `init-project-rules.sh`, `quick-jump.sh`, `recall.sh` |
+| `lib/` | Shared utilities | `common.sh`, `cache.sh`, `lock.sh`, `notify.sh` |
+| `tests/` | Validation | `smoke-test.sh` |
 
 Root-level: (none - all scripts organized into subdirectories)
 
@@ -157,7 +188,7 @@ Run `~/.claude/scripts/diagnostics/health-check.sh --cleanup` to:
 |------|---------|
 | `settings.json` | Permissions, allowed tools, model preferences |
 | `pyproject.toml` | Python dependencies for hooks |
-| `rules/*.md` | Auto-loaded instructions (4 files) |
+| `rules/*.md` | Auto-loaded instructions |
 | `data/task-queue.json` | Pending background tasks |
 | `data/token-usage.json` | Daily token tracking |
 | `data/exploration-cache.json` | Cached codebase exploration (unified_cache) |

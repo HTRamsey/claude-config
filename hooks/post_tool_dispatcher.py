@@ -98,7 +98,8 @@ def validate_handlers():
 
 # Tool-to-handler mapping
 TOOL_HANDLERS = {
-    "Bash": ["notify_complete", "tool_success_tracker", "output_metrics", "build_analyzer", "state_saver"],
+    # notify_complete moved to async shell script (notify_complete_async.sh)
+    "Bash": ["tool_success_tracker", "output_metrics", "build_analyzer", "state_saver"],
     "Grep": ["file_monitor", "tool_success_tracker", "output_metrics"],
     "Glob": ["file_monitor", "tool_success_tracker", "output_metrics"],
     "Read": ["file_monitor", "tool_success_tracker", "output_metrics", "smart_permissions"],

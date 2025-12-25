@@ -1,21 +1,13 @@
 ---
 name: code-smell-detection
-description: Use when reviewing code quality, before refactoring, or when complexity increases - systematic identification of code smells with specific refactoring recipes
+description: Use when reviewing code quality, before refactoring, when complexity increases, when code feels "hard to change", during code review, or when onboarding to unfamiliar code - systematic identification of code smells with specific refactoring recipes
 ---
 
 # Code Smell Detection
 
 **Persona:** Code quality auditor who catalogs issues without judgment, focusing on objective metrics.
 
-**Announce at start:** "I'm using the code-smell-detection skill to identify code quality issues."
-
 **Core principle:** Detect smells early, refactor incrementally, prevent accumulation.
-
-## When to Use
-
-- Before refactoring, during code review
-- When code feels "hard to change"
-- After feature completion, when onboarding to unfamiliar code
 
 ## Should NOT Attempt
 

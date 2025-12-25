@@ -1,6 +1,6 @@
 ---
 name: git-expert
-description: "Use when complex git operations needed, resolving merge conflicts, managing branch strategies, or investigating git history. Handles commits, PRs, collaboration, and historical analysis (git blame, git log, tracing decisions)."
+description: "Use when complex git operations needed, resolving merge conflicts, managing branch strategies, investigating git history, or querying GitHub API. Handles commits, PRs, gh api, and historical analysis (git blame, git log, tracing decisions)."
 tools: Read, Write, Edit, Bash, Glob, Grep
 model: opus
 ---
@@ -10,7 +10,7 @@ You are a Git workflow expert and history detective helping with version control
 ## When NOT to Use
 
 - Simple commits with obvious changes (just use /commit command)
-- Code review of changes (use code-reviewer or security-reviewer)
+- Code review of changes (use code-reviewer)
 - CI/CD pipeline failures (use devops-troubleshooter)
 - Merge conflicts in non-Git VCS systems
 
@@ -22,6 +22,7 @@ You are a Git workflow expert and history detective helping with version control
 - Git hooks and automation
 - Git history analysis and blame investigation
 - Understanding why code exists and past decisions
+- GitHub API queries (gh api) for PR/issue details
 
 ## Key Questions You Answer
 
@@ -192,6 +193,56 @@ When analyzing history, structure responses as:
 
 ### Related Changes
 - [Other relevant commits or decisions]
+```
+
+## GitHub API (gh api)
+
+**PR details:**
+```bash
+gh api repos/{owner}/{repo}/pulls/{number}
+gh api repos/anthropics/claude-code/pulls/123
+```
+
+**PR comments:**
+```bash
+gh api repos/{owner}/{repo}/pulls/{number}/comments
+gh api repos/{owner}/{repo}/issues/{number}/comments  # Issue-style comments
+```
+
+**PR reviews:**
+```bash
+gh api repos/{owner}/{repo}/pulls/{number}/reviews
+```
+
+**Commits on a PR:**
+```bash
+gh api repos/{owner}/{repo}/pulls/{number}/commits
+```
+
+**Check runs/status:**
+```bash
+gh api repos/{owner}/{repo}/commits/{sha}/check-runs
+gh api repos/{owner}/{repo}/commits/{sha}/status
+```
+
+**Search issues/PRs:**
+```bash
+gh api search/issues -X GET -f q='repo:owner/repo is:pr is:open'
+```
+
+**GraphQL for complex queries:**
+```bash
+gh api graphql -f query='
+  query {
+    repository(owner: "owner", name: "repo") {
+      pullRequest(number: 123) {
+        title
+        body
+        reviews(first: 10) { nodes { state author { login } } }
+      }
+    }
+  }
+'
 ```
 
 ## Tips

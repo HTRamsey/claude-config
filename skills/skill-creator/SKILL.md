@@ -30,6 +30,32 @@ skill-name/
 
 **Progressive loading:** Metadata always in context (~100 words) -> SKILL.md when triggered (<5k words) -> Resources as needed
 
+## Core Principles
+
+### Conciseness is Key
+
+The context window is a public good. Claude is already very smart - only add context Claude doesn't already have.
+
+Challenge each piece: "Does Claude really need this?" Prefer concise examples over verbose explanations.
+
+### Degrees of Freedom
+
+Match specificity to task fragility:
+
+| Freedom | Format | Use When |
+|---------|--------|----------|
+| High | Text instructions | Multiple approaches valid, context-dependent |
+| Medium | Pseudocode/parameterized scripts | Preferred pattern exists, some variation OK |
+| Low | Specific scripts, few params | Operations fragile, consistency critical |
+
+### Description is the Trigger
+
+The `description` field is the **primary mechanism** for skill activation. It must include:
+- What the skill does
+- When to use it (triggers, contexts)
+
+Do NOT put "When to Use" in the body - the body loads AFTER triggering.
+
 ## Should NOT Attempt
 
 - Creating skills that duplicate existing ones (check first)
@@ -116,32 +142,27 @@ Use skill on real tasks -> notice struggles -> update SKILL.md or resources -> t
 ```markdown
 ---
 name: skill-name
-description: One sentence on when to use this skill. Be specific about triggers.
+description: What this skill does AND when to use it. Include specific triggers. Example: "PDF processing for rotation, merging, text extraction. Use when working with .pdf files for document manipulation, data extraction, or format conversion."
 ---
 
 # Skill Name
 
-{One paragraph explaining what this skill teaches Claude to do.}
+{One paragraph: what this skill teaches Claude to do.}
 
 ## Persona
 
-{1-2 sentences establishing expertise/approach that shapes behavior.}
-
-## When to Use
-
-- {Trigger condition 1}
-- {Trigger condition 2}
+{1-2 sentences: expertise/approach shaping behavior.}
 
 ## Process
 
-1. **{Step name}:** {What to do}
-2. **{Step name}:** {What to do}
-3. **{Step name}:** {What to do}
+1. **{Step}:** {What to do}
+2. **{Step}:** {What to do}
+3. **{Step}:** {What to do}
 
 ## Examples
 
-### Example 1: {Scenario}
-{Show input and expected output/behavior}
+### {Scenario}
+{Input and expected behavior - concise}
 
 ## Should NOT Attempt
 
@@ -150,13 +171,15 @@ description: One sentence on when to use this skill. Be specific about triggers.
 
 ## Escalation
 
-When to recommend a different approach or ask for guidance.
+{When to recommend alternatives or ask for guidance.}
 
 ## Resources
 
-- `scripts/X.py`: {What it does}
-- `references/Y.md`: {What it contains}
+- `scripts/X.py`: {Purpose}
+- `references/Y.md`: {Content}
 ```
+
+**Note:** No "When to Use" section in body - that information belongs in the `description` field.
 
 ## Skill vs Command vs Agent
 

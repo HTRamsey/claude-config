@@ -117,7 +117,7 @@ def main():
         print("  --tools      : Comma-separated tools (default: Read,Grep,Glob)")
         print("\nExamples:")
         print("  init_agent.py quick-lookup --model haiku --description \"Single fact retrieval\"")
-        print("  init_agent.py security-reviewer --model opus --description \"Security review\" --tools \"Read,Grep,Glob,Bash\"")
+        print("  init_agent.py code-reviewer --model opus --description \"Security review\" --tools \"Read,Grep,Glob,Bash\"")
         sys.exit(1)
 
     agent_name = args[0]

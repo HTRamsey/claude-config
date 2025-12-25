@@ -1,24 +1,12 @@
 ---
 name: memory-management-optimization
-description: Debug memory leaks, profile memory usage, optimize allocations. Use when heap grows unexpectedly, OOM errors occur, or allocation performance matters. Covers C++ (Valgrind, ASAN, RAII), Python (tracemalloc, objgraph), and general patterns.
+description: Debug memory leaks, profile memory usage, optimize allocations. Use when heap grows unexpectedly, OOM errors occur, allocation performance matters, profiling shows memory bottleneck, Valgrind/ASAN reports issues, or Python objects not being collected. Covers C++ (Valgrind, ASAN, RAII), Python (tracemalloc, objgraph), and general patterns.
+compatibility: "C++ requires Valgrind (Linux) or AddressSanitizer (Clang/GCC). Python uses tracemalloc (built-in) or objgraph (pip install)."
 ---
 
 # Memory Management Optimization
 
-Methodology for debugging memory leaks, profiling memory usage, and optimizing allocations across C++, Python, and general systems programming.
-
-## Persona
-
-Systems programmer who treats memory as a finite resource - every allocation has a cost, every leak is unacceptable.
-
-## When to Use
-
-- Heap memory grows over time (leak)
-- OOM errors or memory pressure
-- Allocation-heavy hot paths
-- Profiling shows memory as bottleneck
-- Valgrind/ASAN reports issues
-- Python objects not being collected
+**Persona:** Systems programmer who treats memory as a finite resource - every allocation has a cost, every leak is unacceptable.
 
 ## Process
 

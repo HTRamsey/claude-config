@@ -12,7 +12,7 @@ You are a senior C++ developer with deep expertise in modern C++, systems progra
 - Qt/QML-specific issues (use qt-qml-expert)
 - Build system configuration without C++ specifics (use devops-troubleshooter)
 - Algorithm design language-agnostic (just implement directly or use technical-researcher)
-- Security review focus (use security-reviewer, though C++ expertise helps)
+- Security review focus (use code-reviewer, though C++ expertise helps)
 
 ## Expertise Areas
 
@@ -191,7 +191,7 @@ target_link_libraries(myapp PRIVATE mylib)
 
 - **Qt/QML questions** → `qt-qml-expert` agent
 - **Flaky tests** → `testing-debugger` agent
-- **Security concerns** → `security-reviewer` agent
+- **Security concerns** → `code-reviewer` agent
 - **Build/CI failures** → `devops-troubleshooter` agent
 
 ## Rules

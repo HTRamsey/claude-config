@@ -25,7 +25,7 @@ Use for precise navigation instead of grep:
 | Analysis | `analysis/` | `project-stats.sh`, `review-patterns.sh`, `token-tools.sh` (use `smart-analyze.sh` for deps/impact) |
 | Git | `git/` | `git-prep.sh`, `git-cleanup.sh` |
 | Queue | `queue/` | `task-queue.sh`, `queue-runner.sh` |
-| Diagnostics | `diagnostics/` | `health-check.sh`, `validate-config.sh`, `hook-benchmark.sh`, `test-hooks.sh`, `statusline.sh`, `venv-setup.sh`, `usage-report.sh`, `backup-config.sh` |
+| Diagnostics | `diagnostics/` | `health-check.sh`, `validate-config.sh`, `hook-benchmark.sh`, `test-hooks.sh`, `statusline.sh`, `venv-setup.sh`, `usage-report.sh`, `backup-config.sh`, `skills-ref.sh` |
 | Automation | `automation/` | `claude-safe.sh`, `batch-process.sh`, `parallel.sh`, `fan-out.sh`, `session-picker.sh`, `init-project-rules.sh`, `quick-jump.sh`, `recall.sh` |
 
 ## Output Compression

@@ -82,6 +82,13 @@ Skills, agents, and commands quick reference.
 | Trigger | Skill |
 |---------|-------|
 | Memory leaks, profiling, allocation issues | `memory-management-optimization` |
+| Interactive commands (git rebase -i, vim, REPLs) | `using-tmux` |
+| On-demand MCP server access | `mcp-cli` |
+
+### Document Handling
+| Trigger | Skill |
+|---------|-------|
+| PDF manipulation, extraction, forms | `pdf` |
 
 ### Creators
 | Trigger | Skill |
@@ -97,7 +104,7 @@ Skills, agents, and commands quick reference.
 - `Task(subagent_type="agent-name", prompt="...")` - programmatic
 - `@agent-name` in prompt - inline mention (Tab to accept suggestion)
 
-### Built-in Agents (3)
+### Built-in Agents
 | Trigger | Agent |
 |---------|-------|
 | Codebase exploration | `Explore` |
@@ -117,8 +124,7 @@ Skills, agents, and commands quick reference.
 ### Code Review & Quality
 | Trigger | Agent |
 |---------|-------|
-| Code review (security, perf, a11y, dead code) | `code-reviewer` |
-| Security-focused review, threat modeling | `security-reviewer` |
+| Code review (OWASP security, perf, a11y, dead code) | `code-reviewer` |
 
 ### Generation & Planning
 | Trigger | Agent |
@@ -135,9 +141,8 @@ Skills, agents, and commands quick reference.
 ### Architecture
 | Trigger | Agent |
 |---------|-------|
-| Backend system design, API design | `backend-architect` |
+| QGroundControl architecture, plugins, FactSystem | `qgc-architect` |
 | Database strategy, schema, optimization | `database-architect` |
-| LLM integration, RAG, prompt engineering | `ai-engineer` |
 
 ### Operations
 | Trigger | Agent |
@@ -161,8 +166,6 @@ Skills, agents, and commands quick reference.
 |---------|-------|
 | Audit/improve ~/.claude config, research Claude Code updates | `claude-config-expert` |
 
-**Total**: 21 custom agents + 3 built-in = 24 agents
-
 ## Key Workflows
 
 **Before claiming work is done:**
@@ -178,3 +181,30 @@ Skills, agents, and commands quick reference.
 **Before creating config files:**
 1. Load the appropriate creator skill
 2. Follow the skill's process
+
+## Skill Validation
+
+Validate skills against AgentSkills specification:
+
+```bash
+# Validate single skill
+~/.claude/scripts/diagnostics/skills-ref.sh validate ~/.claude/skills/pdf
+
+# Validate all skills
+~/.claude/scripts/diagnostics/skills-ref.sh validate-all
+
+# Read skill properties as JSON
+~/.claude/scripts/diagnostics/skills-ref.sh read ~/.claude/skills/skill-creator
+```
+
+## External Resources
+
+Reference materials in `~/.claude/resources/`:
+
+| Resource | Path | Purpose |
+|----------|------|---------|
+| Anthropic skill-creator | `anthropic/skill-creator/` | Official skill creation guide |
+| AgentSkills SDK | `agentskills/skills-ref/` | Skill validation & tooling |
+| AgentSkills spec | `agentskills/docs/specification.mdx` | Open format specification |
+
+See `resources/README.md` for usage examples.

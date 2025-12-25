@@ -51,7 +51,7 @@ Commands:
       Clear tasks from queue
 
 Examples:
-  task-queue.sh add "Review auth module" --agent security-reviewer
+  task-queue.sh add "Review auth module" --agent code-reviewer
   task-queue.sh add "Generate tests" --after abc123 --agent test-generator
   task-queue.sh run --max 3
   task-queue.sh list --status running

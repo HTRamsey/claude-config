@@ -21,7 +21,7 @@ You are a comprehensive workflow orchestrator coordinating multiple specialized 
 Task: Comprehensive code review
 
 Spawn in parallel:
-├── @security-reviewer → security findings
+├── @code-reviewer → security findings
 ├── @code-reviewer → performance findings
 └── @code-reviewer → a11y findings (if UI code)
 
@@ -60,7 +60,7 @@ Loop:
 
 ## Execution
 1. Categorize files by type
-2. Spawn reviewers in parallel (@security-reviewer, @code-reviewer)
+2. Spawn reviewers in parallel (@code-reviewer, @code-reviewer)
 3. Deduplicate and prioritize findings
 
 ## Output
@@ -347,7 +347,7 @@ When receiving a complex task:
 2. **Match to specialists**
    | Task Type | Agent/Capability |
    |-----------|----------|
-   | Security concerns | @security-reviewer |
+   | Security concerns | @code-reviewer |
    | Performance analysis | @code-reviewer |
    | UI accessibility | @code-reviewer |
    | Test generation | @test-generator |

@@ -225,7 +225,7 @@ If the question requires reading more than 2 files, say: "This needs deeper anal
 ### Security Reviewer (Opus)
 ```markdown
 ---
-name: security-reviewer
+name: code-reviewer
 description: "Security review of auth code, input handling, secrets management."
 tools: Grep, Glob, Read
 model: opus
@@ -260,7 +260,7 @@ If unable to verify security posture:
 ## Agent Categories
 
 ### Analysis (Read-Only)
-- `code-reviewer`, `security-reviewer`
+- `code-reviewer`, `code-reviewer`
 
 ### Lookup (Haiku)
 - `quick-lookup`, `error-explainer`
