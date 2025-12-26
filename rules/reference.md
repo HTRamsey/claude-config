@@ -104,6 +104,14 @@ Skills, agents, and commands quick reference.
 - `Task(subagent_type="agent-name", prompt="...")` - programmatic
 - `@agent-name` in prompt - inline mention (Tab to accept suggestion)
 
+### Model Tiers
+
+| Tier | Model | Agents | Use For |
+|------|-------|--------|---------|
+| **Haiku** | Fast, cheap | quick-lookup, batch-editor, doc-generator, context-optimizer | Single-focus, repetitive, summarization |
+| **Sonnet** | Balanced | Most agents (default) | General implementation, research |
+| **Opus** | Deep reasoning | orchestrator, code-reviewer, migration-planner | Security, architecture, complex planning |
+
 ### Built-in Agents
 | Trigger | Agent |
 |---------|-------|

@@ -2,10 +2,17 @@
 """
 SubagentLifecycle hook - tracks subagent lifecycle for metrics and timing.
 Handles both SubagentStart and SubagentStop events.
+
+Also maintains Reflexion memory - a log of task outcomes and lessons
+for learning from past subagent executions.
 """
+import hashlib
+import json
 import sys
 import os
 from datetime import datetime
+from pathlib import Path
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from hook_utils import (
     graceful_main,
@@ -14,6 +21,118 @@ from hook_utils import (
     get_session_state,
     update_session_state
 )
+
+REFLEXION_LOG = Path.home() / ".claude/data/reflexion-log.json"
+MAX_REFLEXION_ENTRIES = 100  # Keep last N entries
+
+
+def load_reflexion_log() -> list:
+    """Load the reflexion log."""
+    if REFLEXION_LOG.exists():
+        try:
+            with open(REFLEXION_LOG) as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    return []
+
+
+def save_reflexion_log(entries: list):
+    """Save the reflexion log, trimming old entries."""
+    try:
+        REFLEXION_LOG.parent.mkdir(parents=True, exist_ok=True)
+        # Keep only last N entries
+        trimmed = entries[-MAX_REFLEXION_ENTRIES:]
+        with open(REFLEXION_LOG, "w") as f:
+            json.dump(trimmed, f, indent=2)
+    except IOError as e:
+        log_event("subagent_lifecycle", "reflexion_save_error", {"error": str(e)})
+
+
+def extract_task_summary(ctx: dict) -> str:
+    """Extract a summary of the task from context."""
+    # Try to get from prompt or description
+    prompt = ctx.get("prompt", "")
+    description = ctx.get("description", "")
+
+    summary = description or prompt[:100]
+    if len(prompt) > 100 and not description:
+        summary += "..."
+    return summary
+
+
+def extract_outcome(ctx: dict) -> str:
+    """Determine outcome from stop_reason and context."""
+    stop_reason = ctx.get("stop_reason", "")
+
+    if stop_reason == "completed":
+        return "success"
+    elif stop_reason in ("error", "failed"):
+        return "failure"
+    elif stop_reason == "interrupted":
+        return "interrupted"
+    else:
+        return "unknown"
+
+
+def extract_lessons(ctx: dict, outcome: str) -> list:
+    """Extract lessons learned from the task output."""
+    lessons = []
+    output = ctx.get("output", "") or ctx.get("result", "")
+
+    # For failures, try to extract what went wrong
+    if outcome == "failure":
+        if "timeout" in output.lower():
+            lessons.append("Task timed out - consider breaking into smaller parts")
+        if "not found" in output.lower():
+            lessons.append("File or resource not found - verify paths before dispatching")
+        if "permission" in output.lower():
+            lessons.append("Permission issue - check access rights")
+
+    # For successes, note patterns
+    if outcome == "success":
+        if "test" in output.lower() and "pass" in output.lower():
+            lessons.append("Tests passed - approach validated")
+        if "refactor" in output.lower():
+            lessons.append("Refactoring completed successfully")
+
+    return lessons
+
+
+def record_reflexion(ctx: dict, duration_s: float | None):
+    """Record a reflexion entry for this subagent completion."""
+    subagent_type = ctx.get("subagent_type", "unknown")
+    prompt = ctx.get("prompt", "")
+
+    # Create a hash of the task for deduplication
+    task_hash = hashlib.md5(
+        f"{subagent_type}:{prompt[:200]}".encode()
+    ).hexdigest()[:12]
+
+    outcome = extract_outcome(ctx)
+    lessons = extract_lessons(ctx, outcome)
+
+    entry = {
+        "task_hash": task_hash,
+        "subagent_type": subagent_type,
+        "task_summary": extract_task_summary(ctx),
+        "outcome": outcome,
+        "lessons": lessons,
+        "duration_s": duration_s,
+        "timestamp": datetime.now().isoformat()
+    }
+
+    # Only record if there's meaningful content
+    if entry["task_summary"] or lessons:
+        log = load_reflexion_log()
+        log.append(entry)
+        save_reflexion_log(log)
+
+        log_event("subagent_lifecycle", "reflexion_recorded", {
+            "task_hash": task_hash,
+            "outcome": outcome,
+            "lesson_count": len(lessons)
+        })
 
 
 def handle_start(ctx):
@@ -87,6 +206,9 @@ def handle_complete(ctx):
         "duration_s": duration_s,
         "total_runs": subagent_stats[subagent_type]["count"]
     })
+
+    # Record to Reflexion memory
+    record_reflexion(ctx, duration_s)
 
 
 @graceful_main("subagent_lifecycle")

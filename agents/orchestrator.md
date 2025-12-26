@@ -345,6 +345,26 @@ When receiving a complex task:
    - What are the dependencies?
 
 2. **Match to specialists**
+
+   **By Task Pattern (Quick Reference):**
+   | Pattern | Agents |
+   |---------|--------|
+   | "Review this code" | @code-reviewer |
+   | "Fix these N tests" | @testing-debugger (parallel if independent) |
+   | "Update dependency X" | @migration-planner |
+   | "Add feature with tests" | Plan → @test-generator → implement |
+   | "Optimize performance" | @code-reviewer (perf) → @batch-editor |
+   | "Security audit" | @code-reviewer |
+   | "Document this" | @doc-generator |
+
+   **By Model Tier:**
+   | Tier | Agents | Use For |
+   |------|--------|---------|
+   | Haiku | quick-lookup, batch-editor, doc-generator | Fast, repetitive, summaries |
+   | Sonnet | Most agents | General implementation |
+   | Opus | orchestrator, code-reviewer, migration-planner | Deep reasoning, security |
+
+   **Full Mapping:**
    | Task Type | Agent/Capability |
    |-----------|----------|
    | Security concerns | @code-reviewer |

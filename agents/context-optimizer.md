@@ -61,6 +61,37 @@ Task(subagent_type=Explore, prompt="Find authentication implementation")
 Task(subagent_type=quick-lookup, prompt="Where are API endpoints defined?")
 ```
 
+### 5. Multi-Agent Context Preparation
+
+When spawning multiple agents, prepare shared context efficiently:
+
+**Context Categories:**
+| Category | Examples | Strategy |
+|----------|----------|----------|
+| Config | package.json, tsconfig | Share summary, not full |
+| Types | interfaces, schemas | Share to all who need |
+| Utilities | helpers, common | Share signatures only |
+| Task-specific | file being modified | Only in relevant agent |
+
+**Prep Commands:**
+```bash
+# Extract signatures (minimal tokens, max info)
+~/.claude/scripts/smart/extract-signatures.sh src/**/*.ts
+
+# Quick structure overview
+~/.claude/scripts/analysis/project-stats.sh ./src summary
+
+# Smart preview (first/last + structure)
+~/.claude/scripts/smart/smart-preview.sh src/types.ts
+```
+
+**Anti-Pattern → Better:**
+| Don't | Do Instead |
+|-------|------------|
+| Full file in all agents | Signatures shared, full only where needed |
+| All tests in code-reviewer | Point to test dir, let it sample |
+| Duplicate type definitions | Share types.ts summary |
+
 ## Anti-Patterns
 
 - Reading same file multiple times without caching mentally

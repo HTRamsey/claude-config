@@ -63,6 +63,9 @@ def get_handler(name: str):
             elif name == "usage_tracker":
                 from usage_tracker import track_usage
                 _handlers[name] = track_usage
+            elif name == "hierarchical_rules":
+                from hierarchical_rules import check_hierarchical_rules
+                _handlers[name] = check_hierarchical_rules
             else:
                 _handlers[name] = None
         except ImportError as e:
@@ -75,7 +78,7 @@ def get_handler(name: str):
 ALL_HANDLERS = [
     "file_protection", "tdd_guard", "dangerous_command_blocker",
     "credential_scanner", "suggestion_engine", "file_monitor",
-    "state_saver", "unified_cache", "usage_tracker"
+    "state_saver", "unified_cache", "usage_tracker", "hierarchical_rules"
 ]
 
 def validate_handlers():
@@ -109,9 +112,9 @@ def validate_handlers():
 
 # Tool-to-handler mapping (order matters - deny hooks first)
 TOOL_HANDLERS = {
-    "Read": ["file_protection", "file_monitor", "suggestion_engine"],
-    "Write": ["file_protection", "tdd_guard", "suggestion_engine", "state_saver"],
-    "Edit": ["file_protection", "tdd_guard", "suggestion_engine", "file_monitor", "state_saver"],
+    "Read": ["file_protection", "file_monitor", "hierarchical_rules", "suggestion_engine"],
+    "Write": ["file_protection", "tdd_guard", "hierarchical_rules", "suggestion_engine", "state_saver"],
+    "Edit": ["file_protection", "tdd_guard", "hierarchical_rules", "suggestion_engine", "file_monitor", "state_saver"],
     "Bash": ["dangerous_command_blocker", "credential_scanner", "suggestion_engine"],
     "Grep": ["suggestion_engine"],
     "Glob": ["suggestion_engine"],

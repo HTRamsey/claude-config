@@ -66,7 +66,22 @@ Supported patterns: `**/*.ts`, `src/**/*`, `{src,lib}/**/*.ts`
 ## Hooks
 
 **Shared Utilities**: `hook_utils.py` provides graceful degradation, JSON logging, session state.
+**Hook SDK**: `hook_sdk.py` provides typed context objects, response builders, and common patterns.
 **Dispatchers (ACTIVE)**: `pre_tool_dispatcher.py` and `post_tool_dispatcher.py` consolidate all PreToolUse/PostToolUse hooks into single processes. ~200ms latency savings per tool call.
+
+### Hook CLI
+
+Manage hooks with `~/.claude/scripts/diagnostics/hook-cli.sh`:
+
+| Command | Description |
+|---------|-------------|
+| `list` | List all hooks and their status |
+| `status [hook]` | Show detailed status (last run, errors) |
+| `enable <hook>` | Enable a disabled hook |
+| `disable <hook>` | Disable a hook |
+| `test <hook>` | Test hook with sample input |
+| `bench [hook]` | Benchmark hook latency |
+| `logs [hook]` | Show recent log entries |
 
 ### Async Hooks
 
@@ -94,6 +109,7 @@ Use async for hooks that:
 | `suggestion_engine` | Write, Edit, Bash, Grep, Glob, Read | Unified suggestions (skills, subagents, tool optimization) |
 | `file_monitor` | Read, Edit | Track reads, detect stale context, suggest summarization |
 | `state_saver` | Edit, Write | Save checkpoint before risky edits |
+| `hierarchical_rules` | Read, Write, Edit | Apply per-directory CLAUDE.md rules |
 
 ### PostToolUse (react after execution)
 | Hook | Watches | Purpose |
@@ -112,13 +128,14 @@ Use async for hooks that:
 ### Other Events
 | Hook | Event | Purpose |
 |------|-------|---------|
-| `session_start` | SessionStart | Auto-load git context on new session |
+| `session_start` | SessionStart | Auto-load git context, codebase map, project type |
 | `context_monitor` | UserPromptSubmit | Warn at 40K/80K tokens, auto-backup |
 | `session_persistence` | SessionEnd | Auto-save session insights |
 | `uncommitted_reminder` | Stop | Remind about uncommitted changes |
+| `auto_continue` | Stop | Evaluate if work should continue (rate-limited) |
 | `start_viewer` | SessionStart | Start claude-code-viewer |
 | `smart_permissions` | PermissionRequest | Context-aware auto-approval with learning |
-| `state_saver` | PreCompact | Backup transcript, remind to capture learnings |
+| `state_saver` | PreCompact | Backup transcript, preserve CLAUDE.md/todos, learning reminder |
 | `subagent_start` | SubagentStart | Track subagent spawn time |
 | `subagent_complete` | SubagentStop | Handle subagent completion, calculate duration |
 
@@ -136,7 +153,7 @@ Organized into subdirectories:
 | `analysis/` | Code analysis | `project-stats.sh`, `review-patterns.sh`, `token-tools.sh` |
 | `git/` | Git workflow | `git-prep.sh`, `git-cleanup.sh`, `pre-commit-hook.sh` |
 | `queue/` | Task queue | `task-queue.sh`, `queue-runner.sh` |
-| `diagnostics/` | Health & testing | `health-check.sh`, `hook-benchmark.sh`, `hook-profiler.sh`, `validate-config.sh`, `test-hooks.sh`, `statusline.sh`, `venv-setup.sh`, `usage-report.sh`, `backup-config.sh`, `skills-ref.sh` |
+| `diagnostics/` | Health & testing | `health-check.sh`, `hook-cli.sh`, `hook-benchmark.sh`, `hook-profiler.sh`, `validate-config.sh`, `test-hooks.sh`, `statusline.sh`, `venv-setup.sh`, `usage-report.sh`, `backup-config.sh`, `skills-ref.sh` |
 | `automation/` | Batch operations | `claude-safe.sh`, `batch-process.sh`, `parallel.sh`, `fan-out.sh`, `retry.sh`, `claude-model.sh`, `claude-tmux.sh`, `batch-annotate.sh`, `batch-select.sh`, `session-picker.sh`, `init-project-rules.sh`, `quick-jump.sh`, `recall.sh` |
 | `lib/` | Shared utilities | `common.sh`, `cache.sh`, `lock.sh`, `notify.sh` |
 | `tests/` | Validation | `smoke-test.sh` |
@@ -194,6 +211,7 @@ Run `~/.claude/scripts/diagnostics/health-check.sh --cleanup` to:
 | `data/exploration-cache.json` | Cached codebase exploration (unified_cache) |
 | `data/research-cache.json` | Cached web research (unified_cache) |
 | `data/usage-stats.json` | Agent/skill/command usage tracking |
+| `data/reflexion-log.json` | Subagent outcomes and lessons learned |
 | `data/permission-patterns.json` | Learned permission patterns |
 | `data/hook-events.jsonl` | Hook execution log |
 | `data/session-history.json` | Session metadata for resumption |

@@ -2,7 +2,7 @@
 name: batch-editor
 description: "Make similar changes across 3+ files efficiently. Use for bulk renames, multi-file imports, pattern replacement. Triggers: 'change all files', 'rename everywhere', 'batch update', 'find and replace all'."
 tools: Read, Edit, Write, Glob, Grep, Bash
-model: sonnet
+model: haiku
 ---
 
 You are a batch editing specialist optimized for making similar changes across multiple files efficiently.

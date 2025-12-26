@@ -3,16 +3,22 @@
 
 PreToolUse hook for Read, Write, and Edit tools.
 Enforces protection that glob patterns in settings.json can't provide on Linux.
+
+Uses hook_sdk for typed context and response builders.
 """
-import fnmatch
-import json
-import os
 import sys
 from pathlib import Path
 
-# Import shared utilities
 sys.path.insert(0, str(Path(__file__).parent))
-from hook_utils import graceful_main, log_event
+from hook_sdk import (
+    PreToolUseContext,
+    Response,
+    Patterns,
+    dispatch_handler,
+    run_standalone,
+    expand_path,
+    log_event,
+)
 
 
 # Patterns that block both read and write
@@ -45,9 +51,6 @@ PROTECTED_PATTERNS = [
     "*/.netrc",
     "*/.docker/config.json",
     "*/.kube/config",
-
-    # Git internals (allow read, block write)
-    # Handled separately below
 ]
 
 # Patterns only blocked for write/edit (not read)
@@ -63,91 +66,54 @@ WRITE_ONLY_PATTERNS = [
 ]
 
 
-def matches_any(filepath: str, patterns: list) -> str | None:
-    """Check if filepath matches any pattern. Returns matching pattern or None."""
-    # Normalize path
-    filepath = os.path.normpath(filepath)
-    filename = os.path.basename(filepath)
+@dispatch_handler("file_protection", event="PreToolUse")
+def check_file_protection(ctx: PreToolUseContext) -> dict | None:
+    """
+    Handler function for dispatcher.
 
-    for pattern in patterns:
-        # Check against full path
-        if fnmatch.fnmatch(filepath, pattern):
-            return pattern
-        # Check against filename only
-        if fnmatch.fnmatch(filename, pattern):
-            return pattern
-        # Check if pattern appears as substring (for simple patterns)
-        if not any(c in pattern for c in '*?['):
-            if pattern in filepath:
-                return pattern
-    return None
+    Args:
+        ctx: PreToolUseContext with typed access to tool_name, tool_input, etc.
 
-
-def check_file_protection(ctx: dict) -> dict | None:
-    """Handler function for dispatcher. Returns result dict or None."""
-    tool_name = ctx.get("tool_name", "")
-    tool_input = ctx.get("tool_input", {})
-    file_path = tool_input.get("file_path", "")
-
+    Returns:
+        Response dict if blocked, None if allowed
+    """
+    file_path = ctx.tool_input.file_path
     if not file_path:
         return None
 
-    # Expand home directory
-    if file_path.startswith("~"):
-        file_path = os.path.expanduser(file_path)
-
-    is_write = tool_name in ("Write", "Edit")
+    # Expand and normalize path
+    file_path = expand_path(file_path)
+    is_write = ctx.is_write or ctx.is_edit
 
     # Check protected patterns (block read and write)
-    matched = matches_any(file_path, PROTECTED_PATTERNS)
+    matched = Patterns.matches_glob(file_path, PROTECTED_PATTERNS)
     if matched:
         action = "write to" if is_write else "read"
         log_event("file_protection", "blocked", {
             "file": file_path,
             "pattern": matched,
-            "tool": tool_name
+            "tool": ctx.tool_name
         })
-        return {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "deny",
-                "permissionDecisionReason": f"Blocked {action} protected file: {file_path} (matches: {matched})"
-            }
-        }
+        return Response.deny(
+            f"Blocked {action} protected file: {file_path} (matches: {matched})"
+        )
 
     # Check write-only patterns (only block write/edit, allow read)
     if is_write:
-        matched = matches_any(file_path, WRITE_ONLY_PATTERNS)
+        matched = Patterns.matches_glob(file_path, WRITE_ONLY_PATTERNS)
         if matched:
             log_event("file_protection", "blocked", {
                 "file": file_path,
                 "pattern": matched,
-                "tool": tool_name
+                "tool": ctx.tool_name
             })
-            return {
-                "hookSpecificOutput": {
-                    "hookEventName": "PreToolUse",
-                    "permissionDecision": "deny",
-                    "permissionDecisionReason": f"Blocked write to protected file: {file_path} (matches: {matched})"
-                }
-            }
+            return Response.deny(
+                f"Blocked write to protected file: {file_path} (matches: {matched})"
+            )
 
     return None
 
 
-@graceful_main("file_protection")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except (json.JSONDecodeError, Exception):
-        sys.exit(0)
-
-    result = check_file_protection(ctx)
-    if result:
-        print(json.dumps(result))
-
-    sys.exit(0)
-
-
 if __name__ == "__main__":
-    main()
+    # Standalone mode: read from stdin, write to stdout
+    run_standalone(lambda raw: check_file_protection(raw))

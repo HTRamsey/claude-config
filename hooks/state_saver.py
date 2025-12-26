@@ -232,8 +232,71 @@ def handle_post_tool_use(ctx: dict) -> dict | None:
     return None
 
 
+def get_claude_md_content(cwd: str) -> str:
+    """Extract key content from CLAUDE.md files for preservation."""
+    claude_md_paths = [
+        Path(cwd) / "CLAUDE.md",
+        Path(cwd) / ".claude" / "CLAUDE.md",
+    ]
+
+    for path in claude_md_paths:
+        if path.exists():
+            try:
+                content = path.read_text()[:2000]  # First 2000 chars
+                return f"[Project CLAUDE.md preserved]\n{content}"
+            except Exception:
+                pass
+    return ""
+
+
+def get_active_todos(ctx: dict) -> str:
+    """Extract active todos from context if present."""
+    # Check if there's a todos key in context (from TodoWrite tool state)
+    todos = ctx.get("todos", [])
+    if not todos:
+        return ""
+
+    active = [t for t in todos if t.get("status") in ("pending", "in_progress")]
+    if not active:
+        return ""
+
+    lines = ["[Active Todos preserved]"]
+    for t in active[:10]:  # Max 10 todos
+        status = "→" if t.get("status") == "in_progress" else "○"
+        lines.append(f"  {status} {t.get('content', '')}")
+
+    return "\n".join(lines)
+
+
+def get_key_context(ctx: dict) -> str:
+    """Extract key context that should survive compaction."""
+    parts = []
+    cwd = ctx.get("cwd", "")
+
+    # CLAUDE.md content
+    claude_md = get_claude_md_content(cwd)
+    if claude_md:
+        parts.append(claude_md)
+
+    # Active todos
+    todos = get_active_todos(ctx)
+    if todos:
+        parts.append(todos)
+
+    # Current working directory
+    if cwd:
+        parts.append(f"[Working directory: {cwd}]")
+
+    # Session ID for continuity
+    session_id = ctx.get("session_id", "")
+    if session_id:
+        parts.append(f"[Session: {session_id[:8]}...]")
+
+    return "\n\n".join(parts)
+
+
 def handle_pre_compact(ctx: dict) -> dict | None:
-    """Backup transcript before compaction and remind about learnings."""
+    """Backup transcript before compaction and preserve key context."""
     transcript_path = ctx.get("transcript_path", "")
 
     if not transcript_path:
@@ -248,16 +311,30 @@ def handle_pre_compact(ctx: dict) -> dict | None:
         })
         log_event("state_saver", "pre_compact_backup", {"backup_path": backup_path})
 
-    # Output learning reminder
+    # Build preservation message
+    messages = []
+
+    # Key context preservation
+    key_context = get_key_context(ctx)
+    if key_context:
+        messages.append(key_context)
+
+    # Learning reminder
     learnings_dir = Path.home() / ".claude/learnings"
     if learnings_dir.exists():
         categories = [f.stem for f in learnings_dir.glob("*.md") if f.stem != "README"]
-        categories_str = ", ".join(categories[:5])
+        if categories:
+            categories_str = ", ".join(categories[:5])
+            messages.append(
+                f"[Learning Reminder] Before compacting, consider capturing any insights. "
+                f"Categories: {categories_str}. "
+                f"Format: ## [Date] Title\\n**Context:** ...\\n**Learning:** ...\\n**Application:** ..."
+            )
+
+    if messages:
         return {
             "result": "continue",
-            "message": f"[Learning Reminder] Before compacting, consider capturing any insights from this session. "
-                       f"Categories: {categories_str}. "
-                       f"Format: ## [Date] Title\\n**Context:** ...\\n**Learning:** ...\\n**Application:** ..."
+            "message": "\n\n".join(messages)
         }
 
     return None

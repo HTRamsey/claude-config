@@ -3,15 +3,21 @@
 
 PreToolUse hook for Bash tool.
 Blocks or warns about commands that could cause irreversible damage.
+
+Uses hook_sdk for typed context and response builders.
 """
-import json
 import re
 import sys
 from pathlib import Path
 
-# Import shared utilities
 sys.path.insert(0, str(Path(__file__).parent))
-from hook_utils import graceful_main, log_event
+from hook_sdk import (
+    PreToolUseContext,
+    Response,
+    dispatch_handler,
+    run_standalone,
+    log_event,
+)
 
 # Commands that are BLOCKED (exit 2)
 BLOCKED_PATTERNS = [
@@ -34,7 +40,6 @@ BLOCKED_PATTERNS = [
     # Credential theft / remote code execution
     (r'curl\s+.*\|\s*(ba)?sh', "curl pipe to shell"),
     (r'wget\s+.*-O\s*-\s*\|\s*(ba)?sh', "wget pipe to shell"),
-    # Expanded patterns to catch bypasses
     (r'(curl|wget)\s+[^|]*\|\s*(python|ruby|perl|node|php)', "download pipe to interpreter"),
     (r'(curl|wget)\s+-[qsS]*o?\s*-[^|]*\|\s*\w*sh', "download pipe to shell (alternate syntax)"),
     (r'(curl|wget)[^;|&]*[;|&]\s*(ba)?sh\s', "download then execute"),
@@ -69,76 +74,76 @@ WARNING_PATTERNS = [
     (r'\bshred\b', "secure delete"),
 ]
 
-# Pre-compile patterns for performance (avoids recompilation each invocation)
+# Pre-compile patterns for performance
 BLOCKED_COMPILED = [(re.compile(p, re.IGNORECASE), r) for p, r in BLOCKED_PATTERNS]
 WARNING_COMPILED = [(re.compile(p, re.IGNORECASE), r) for p, r in WARNING_PATTERNS]
 
-def check_command(command: str) -> tuple:
+
+def check_command(command: str) -> tuple[str, str | None]:
     """
     Check command for dangerous patterns.
-    Returns: (action, reason) where action is 'block', 'warn', or 'allow'
+
+    Args:
+        command: The bash command to check
+
+    Returns:
+        (action, reason) where action is 'block', 'warn', or 'allow'
     """
-    # Normalize command
     cmd = command.strip()
 
-    # Check blocked patterns (using pre-compiled regexes)
+    # Check blocked patterns
     for compiled, reason in BLOCKED_COMPILED:
         if compiled.search(cmd):
             return ('block', reason)
 
-    # Check warning patterns (using pre-compiled regexes)
+    # Check warning patterns
     for compiled, reason in WARNING_COMPILED:
         if compiled.search(cmd):
             return ('warn', reason)
 
     return ('allow', None)
 
-def check_dangerous_command(ctx: dict) -> dict | None:
-    """Handler function for dispatcher. Returns result dict or None."""
-    tool_input = ctx.get("tool_input", {})
-    command = tool_input.get("command", "")
 
+@dispatch_handler("dangerous_command_blocker", event="PreToolUse")
+def check_dangerous_command(ctx: PreToolUseContext) -> dict | None:
+    """
+    Handler function for dispatcher.
+
+    Args:
+        ctx: PreToolUseContext with typed access to tool input
+
+    Returns:
+        Response dict if blocked/warned, None if allowed
+    """
+    command = ctx.tool_input.command
     if not command:
         return None
 
     action, reason = check_command(command)
 
     if action == 'block':
-        log_event("dangerous_command_blocker", "blocked", {"reason": reason, "command": command[:100]})
-        return {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "deny",
-                "permissionDecisionReason": f"[Dangerous Command] BLOCKED: {reason}. Command: {command[:100]}... This command could cause irreversible system damage."
-            }
-        }
+        log_event("dangerous_command_blocker", "blocked", {
+            "reason": reason,
+            "command": command[:100]
+        })
+        return Response.deny(
+            f"[Dangerous Command] BLOCKED: {reason}. "
+            f"Command: {command[:100]}... "
+            "This command could cause irreversible system damage."
+        )
 
-    elif action == 'warn':
-        log_event("dangerous_command_blocker", "warning", {"reason": reason, "command": command[:80]})
-        return {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "allow",
-                "permissionDecisionReason": f"[Dangerous Command] Warning: {reason}. Command: {command[:80]}..."
-            }
-        }
+    if action == 'warn':
+        log_event("dangerous_command_blocker", "warning", {
+            "reason": reason,
+            "command": command[:80]
+        })
+        return Response.allow(
+            f"[Dangerous Command] Warning: {reason}. "
+            f"Command: {command[:80]}..."
+        )
 
     return None
 
 
-@graceful_main("dangerous_command_blocker")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
-    result = check_dangerous_command(ctx)
-    if result:
-        print(json.dumps(result))
-
-    sys.exit(0)
-
-
 if __name__ == "__main__":
-    main()
+    run_standalone(lambda raw: check_dangerous_command(raw))

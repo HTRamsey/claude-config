@@ -115,6 +115,108 @@ def get_recent_errors() -> str:
     return ""
 
 
+def get_codebase_map(cwd: str, max_depth: int = 3) -> str:
+    """Generate concise project structure map.
+
+    Returns a tree-like structure of the codebase, excluding common
+    build/vendor directories. Limited to max_depth levels.
+    """
+    IGNORE_DIRS = {
+        'node_modules', 'vendor', 'build', 'dist', '__pycache__',
+        '.git', '.svn', '.hg', 'target', 'out', 'bin', 'obj',
+        'venv', '.venv', 'env', '.env', 'coverage', '.cache',
+        '.tox', '.pytest_cache', '.mypy_cache', 'htmlcov',
+    }
+    IGNORE_PATTERNS = {'.min.js', '.min.css', '.map', '.lock'}
+
+    def should_ignore(name: str) -> bool:
+        if name in IGNORE_DIRS:
+            return True
+        for pattern in IGNORE_PATTERNS:
+            if name.endswith(pattern):
+                return True
+        return False
+
+    def build_tree(path: Path, depth: int = 0, prefix: str = "") -> list:
+        if depth > max_depth:
+            return []
+
+        lines = []
+        try:
+            entries = sorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))
+        except PermissionError:
+            return []
+
+        # Filter entries
+        entries = [e for e in entries if not should_ignore(e.name) and not e.name.startswith('.')]
+
+        # Limit entries per level
+        max_entries = 15 if depth == 0 else 10
+        show_more = len(entries) > max_entries
+        entries = entries[:max_entries]
+
+        for i, entry in enumerate(entries):
+            is_last = (i == len(entries) - 1) and not show_more
+            connector = "└── " if is_last else "├── "
+            child_prefix = "    " if is_last else "│   "
+
+            if entry.is_dir():
+                lines.append(f"{prefix}{connector}{entry.name}/")
+                lines.extend(build_tree(entry, depth + 1, prefix + child_prefix))
+            else:
+                lines.append(f"{prefix}{connector}{entry.name}")
+
+        if show_more:
+            lines.append(f"{prefix}└── ... and more")
+
+        return lines
+
+    try:
+        cwd_path = Path(cwd)
+        if not cwd_path.exists():
+            return ""
+
+        tree_lines = build_tree(cwd_path)
+        if not tree_lines:
+            return ""
+
+        # Add project name as root
+        project_name = cwd_path.name
+        return f"Project: {project_name}/\n" + "\n".join(tree_lines)
+    except Exception:
+        return ""
+
+
+def detect_project_type(cwd: str) -> str:
+    """Detect project type based on config files."""
+    indicators = {
+        "package.json": "Node.js",
+        "Cargo.toml": "Rust",
+        "pyproject.toml": "Python",
+        "setup.py": "Python",
+        "go.mod": "Go",
+        "pom.xml": "Java/Maven",
+        "build.gradle": "Java/Gradle",
+        "CMakeLists.txt": "C/C++ (CMake)",
+        "Makefile": "Make",
+        "Gemfile": "Ruby",
+        "composer.json": "PHP",
+        "mix.exs": "Elixir",
+        "pubspec.yaml": "Dart/Flutter",
+    }
+
+    cwd_path = Path(cwd)
+    detected = []
+
+    for file, lang in indicators.items():
+        if (cwd_path / file).exists():
+            detected.append(lang)
+
+    if detected:
+        return f"Type: {', '.join(detected[:3])}"
+    return ""
+
+
 def get_usage_summary() -> str:
     """Get compact usage stats for today."""
     from datetime import datetime, timedelta
@@ -189,15 +291,33 @@ def main():
     if git_ctx:
         output_parts.extend(git_ctx)
 
-    # TODO.md
-    todo_ctx = get_todo_context(cwd)
-    if todo_ctx:
-        output_parts.append(todo_ctx)
+    # Uncommitted changes count (short form if git_ctx already has details)
+    status = run_cmd(["git", "status", "--short"], cwd)
+    if status and "Uncommitted" not in '\n'.join(output_parts):
+        lines = status.split('\n')
+        output_parts.append(f"Uncommitted: {len(lines)} files changed")
 
     # Usage summary (sessions, agents, skills today)
     usage = get_usage_summary()
     if usage:
         output_parts.append(usage)
+
+    # Project type detection
+    project_type = detect_project_type(cwd)
+    if project_type:
+        output_parts.append(project_type)
+
+    # Codebase map (only for non-home directories to avoid huge output)
+    home = str(Path.home())
+    if cwd != home and not cwd.startswith(home + "/."):
+        codebase_map = get_codebase_map(cwd, max_depth=2)
+        if codebase_map:
+            output_parts.append(codebase_map)
+
+    # TODO.md
+    todo_ctx = get_todo_context(cwd)
+    if todo_ctx:
+        output_parts.append(todo_ctx)
 
     # Output if we have context
     if len(output_parts) > 1:

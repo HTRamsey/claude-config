@@ -2,7 +2,7 @@
 name: doc-generator
 description: "Use when code lacks documentation, creating API docs, or updating READMEs. Generates docs from code structure and comments. Triggers: 'document', 'README', 'API docs', 'JSDoc', 'docstring'."
 tools: Read, Write, Grep, Glob, Bash
-model: sonnet
+model: haiku
 ---
 
 You are a documentation specialist generating clear, maintainable docs from code.

@@ -62,17 +62,62 @@ Update TodoWrite, repeat steps 2-5.
 
 ## Parallel Execution
 
+### Wave-Based Spawning
+
+Execute tasks in waves, waiting for each wave to complete before starting the next:
+
+```
+Wave 1: [Task A, Task B, Task C]  ← spawn in parallel
+         ↓ wait for completion ↓
+Wave 2: [Task D, Task E]          ← spawn next wave
+         ↓ wait for completion ↓
+Wave 3: [Task F]                  ← final wave
+```
+
+**Wave sizing:**
+| Task Complexity | Wave Size | Rationale |
+|-----------------|-----------|-----------|
+| Simple (fix, rename) | 5-8 agents | Low conflict risk |
+| Medium (feature, refactor) | 3-4 agents | Moderate coordination |
+| Complex (architecture) | 1-2 agents | High context needed |
+
+**Wave boundaries:** Group related tasks in same wave when output of one informs another.
+
+### Parallel Agent Decision Framework
+
+Before spawning parallel agents, evaluate:
+
+| Factor | Parallelize If | Serialize If |
+|--------|----------------|--------------|
+| File overlap | Different files | Same file or shared imports |
+| State | Independent | Shared DB/cache/config |
+| Dependencies | No cross-task deps | Task B needs Task A output |
+| Review load | Can review all at once | Need incremental review |
+| Risk | Low (tests, docs) | High (auth, payments) |
+
+**Decision tree:**
+```
+1. Do tasks touch same files? → No parallel
+2. Do tasks share state? → No parallel
+3. Are tasks > 3? → Use waves
+4. Is complexity high? → Smaller waves
+5. Otherwise → Full parallel OK
+```
+
 ### Process
 1. Load plan, review critically, raise concerns before starting
-2. Execute batch (default: first 3 tasks) - mark in_progress, follow steps, verify, mark completed
-3. Report: what implemented, verification output, "Ready for feedback"
-4. Apply changes from feedback, execute next batch, repeat
-5. Use `git-expert` agent for branch cleanup and PR preparation
+2. Apply decision framework: determine wave sizes and boundaries
+3. Execute wave - spawn all wave tasks in parallel (single message with multiple Task calls)
+4. Wait for completion using TaskOutput with block=true
+5. Review wave: dispatch code-reviewer for all changes
+6. Mark completed, execute next wave, repeat
+7. Use `git-expert` agent for branch cleanup and PR preparation
 
 ### When to Stop
 - Hit blocker (missing dependency, failing test, unclear instruction)
 - Plan has critical gaps
 - Verification fails repeatedly
+- Parallel agents report conflicts
 
 **Ask for clarification rather than guessing.**
 
