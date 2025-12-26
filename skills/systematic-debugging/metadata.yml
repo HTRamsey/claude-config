@@ -1,0 +1,26 @@
+# Tier 1: Metadata (always loaded, ~50 tokens)
+name: systematic-debugging
+version: 1.0.0
+
+triggers:
+  - bug
+  - test failure
+  - unexpected behavior
+  - race condition
+  - deadlock
+  - concurrency issue
+
+description: |
+  Four-phase framework for debugging: root cause investigation, pattern analysis, hypothesis testing, implementation.
+
+summary: |
+  Phase 1: Root Cause - Read errors, reproduce, trace data flow
+  Phase 2: Pattern - Find working examples, compare differences
+  Phase 3: Hypothesis - Form theory, test minimally
+  Phase 4: Implementation - Create test, fix, verify
+
+quick_reference:
+  - "NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST"
+  - "Trace data flow from symptom to source"
+  - "One hypothesis, one minimal change at a time"
+  - "3+ failed fixes = question architecture"

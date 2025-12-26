@@ -1,0 +1,26 @@
+# Tier 1: Metadata (always loaded, ~50 tokens)
+name: test-driven-development
+version: 1.0.0
+
+triggers:
+  - implementing feature
+  - adding tests
+  - bugfix
+  - fixing flaky tests
+  - refactoring
+  - TDD
+
+description: |
+  Test-first development: Write failing test → minimal code → refactor.
+  No production code without a failing test first.
+
+summary: |
+  RED: Write failing test
+  GREEN: Minimal code to pass
+  REFACTOR: Clean up (tests stay green)
+
+quick_reference:
+  - "Write test first, watch it fail"
+  - "Write minimum code to pass"
+  - "Refactor only after green"
+  - "One behavior per test"

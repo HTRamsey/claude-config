@@ -5,16 +5,18 @@
 # Commands:
 #   list              List all hooks and their status
 #   status [hook]     Show detailed status for a hook or all hooks
-#   enable <hook>     Enable a disabled hook
-#   disable <hook>    Disable a hook
+#   enable <hook>     Enable a disabled hook (--session for current session only)
+#   disable <hook>    Disable a hook (--session for current session only)
 #   test <hook>       Test a hook with sample input
 #   bench [hook]      Benchmark hook latency
 #   logs [hook]       Show recent log entries for a hook
+#   session           Show session-specific overrides
 
 set -euo pipefail
 
 HOOKS_DIR="${HOME}/.claude/hooks"
 DATA_DIR="${HOME}/.claude/data"
+SESSION_HOOKS_DIR="${DATA_DIR}/session-hooks"
 CONFIG_FILE="${DATA_DIR}/hook-config.json"
 LOG_FILE="${DATA_DIR}/hook-events.jsonl"
 SETTINGS_FILE="${HOME}/.claude/settings.json"
@@ -41,11 +43,18 @@ Commands:
   test <hook>       Test a hook with sample input
   bench [hook]      Benchmark hook latency (run 5 times)
   logs [hook]       Show recent log entries (last 20)
+  session           Show session-specific overrides
+
+Session-scoped options:
+  --session         Apply change to current session only (with enable/disable)
 
 Examples:
   $(basename "$0") list
   $(basename "$0") status file_protection
   $(basename "$0") disable tdd_guard
+  $(basename "$0") disable tdd_guard --session    # This session only
+  $(basename "$0") enable tdd_guard --session     # Re-enable for session
+  $(basename "$0") session                        # Show session overrides
   $(basename "$0") test dangerous_command_blocker
   $(basename "$0") bench
 EOF
@@ -56,6 +65,135 @@ ensure_config() {
     mkdir -p "$DATA_DIR"
     if [[ ! -f "$CONFIG_FILE" ]]; then
         echo '{"disabled": [], "updated": ""}' > "$CONFIG_FILE"
+    fi
+}
+
+# Get current session ID
+get_session_id() {
+    # Priority: CLAUDE_SESSION_ID env var > transcript dir > generated UUID
+    if [[ -n "${CLAUDE_SESSION_ID:-}" ]]; then
+        echo "$CLAUDE_SESSION_ID"
+    elif [[ -n "${CLAUDE_TRANSCRIPT_DIR:-}" ]]; then
+        basename "$CLAUDE_TRANSCRIPT_DIR"
+    else
+        # Generate or retrieve persistent session ID
+        local session_file="${DATA_DIR}/.current-session"
+        if [[ -f "$session_file" ]]; then
+            cat "$session_file"
+        else
+            local new_id
+            new_id=$(date +%s)-$$
+            echo "$new_id" > "$session_file"
+            echo "$new_id"
+        fi
+    fi
+}
+
+# Get session override file path
+get_session_file() {
+    local session_id
+    session_id=$(get_session_id)
+    echo "${SESSION_HOOKS_DIR}/${session_id}.json"
+}
+
+# Ensure session hooks directory exists
+ensure_session_dir() {
+    mkdir -p "$SESSION_HOOKS_DIR"
+}
+
+# Clean up old session files (older than 24 hours)
+cleanup_old_sessions() {
+    if [[ -d "$SESSION_HOOKS_DIR" ]]; then
+        find "$SESSION_HOOKS_DIR" -name "*.json" -mtime +1 -delete 2>/dev/null || true
+    fi
+}
+
+# Check if hook is disabled for current session
+is_session_disabled() {
+    local hook="$1"
+    local session_file
+    session_file=$(get_session_file)
+
+    if [[ -f "$session_file" ]]; then
+        local override
+        override=$(jq -r --arg h "$hook" '.overrides[$h] // "null"' "$session_file" 2>/dev/null)
+        if [[ "$override" == "false" ]]; then
+            echo "true"
+            return
+        elif [[ "$override" == "true" ]]; then
+            echo "false"
+            return
+        fi
+    fi
+    echo "inherit"
+}
+
+# Set session override for a hook
+set_session_override() {
+    local hook="$1"
+    local enabled="$2"  # true or false
+
+    ensure_session_dir
+    cleanup_old_sessions
+
+    local session_file
+    session_file=$(get_session_file)
+    local session_id
+    session_id=$(get_session_id)
+
+    if [[ ! -f "$session_file" ]]; then
+        echo "{\"session_id\": \"$session_id\", \"created\": \"$(date -Iseconds)\", \"overrides\": {}}" > "$session_file"
+    fi
+
+    jq --arg h "$hook" --argjson v "$enabled" '.overrides[$h] = $v' "$session_file" > "${session_file}.tmp"
+    mv "${session_file}.tmp" "$session_file"
+}
+
+# Show session overrides
+cmd_session() {
+    ensure_session_dir
+    local session_file
+    session_file=$(get_session_file)
+    local session_id
+    session_id=$(get_session_id)
+
+    echo -e "${BLUE}Session Hook Overrides${NC}"
+    echo ""
+    echo "Session ID: $session_id"
+    echo "Session file: $session_file"
+    echo ""
+
+    if [[ -f "$session_file" ]]; then
+        local overrides
+        overrides=$(jq -r '.overrides | to_entries[] | "\(.key): \(.value)"' "$session_file" 2>/dev/null)
+        if [[ -n "$overrides" ]]; then
+            echo "Overrides:"
+            echo "$overrides" | while read -r line; do
+                local hook status
+                hook=$(echo "$line" | cut -d: -f1)
+                status=$(echo "$line" | cut -d: -f2 | tr -d ' ')
+                if [[ "$status" == "true" ]]; then
+                    echo -e "  ${GREEN}✓${NC} $hook (enabled)"
+                else
+                    echo -e "  ${RED}✗${NC} $hook (disabled)"
+                fi
+            done
+        else
+            echo "No session overrides set."
+        fi
+    else
+        echo "No session overrides set."
+    fi
+
+    # Show active session files
+    echo ""
+    echo "Active session files:"
+    if [[ -d "$SESSION_HOOKS_DIR" ]]; then
+        ls -la "$SESSION_HOOKS_DIR"/*.json 2>/dev/null | while read -r line; do
+            echo "  $line"
+        done || echo "  (none)"
+    else
+        echo "  (none)"
     fi
 }
 
@@ -210,7 +348,22 @@ cmd_status() {
 
 # Enable a hook
 cmd_enable() {
-    local hook="$1"
+    local hook=""
+    local session_mode=false
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --session)
+                session_mode=true
+                shift
+                ;;
+            *)
+                hook="$1"
+                shift
+                ;;
+        esac
+    done
 
     if [[ -z "$hook" ]]; then
         echo -e "${RED}Error: Hook name required${NC}" >&2
@@ -223,6 +376,14 @@ cmd_enable() {
     if [[ -z "$path" ]]; then
         echo -e "${RED}Error: Hook '$hook' not found${NC}" >&2
         exit 1
+    fi
+
+    if [[ "$session_mode" == "true" ]]; then
+        # Session-scoped enable
+        set_session_override "$hook" true
+        echo -e "${GREEN}Enabled hook for this session: $hook${NC}"
+        echo -e "${YELLOW}Note: This override expires after 24 hours${NC}"
+        return
     fi
 
     ensure_config
@@ -243,7 +404,22 @@ cmd_enable() {
 
 # Disable a hook
 cmd_disable() {
-    local hook="$1"
+    local hook=""
+    local session_mode=false
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --session)
+                session_mode=true
+                shift
+                ;;
+            *)
+                hook="$1"
+                shift
+                ;;
+        esac
+    done
 
     if [[ -z "$hook" ]]; then
         echo -e "${RED}Error: Hook name required${NC}" >&2
@@ -265,6 +441,14 @@ cmd_disable() {
             exit 1
             ;;
     esac
+
+    if [[ "$session_mode" == "true" ]]; then
+        # Session-scoped disable
+        set_session_override "$hook" false
+        echo -e "${GREEN}Disabled hook for this session: $hook${NC}"
+        echo -e "${YELLOW}Note: This override expires after 24 hours${NC}"
+        return
+    fi
 
     ensure_config
     local current
@@ -475,10 +659,12 @@ main() {
             cmd_status "${2:-}"
             ;;
         enable)
-            cmd_enable "${2:-}"
+            shift
+            cmd_enable "$@"
             ;;
         disable)
-            cmd_disable "${2:-}"
+            shift
+            cmd_disable "$@"
             ;;
         test)
             cmd_test "${2:-}"
@@ -488,6 +674,9 @@ main() {
             ;;
         logs|log)
             cmd_logs "${2:-}"
+            ;;
+        session)
+            cmd_session
             ;;
         -h|--help|help|"")
             usage

@@ -1,0 +1,26 @@
+# Tier 1: Metadata (always loaded, ~50 tokens)
+name: code-smell-detection
+version: 1.0.0
+
+triggers:
+  - "reviewing code quality"
+  - "before refactoring"
+  - "when complexity increases"
+  - "when code feels hard to change"
+  - "during code review"
+  - "onboarding to unfamiliar code"
+
+description: |
+  Systematic identification of code smells with specific refactoring recipes.
+
+summary: |
+  1. Detect smells by category (Bloaters, Change Preventers, Couplers, Dispensables)
+  2. Prioritize by severity (High/Medium/Low)
+  3. Provide refactoring recipes
+  4. Report with file:line references
+
+quick_reference:
+  - "Detect smells early, refactor incrementally"
+  - "Match smell to refactoring recipe"
+  - "Prioritize: High (duplicate code, god class) → Medium (long methods) → Low (comments)"
+  - "Never refactor without tests"

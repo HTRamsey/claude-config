@@ -75,7 +75,7 @@ Skills, agents, and commands quick reference.
 ### Git & Implementation
 | Trigger | Skill |
 |---------|-------|
-| Feature needs isolation | `using-git-worktrees` |
+| Feature needs isolation, or ready to merge/PR | `git-workflow` |
 | Multi-day feature, avoid long branches | `incremental-implementation` |
 
 ### Specialized

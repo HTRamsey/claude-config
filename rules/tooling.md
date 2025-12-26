@@ -62,10 +62,45 @@ Auto-suggested by `suggest_tool_optimization.py` hook:
 **Route to Haiku**: Single-file ops, "What/Where is X?", error explanations, summarization.
 **Keep on Opus**: Architecture, complex debugging, security, code review, refactoring.
 
-## Background & Resume Patterns
+## Task Tool Settings
 
-- **Long-running agents**: Use `run_in_background=true`
+| Parameter | Default | When to Change |
+|-----------|---------|----------------|
+| `model` | sonnet | haiku: lookups, summaries; opus: security, architecture |
+| `timeout` | 120s | Increase for: large codebases, slow builds, complex analysis |
+| `run_in_background` | false | Long tasks (>30s), parallel investigation |
+
+### Timeout Guidelines
+
+| Task Type | Recommended |
+|-----------|-------------|
+| Quick lookup, simple edit | 60s |
+| Code review, test generation | 120s (default) |
+| Large codebase exploration | 300s |
+| Full build + test | 600s (max) |
+
+### Background Execution
+
+Use `run_in_background=true` when:
+- Task will take >30 seconds
+- Running multiple agents in parallel
+- Want to continue working while agent runs
+
+Retrieve results with `TaskOutput(task_id, block=true)`.
+
+### Model Selection
+
+| Model | Cost | Use For |
+|-------|------|---------|
+| haiku | $ | quick-lookup, batch-editor, doc-generator, summarization |
+| sonnet | $$ | Most agents (default) |
+| opus | $$$ | orchestrator, code-reviewer, migration-planner, security |
+
+### Resume Pattern
+
 - **Iterative work**: Resume agents with `resume=<agent_id>`
+- Agent continues with full previous context preserved
+- Use for follow-up questions or extending previous work
 
 ## Context Management
 

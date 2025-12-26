@@ -71,3 +71,8 @@ Ready for: cd /path/to/project-feature && claude
 /worktree remove feature-auth
 → Remove the feature-auth worktree
 ```
+
+## Related
+
+- **git-workflow** skill - Full worktree lifecycle (setup through merge/PR/discard)
+- **/pr** command - Create pull request from feature branch

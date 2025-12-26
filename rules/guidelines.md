@@ -110,6 +110,24 @@ Style, security, and verification rules.
 
 Toggle with **Shift+Tab** during session.
 
+## Before Every Response
+
+**Skill check (mandatory):**
+1. Ask: "Might any skill apply?" (even 1% chance)
+2. If yes: Load via Skill tool, announce usage
+3. Process skills (debugging, brainstorming) before implementation
+
+Skills encode best practices. Skipping them means reinventing patterns that already exist.
+
+## Design Conversations
+
+When discussing design, architecture, or gathering requirements:
+
+- **One question per message** - Don't overwhelm with multiple questions
+- **Prefer multiple choice** - Options are faster than open-ended
+- **200-300 word sections** - Break complex topics into digestible chunks
+- **Validate before proceeding** - Confirm understanding at each step
+
 ## Before You Start
 
 1. **Read the file first** - Never edit without reading

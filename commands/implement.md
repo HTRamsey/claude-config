@@ -22,8 +22,9 @@ Implement a feature with a structured approach.
 
 2. **Plan the implementation:**
    - List files to create/modify (max 5)
-   - Break into 3-6 small steps
+   - Break into 3-6 small steps (each ~2-5 minutes of work)
    - Each step is independently testable
+   - If a step can't be described in one sentence, split it
    - Identify dependencies between steps
 
 3. **Propose architecture:**

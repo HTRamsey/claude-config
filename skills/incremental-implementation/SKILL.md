@@ -110,12 +110,12 @@ Recommendation: [path forward]
 
 ## Related Skills
 
-- **using-git-worktrees**: Isolate incremental work in worktrees
+- **git-workflow**: Isolate incremental work in worktrees, handle completion
 - **test-driven-development**: TDD for each increment
 
 ## Integration
 
-- **using-git-worktrees** skill - Isolate each increment in worktree
+- **git-workflow** skill - Isolate each increment in worktree, merge/PR when complete
 - **orchestrator** agent - Help plan increment ordering
 - **test-driven-development** skill - Each increment needs tests
 - **verification-before-completion** skill - Verify before merging each increment

@@ -104,3 +104,8 @@ CI checks started: build, test, lint
 - Include testing instructions
 - Link related issues
 - Add `--draft` flag for work-in-progress
+
+## Related
+
+- **git-workflow** skill - Full worktree lifecycle (setup through merge/PR/discard)
+- **/worktree** command - Manage worktrees for feature branches

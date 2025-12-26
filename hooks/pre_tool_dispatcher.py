@@ -124,9 +124,54 @@ TOOL_HANDLERS = {
 }
 
 
+def is_hook_disabled(name: str) -> bool:
+    """Check if hook is disabled globally or for current session."""
+    import os
+    data_dir = Path.home() / ".claude" / "data"
+
+    # Check session override first (takes precedence)
+    session_hooks_dir = data_dir / "session-hooks"
+    session_id = os.environ.get("CLAUDE_SESSION_ID", "")
+    if not session_id:
+        session_file = data_dir / ".current-session"
+        if session_file.exists():
+            session_id = session_file.read_text().strip()
+
+    if session_id:
+        session_override_file = session_hooks_dir / f"{session_id}.json"
+        if session_override_file.exists():
+            try:
+                session_data = json.loads(session_override_file.read_text())
+                override = session_data.get("overrides", {}).get(name)
+                if override is False:
+                    return True  # Disabled for session
+                elif override is True:
+                    return False  # Enabled for session (overrides global)
+            except (json.JSONDecodeError, IOError):
+                pass
+
+    # Check global disabled list
+    config_file = data_dir / "hook-config.json"
+    if config_file.exists():
+        try:
+            config = json.loads(config_file.read_text())
+            if name in config.get("disabled", []):
+                return True
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    return False
+
+
 def run_handler(name: str, ctx: dict) -> dict | None:
     """Run a single handler and return its result."""
     import time
+
+    # Check if hook is disabled
+    if is_hook_disabled(name):
+        log_event("pre_tool_dispatcher", "handler_skipped", {"handler": name, "reason": "disabled"})
+        return None
+
     handler = get_handler(name)
     if handler is None:
         return None

@@ -1,0 +1,23 @@
+# Tier 1: Metadata (always loaded, ~50 tokens)
+name: verification-before-completion
+version: 1.0.0
+
+triggers:
+  - "about to claim work is complete"
+  - "before committing or creating PRs"
+  - "claiming tests pass"
+  - "expressing satisfaction with work"
+  - "any success or completion claims"
+
+description: |
+  Use when about to claim work is complete, fixed, or passing - requires running verification commands and confirming output before making any success claims; evidence before assertions always.
+
+summary: |
+  Evidence before claims, always. Run verification command, read output, verify result, THEN claim success.
+  No completion claims without fresh verification evidence in current message.
+
+quick_reference:
+  - "IDENTIFY: What command proves this claim?"
+  - "RUN: Execute the FULL command (fresh, complete)"
+  - "READ: Full output, check exit code, count failures"
+  - "VERIFY: Does output confirm? If YES claim with evidence, if NO state actual status"

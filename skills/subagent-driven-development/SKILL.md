@@ -123,6 +123,41 @@ Before spawning parallel agents, evaluate:
 
 ---
 
+## Checkpoint Pattern
+
+Execute in batches with verification gates:
+
+```
+1. Execute 3 tasks
+2. Report: what was done + verification output
+3. Wait for feedback (or auto-continue if clear)
+4. Stop immediately if:
+   - Missing dependencies
+   - Failed tests
+   - Unclear instructions
+   - Conflicting results
+```
+
+**Checkpoint report format:**
+```markdown
+## Checkpoint: Tasks 1-3 Complete
+
+### Completed
+- [x] Task 1: Added auth middleware → tests pass
+- [x] Task 2: Updated routes → build OK
+- [x] Task 3: Added validation → 2 new tests pass
+
+### Verification
+- All tests: 47 passing, 0 failing
+- Build: clean
+- Lint: no new warnings
+
+### Next
+Tasks 4-6 ready. Continue?
+```
+
+---
+
 ## Parallel Investigation
 
 For 3+ unrelated failures across different files/subsystems.

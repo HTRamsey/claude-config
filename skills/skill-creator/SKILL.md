@@ -11,24 +11,94 @@ Skills are modular packages extending Claude with specialized knowledge, workflo
 
 ## Skill Structure
 
+Skills use a **3-tier progressive format** for optimal context usage:
+
 ```
 skill-name/
-├── SKILL.md (required) - YAML frontmatter (name, description) + instructions
-└── Bundled Resources (optional)
-    ├── scripts/     - Executable code for deterministic/repeated tasks
-    ├── references/  - Documentation loaded into context as needed
-    └── assets/      - Files used in output (templates, icons, fonts)
+├── metadata.yml (Tier 1)      - ~50 tokens, always loaded
+├── instructions.md (Tier 2)   - ~200 tokens, core workflow
+├── SKILL.md (Tier 3)          - Full content, loaded on-demand
+└── resources/ (Tier 3)        - Advanced materials
+    ├── examples/              - Usage examples
+    ├── templates/             - Reusable templates
+    ├── scripts/               - Executable code
+    └── references/            - Detailed documentation
 ```
 
-### Resource Guidelines
+### 3-Tier Loading Strategy
 
+| Tier | File | Size | Always Loaded? | Contains |
+|------|------|------|----------------|----------|
+| **1** | `metadata.yml` | ~50 tokens | Yes | Name, triggers, 1-2 sentence description, quick reference |
+| **2** | `instructions.md` | ~200 tokens | When triggered | Core workflow, mandatory checks, anti-patterns, escalation |
+| **3** | `SKILL.md` | <5k words | On-demand | Full details, advanced topics, examples, edge cases |
+| **3** | `resources/` | Variable | As needed | Templates, scripts, references, examples |
+
+### Tier 1: metadata.yml (~50 tokens)
+
+The skill's "business card" - always in context, enables auto-triggering.
+
+```yaml
+name: skill-name
+version: 1.0.0
+
+triggers:
+  - keyword or phrase
+  - another trigger
+  - specific context
+
+description: |
+  One sentence what it does. One sentence when to use it.
+
+summary: |
+  2-3 line workflow summary
+  Key principle or constraint
+
+quick_reference:
+  - "Step 1 in brief"
+  - "Step 2 in brief"
+  - "Critical rule"
+```
+
+**Token budget:** ~50 tokens. Every word counts.
+
+### Tier 2: instructions.md (~200 tokens)
+
+Core workflow loaded when skill is triggered. Must be self-contained for simple cases.
+
+**Must include:**
+- Core workflow (numbered steps)
+- Mandatory checks (verification gates)
+- Should NOT do (anti-patterns)
+- Escalate when (complexity triggers)
+
+**Optional:**
+- Quick commands table
+- Common patterns
+- Reference to Tier 3 for advanced topics
+
+**Token budget:** ~200 tokens. Focus on the 80% case.
+
+### Tier 3: SKILL.md & resources/ (on-demand)
+
+Full detailed content loaded only when needed for complex scenarios.
+
+**SKILL.md includes:**
+- Detailed explanations
+- Edge cases and advanced topics
+- Comprehensive examples
+- Troubleshooting guides
+- Philosophy and principles
+
+**resources/ includes:**
 | Type | When to Include | Example |
 |------|-----------------|---------|
-| scripts/ | Same code rewritten repeatedly, needs deterministic reliability | `rotate_pdf.py` |
-| references/ | Documentation Claude should reference while working | `schema.md`, `api_docs.md` |
-| assets/ | Files used in final output, not loaded into context | `logo.png`, `template.pptx` |
+| examples/ | Concrete usage scenarios | `api-integration/`, `async-test/` |
+| templates/ | Reusable file templates | `test-template.py`, `config.json` |
+| scripts/ | Executable code for repeated tasks | `rotate_pdf.py`, `analyze.sh` |
+| references/ | Documentation to reference while working | `schema.md`, `api_docs.md` |
 
-**Progressive loading:** Metadata always in context (~100 words) -> SKILL.md when triggered (<5k words) -> Resources as needed
+**Progressive loading:** metadata.yml (always) -> instructions.md (when triggered) -> SKILL.md (complex cases) -> resources/ (as needed)
 
 ## Core Principles
 
@@ -48,21 +118,27 @@ Match specificity to task fragility:
 | Medium | Pseudocode/parameterized scripts | Preferred pattern exists, some variation OK |
 | Low | Specific scripts, few params | Operations fragile, consistency critical |
 
-### Description is the Trigger
+### Triggers Enable Auto-Activation
 
-The `description` field is the **primary mechanism** for skill activation. It must include:
-- What the skill does
-- When to use it (triggers, contexts)
+The `triggers` and `description` fields in **metadata.yml** are the **primary mechanism** for skill activation.
 
-Do NOT put "When to Use" in the body - the body loads AFTER triggering.
+**triggers:** Keywords/phrases that should activate this skill
+**description:** 1-2 sentences: what it does + when to use it
+**summary:** The core workflow/constraint in 2-3 lines
+
+These fields are ALWAYS loaded (Tier 1). They enable Claude to auto-trigger the skill when relevant.
+
+Do NOT put "When to Use" in instructions.md or SKILL.md - those load AFTER triggering.
 
 ## Should NOT Attempt
 
 - Creating skills that duplicate existing ones (check first)
 - Skills that are too broad (split into focused skills)
-- Skills with more than 5k words (keep SKILL.md concise)
+- Skills with more than 5k words in SKILL.md (move to resources/)
 - Skills that should be commands (user-initiated workflows) or agents (delegated tasks)
-- Including large references inline (use references/ directory)
+- Including large references inline (use resources/references/)
+- Putting triggers/description in SKILL.md (belongs in metadata.yml)
+- Creating single-file skills (use 3-tier format)
 
 ## Failure Behavior
 
@@ -96,9 +172,9 @@ For each example, analyze:
 
 | Example Query | Reusable Resource |
 |---------------|-------------------|
-| "Rotate this PDF" | `scripts/rotate_pdf.py` |
-| "Build me a todo app" | `assets/hello-world/` template |
-| "How many users logged in?" | `references/schema.md` |
+| "Rotate this PDF" | `resources/scripts/rotate_pdf.py` |
+| "Build me a todo app" | `resources/templates/hello-world/` |
+| "How many users logged in?" | `resources/references/schema.md` |
 
 ### Step 3: Initialize
 
@@ -106,24 +182,40 @@ For each example, analyze:
 ~/.claude/skills/skill-creator/scripts/init_skill.py <skill-name> --path <output-directory>
 ```
 
-Creates: skill directory, SKILL.md template, example `scripts/`, `references/`, `assets/` directories.
+Creates: skill directory with 3-tier structure (metadata.yml, instructions.md, SKILL.md, resources/)
 
 ### Step 4: Edit the Skill
 
 **Writing style:** Imperative/infinitive form ("To accomplish X, do Y" not "You should do X")
 
-**SKILL.md must answer:**
-1. What is the skill's purpose?
-2. When should it be used?
-3. How should Claude use it? (Reference all bundled resources)
+**Edit in order:**
 
-**SKILL.md should include:**
-- Persona (brief statement shaping behavior)
-- Should NOT Attempt (explicit anti-patterns)
-- Failure Behavior (what to do when blocked)
-- Escalation (when to recommend alternatives)
+1. **metadata.yml (~50 tokens):**
+   - Add specific trigger keywords
+   - Write clear 1-2 sentence description
+   - Distill summary to 2-3 lines
+   - Create quick reference bullets
 
-Delete unused example directories.
+2. **instructions.md (~200 tokens):**
+   - Define core workflow (numbered steps)
+   - Add mandatory checks/verification gates
+   - List "Should NOT Do" anti-patterns
+   - List "Escalate When" complexity triggers
+   - Add quick commands if applicable
+
+3. **SKILL.md (detailed):**
+   - Remove TODO placeholders
+   - Keep/expand persona statement
+   - Provide detailed process explanations
+   - Add comprehensive examples
+   - Cover advanced topics and edge cases
+   - Reference resources/ as needed
+
+4. **resources/:**
+   - Customize or delete example files
+   - Add concrete examples in examples/
+   - Add reusable templates in templates/
+   - Add scripts/references only if needed
 
 ### Step 5: Package
 
@@ -137,12 +229,114 @@ Validates (frontmatter, structure, description quality) then creates distributab
 
 Use skill on real tasks -> notice struggles -> update SKILL.md or resources -> test again
 
+## Migrating Existing Skills
+
+For skills with old single-file format (YAML frontmatter + content in SKILL.md):
+
+1. **Extract metadata.yml:**
+   - Copy `name` from frontmatter
+   - Add `version: 1.0.0`
+   - Create `triggers` list from description/context
+   - Write 1-2 sentence `description`
+   - Distill `summary` to 2-3 lines
+   - Create `quick_reference` bullets (~3-5 items)
+
+2. **Create instructions.md:**
+   - Extract core workflow/process (numbered steps)
+   - Add mandatory checks/verification gates
+   - List anti-patterns ("Should NOT Do")
+   - List escalation triggers ("Escalate When")
+   - Keep under 200 tokens
+
+3. **Update SKILL.md:**
+   - Remove frontmatter (now in metadata.yml)
+   - Remove core workflow (now in instructions.md)
+   - Keep detailed explanations, examples, edge cases
+   - Expand on advanced topics
+   - Reference instructions.md for basic workflow
+
+4. **Organize resources:**
+   - Move existing `scripts/` to `resources/scripts/` (optional)
+   - Move existing `references/` to `resources/references/` (optional)
+   - Add `resources/examples/` for concrete scenarios
+   - Add `resources/templates/` for reusable files
+
+**Token targets:** metadata.yml ~50, instructions.md ~200, SKILL.md <5k words
+
 ## Template
+
+### metadata.yml (Tier 1, ~50 tokens)
+
+```yaml
+name: skill-name
+version: 1.0.0
+
+triggers:
+  - primary keyword
+  - context phrase
+  - specific scenario
+
+description: |
+  One sentence what it does. One sentence when to use it.
+
+summary: |
+  Core workflow in 2-3 lines
+  Key principle or constraint
+
+quick_reference:
+  - "Step 1 brief"
+  - "Step 2 brief"
+  - "Critical rule"
+```
+
+### instructions.md (Tier 2, ~200 tokens)
+
+```markdown
+# {Skill Name} Instructions (Tier 2)
+
+{One-line constraint or principle if critical.}
+
+## Cycle/Process
+
+1. **{Step}:** {What to do}
+2. **{Step}:** {What to do}
+3. **{Step}:** {What to do}
+
+## Mandatory Checks
+
+Before X:
+- Verify Y
+- Confirm Z
+
+## Should NOT Do
+
+- {Anti-pattern 1}
+- {Anti-pattern 2}
+
+## Escalate When
+
+- {Complexity trigger 1}
+- {Complexity trigger 2}
+
+## Quick Commands
+
+\```bash
+# Common operation
+command --flag
+
+# Another operation
+command2
+\```
+
+For {advanced topic}, see SKILL.md.
+```
+
+### SKILL.md (Tier 3, detailed)
 
 ```markdown
 ---
 name: skill-name
-description: What this skill does AND when to use it. Include specific triggers. Example: "PDF processing for rotation, merging, text extraction. Use when working with .pdf files for document manipulation, data extraction, or format conversion."
+description: What this skill does AND when to use it.
 ---
 
 # Skill Name
@@ -153,21 +347,25 @@ description: What this skill does AND when to use it. Include specific triggers.
 
 {1-2 sentences: expertise/approach shaping behavior.}
 
-## Process
+## Detailed Process
 
-1. **{Step}:** {What to do}
-2. **{Step}:** {What to do}
-3. **{Step}:** {What to do}
+1. **{Step}:** {Detailed explanation}
+2. **{Step}:** {Detailed explanation}
 
 ## Examples
 
 ### {Scenario}
-{Input and expected behavior - concise}
+{Input and expected behavior - detailed}
+
+## Advanced Topics
+
+### {Topic}
+{Explanation}
 
 ## Should NOT Attempt
 
-- {Anti-pattern 1}
-- {Anti-pattern 2}
+- {Anti-pattern 1 with explanation}
+- {Anti-pattern 2 with explanation}
 
 ## Escalation
 
@@ -175,11 +373,12 @@ description: What this skill does AND when to use it. Include specific triggers.
 
 ## Resources
 
-- `scripts/X.py`: {Purpose}
-- `references/Y.md`: {Content}
+- `resources/examples/X/`: {Purpose}
+- `resources/templates/Y`: {Usage}
+- `resources/scripts/Z.py`: {What it does}
 ```
 
-**Note:** No "When to Use" section in body - that information belongs in the `description` field.
+**Note:** Triggers and "When to Use" belong in metadata.yml (Tier 1), not in instructions.md or SKILL.md.
 
 ## Skill vs Command vs Agent
 
@@ -200,10 +399,14 @@ Choose agent when: Task should be delegated to a subagent.
 |---------|-----|
 | Skill too broad | Split into focused skills |
 | No concrete examples | Add 2-3 real usage scenarios |
-| Missing trigger conditions | Add "When to Use" section |
-| Too much inline content | Move to references/ |
-| No anti-patterns | Add "Should NOT Attempt" |
-| No failure guidance | Add what to do when blocked |
+| Missing triggers in metadata.yml | Add specific trigger keywords |
+| Too much inline content | Move to resources/ |
+| No anti-patterns | Add "Should NOT Do" in instructions.md |
+| No failure guidance | Add "Escalate When" section |
+| Triggers in SKILL.md not metadata.yml | Move to metadata.yml Tier 1 |
+| Core workflow only in SKILL.md | Put in instructions.md Tier 2 |
+| metadata.yml exceeds 50 tokens | Trim to essential info only |
+| instructions.md exceeds 200 tokens | Move details to SKILL.md |
 
 ## Related Skills
 

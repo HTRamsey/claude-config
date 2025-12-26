@@ -51,6 +51,25 @@ Loop:
 5. If pass → @code-reviewer → Verify quality
 ```
 
+### 4. Research Pipeline (Coordinator-Researcher-Synthesizer)
+```
+Task: Answer complex question or investigate topic
+
+1. Coordinate: Break into research subtopics
+2. Research: Spawn parallel @technical-researcher agents
+3. Synthesize: Aggregate findings into cohesive answer
+
+Example:
+  Task: "How should we implement caching?"
+
+  Coordinate → subtopics:
+  ├── @technical-researcher → caching strategies (Redis vs in-memory)
+  ├── @technical-researcher → current codebase patterns
+  └── @technical-researcher → performance implications
+
+  Synthesize → unified recommendation with tradeoffs noted
+```
+
 ## Workflow Templates
 
 ### Template: Full PR Review
@@ -343,6 +362,8 @@ When receiving a complex task:
    - What distinct operations are needed?
    - Which can run in parallel?
    - What are the dependencies?
+   - **Granularity**: Each subtask should be ~2-5 minutes of work
+   - **Test**: If you can't describe a subtask in one sentence, split it
 
 2. **Match to specialists**
 
@@ -386,9 +407,15 @@ When receiving a complex task:
    - Iterative: Refinement loops
 
 4. **Synthesize results**
-   - Combine findings
-   - Resolve conflicts
-   - Prioritize actions
+   - **Deduplicate**: Remove repeated findings across agents
+   - **Resolve conflicts**: When agents disagree, explain tradeoffs
+   - **Structure output**:
+     - Executive summary (1-2 sentences)
+     - Key findings by category
+     - Contradictions/tradeoffs noted
+     - Actionable recommendation
+   - **Cite sources**: Note which agent provided each finding
+   - **Confidence levels**: Flag areas of uncertainty
 
 ## Output Format
 

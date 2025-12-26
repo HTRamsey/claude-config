@@ -1,12 +1,17 @@
 ---
 description: Review code for security, performance, and quality issues
-allowed-tools: Read, Grep, Glob, Bash(git:*), LSP
-argument-hint: [path|staged]
+allowed-tools: Read, Grep, Glob, Bash(git:*), LSP, Task
+argument-hint: [--deep] [path|staged]
 ---
 
 # /review
 
 Review code for security, performance, quality, and production readiness.
+
+## Options
+- `--deep` - Spawn 6 specialized review agents in parallel (6x tokens, thorough)
+- `--deep security` - Security-focused deep review only
+- `--deep performance` - Performance-focused deep review only
 
 ## Target
 $ARGUMENTS (file, directory, or "staged" for git staged changes - defaults to staged)
@@ -183,9 +188,111 @@ git diff --cached | grep -E "^\+.*(function|def|fn) \w+" | sort | uniq -d
 - Nitpick style when logic issues exist
 - Block on low-severity issues
 
+## Review Discipline
+
+**Before committing:**
+- Run `/review` on staged changes (don't skip "just this once")
+- Fix all Critical issues before commit
+- Document Medium issues as TODOs if deferring
+- Never merge own PR without external review
+
+**During review:**
+- Focus on logic and security first, style last
+- One concern per comment (actionable, not vague)
+- Suggest fixes, not just problems
+- If > 10 issues, stop and request smaller PR
+
+**After review:**
+- Verify fixes addressed the concern (not just silenced it)
+- Re-run review after significant changes
+- Document patterns that keep appearing (add to linting)
+
 ## Rules
 - Show exact file:line locations
 - Explain **impact**, not just what's wrong
 - Suggest **specific fixes** with code when helpful
 - Prioritize by severity
 - If breaking changes found, confirm intent with user
+
+## Deep Review Mode (`--deep`)
+
+Spawns 6 specialized review agents in parallel for comprehensive analysis.
+
+### Agents
+
+| Agent | Focus | Key Checks |
+|-------|-------|------------|
+| **Architecture** | Design patterns, coupling, cohesion | SOLID violations, circular deps, layer violations |
+| **Security** | OWASP Top 10, vulnerabilities | Injection, auth bypass, data exposure, secrets |
+| **Performance** | Bottlenecks, complexity | O(n²), N+1 queries, memory leaks, blocking calls |
+| **Testing** | Coverage, edge cases | Missing tests, weak assertions, flaky patterns |
+| **Quality** | Standards, maintainability | Complexity, duplication, naming, dead code |
+| **Documentation** | Comments, API docs | Missing docs, outdated comments, unclear APIs |
+
+### Workflow
+
+1. **Gather files** - Same as standard review
+2. **Spawn agents** - All 6 in parallel via Task tool
+3. **Aggregate** - Combine results, deduplicate findings
+4. **Prioritize** - Sort by severity: Critical → High → Medium → Low
+5. **Report** - Unified output with agent attribution
+
+### Agent Prompts
+
+Each agent receives:
+```
+Review the following code for [FOCUS AREA]:
+Files: [file list]
+Diff: [staged diff or file contents]
+
+Focus specifically on:
+- [Key checks for this agent]
+
+Report findings as:
+- 🔴 Critical: [description] (file:line)
+- 🟡 Medium: [description] (file:line)
+- 🟢 Low: [description] (file:line)
+```
+
+### Aggregation Rules
+
+1. **Deduplicate** - Same issue from multiple agents → keep most specific
+2. **Cross-reference** - Note when multiple agents flag same code
+3. **Conflict resolution** - If agents disagree, show both perspectives
+4. **Coverage gaps** - Flag files not reviewed by any agent
+
+### Output Format
+
+```markdown
+## Deep Review: [target]
+**Agents:** 6/6 completed | **Total findings:** X
+
+### 🔴 Critical (X)
+- **[file:line]** - [issue] (Architecture, Security)
+  Impact: [why it matters]
+  Fix: [suggested fix]
+
+### 🟡 Medium (X)
+...
+
+### 🟢 Low (X)
+...
+
+### Cross-Agent Insights
+- [file:line] flagged by 3 agents: Architecture (coupling), Quality (complexity), Testing (coverage)
+
+### Summary
+Architecture: 2 issues | Security: 1 critical | Performance: clean | ...
+```
+
+### When to Use Deep Review
+
+- Before major releases
+- Security-sensitive code changes
+- Reviewing unfamiliar codebase
+- PR with >500 lines changed
+- After significant refactoring
+
+### Cost Consideration
+
+Deep review uses ~6x tokens of standard review. Use for important changes, not routine commits.

@@ -483,6 +483,11 @@
             "type": "command",
             "command": "$HOME/.claude/hooks/session_persistence.py",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/transcript_converter.py",
+            "timeout": 10
           }
         ]
       }
