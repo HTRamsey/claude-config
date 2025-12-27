@@ -290,13 +290,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/context_monitor.py",
+            "command": "$HOME/.claude/hooks/user_prompt_dispatcher.py",
             "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/usage_tracker.py",
-            "timeout": 3
           }
         ]
       }

@@ -188,19 +188,14 @@ def get_session_summary(transcript_path):
 
     return " | ".join(parts) if parts else ""
 
-@graceful_main("context_monitor")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
+def check_context(ctx: dict) -> dict | None:
+    """Handler function for dispatcher. Returns message dict or None."""
     transcript_path = ctx.get('transcript_path', '')
     token_count, message_count = get_transcript_size(transcript_path)
 
     if token_count >= TOKEN_CRITICAL_THRESHOLD:
         # Pre-compact backup (audit trail)
-        if HAS_UTILS and transcript_path:
+        if transcript_path:
             backup_path = backup_transcript(transcript_path, "pre_compact")
             if backup_path:
                 log_event("context_monitor", "pre_compact_backup", {
@@ -209,14 +204,29 @@ def main():
                 })
 
         summary = get_session_summary(transcript_path)
-        print(f"[Context Monitor] CRITICAL: {token_count:,} tokens ({message_count} msgs)")
-        print("  Transcript backed up automatically.")
+        lines = [f"[Context Monitor] CRITICAL: {token_count:,} tokens ({message_count} msgs)"]
+        lines.append("  Transcript backed up automatically.")
         if summary:
-            print(f"  Session: {summary}")
-        print("  Recommend /compact. Preserve: current task, modified files, errors.")
+            lines.append(f"  Session: {summary}")
+        lines.append("  Recommend /compact. Preserve: current task, modified files, errors.")
+        return {"message": "\n".join(lines)}
 
     elif token_count >= TOKEN_WARNING_THRESHOLD:
-        print(f"[Context Monitor] {token_count:,} tokens. /compact available if needed.")
+        return {"message": f"[Context Monitor] {token_count:,} tokens. /compact available if needed."}
+
+    return None
+
+
+@graceful_main("context_monitor")
+def main():
+    try:
+        ctx = json.load(sys.stdin)
+    except json.JSONDecodeError:
+        sys.exit(0)
+
+    result = check_context(ctx)
+    if result and result.get("message"):
+        print(result["message"])
 
     sys.exit(0)
 
