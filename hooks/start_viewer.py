@@ -1,4 +1,4 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """Start claude-code-viewer if not already running.
 
 UserPromptSubmit hook - checks on first prompt of session.

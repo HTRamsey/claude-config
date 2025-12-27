@@ -1,4 +1,4 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """Detect potential credentials/API keys before git commit.
 
 PreToolUse hook for Bash tool - triggers on git commit commands.

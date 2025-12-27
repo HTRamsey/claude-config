@@ -2,8 +2,31 @@
 # Setup/update the Claude Code Python venv
 set -euo pipefail
 
-VENV_DIR="$HOME/.claude/venv"
+VENV_DIR="$HOME/.claude/data/venv"
 HOOKS_DIR="$HOME/.claude/hooks"
+ENV_FILE="$HOME/.claude/.env.local"
+
+init_env_file() {
+    if [[ -f "$ENV_FILE" ]]; then
+        return 0
+    fi
+    echo "Creating $ENV_FILE with defaults..."
+    cat > "$ENV_FILE" << 'EOF'
+# Claude Code local environment - sourced by queue scripts
+# chmod 600 this file
+
+# Anthropic API key for queue API mode
+export ANTHROPIC_API_KEY=""
+
+# API base URL (uncomment to use proxy or alternative endpoint)
+# export ANTHROPIC_BASE_URL="https://api.anthropic.com"
+
+# Set to 1 to enable API mode (default: 0 to prevent accidental spend)
+export QUEUE_ENABLE_API=0
+EOF
+    chmod 600 "$ENV_FILE"
+    echo "Created $ENV_FILE (edit to add your API key)"
+}
 
 case "${1:-update}" in
     create)
@@ -13,6 +36,7 @@ case "${1:-update}" in
         if [[ -f "$HOOKS_DIR/pyproject.toml" ]]; then
             "$VENV_DIR/bin/pip" install --quiet "$HOOKS_DIR"
         fi
+        init_env_file
         echo "Done. Venv ready."
         ;;
     update)
@@ -41,8 +65,11 @@ case "${1:-update}" in
         "$VENV_DIR/bin/pip" install --quiet "$HOOKS_DIR[dev]"
         echo "Done."
         ;;
+    init-env)
+        init_env_file
+        ;;
     *)
-        echo "Usage: $0 {create|update|check|dev}"
+        echo "Usage: $0 {create|update|check|dev|init-env}"
         exit 1
         ;;
 esac

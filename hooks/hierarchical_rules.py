@@ -1,4 +1,4 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """
 Hierarchical Rules Hook - Apply per-directory rule overrides.
 

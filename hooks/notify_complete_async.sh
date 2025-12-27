@@ -113,8 +113,8 @@ speak_text() {
         espeak -v en -s 150 "$text" 2>/dev/null
     elif command -v espeak-ng &>/dev/null; then
         espeak-ng -v en -s 150 "$text" 2>/dev/null
-    elif [[ -f "$HOME/.claude/venv/bin/python3" ]]; then
-        "$HOME/.claude/venv/bin/python3" -c "
+    elif [[ -f "$HOME/.claude/data/venv/bin/python3" ]]; then
+        "$HOME/.claude/data/venv/bin/python3" -c "
 try:
     import pyttsx3
     engine = pyttsx3.init()

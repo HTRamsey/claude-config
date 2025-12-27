@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-VENV_BIN="${HOME}/.claude/venv/bin"
+VENV_BIN="${HOME}/.claude/data/venv/bin"
 
 usage() {
     echo "Usage: $0 <command> [skill-path]"

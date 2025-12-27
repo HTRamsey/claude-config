@@ -1,4 +1,4 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """
 Tool Success Tracker Hook - Tracks tool failures and suggests alternatives.
 Runs on PostToolUse to monitor errors and recommend better approaches.

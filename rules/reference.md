@@ -84,6 +84,8 @@ Skills, agents, and commands quick reference.
 | Memory leaks, profiling, allocation issues | `memory-management-optimization` |
 | Interactive commands (git rebase -i, vim, REPLs) | `using-tmux` |
 | On-demand MCP server access | `mcp-cli` |
+| Large context, boilerplate, multi-provider | `multi-llm` |
+| JS-rendered content, screenshots, forms | `browser-automation` |
 
 ### Document Handling
 | Trigger | Skill |

@@ -1,4 +1,4 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """
 Shared utilities for Claude Code hooks.
 Provides unified logging, graceful degradation, state management, and common patterns.
@@ -537,7 +537,7 @@ def cache_result(cache_name: str, key: str, result: str, ttl_hours: int = 24):
         data["updated"] = now.isoformat()
         return data
 
-    update_state(cache_name, updater)
+    update_state(f"cache/{cache_name}", updater)
 
 
 def get_cached_result(cache_name: str, key: str) -> str | None:
@@ -551,7 +551,7 @@ def get_cached_result(cache_name: str, key: str) -> str | None:
     Returns:
         Cached result or None if expired/missing
     """
-    data = read_state(cache_name, {"entries": {}})
+    data = read_state(f"cache/{cache_name}", {"entries": {}})
     entry = data.get("entries", {}).get(key)
     if entry and entry.get("expires", 0) > datetime.now().timestamp():
         return entry.get("result")

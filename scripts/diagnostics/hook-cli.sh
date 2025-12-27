@@ -20,7 +20,7 @@ SESSION_HOOKS_DIR="${DATA_DIR}/session-hooks"
 CONFIG_FILE="${DATA_DIR}/hook-config.json"
 LOG_FILE="${DATA_DIR}/hook-events.jsonl"
 SETTINGS_FILE="${HOME}/.claude/settings.json"
-VENV_PYTHON="${HOME}/.claude/venv/bin/python3"
+VENV_PYTHON="${HOME}/.claude/data/venv/bin/python3"
 
 # Colors
 RED='\033[0;31m'

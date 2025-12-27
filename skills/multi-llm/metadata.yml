@@ -1,0 +1,26 @@
+# Tier 1: Metadata (always loaded, ~50 tokens)
+name: multi-llm
+version: 1.0.0
+
+triggers:
+  - large file analysis
+  - boilerplate generation
+  - context too large
+  - delegate to another LLM
+  - use gemini
+  - use codex
+
+description: |
+  Route tasks to the best LLM for the job. Use Gemini for large context,
+  Codex for boilerplate, Claude for reasoning. Delegate via tmux.
+
+summary: |
+  GEMINI: Large files (>100KB), whole codebase analysis
+  CODEX: Boilerplate, CRUD, templates, scaffolding
+  CLAUDE: Architecture, security, debugging, reasoning
+
+quick_reference:
+  - "Large context → gemini-cli"
+  - "Boilerplate → codex-cli"
+  - "Complex reasoning → claude"
+  - "Delegate: llm-delegate.sh <provider> 'prompt'"

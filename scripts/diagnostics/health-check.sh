@@ -39,12 +39,12 @@ do_cleanup() {
     fi
 
     # Rotate debug files > 7 days
-    old_debug=$(find ~/.claude/debug -type f -mtime +7 2>/dev/null | wc -l)
+    old_debug=$(find ~/.claude/data/debug -type f -mtime +7 2>/dev/null | wc -l)
     if [[ $old_debug -gt 0 ]]; then
         if [[ "$DRY_RUN" == true ]]; then
             echo "  debug/: would delete $old_debug files older than 7 days"
         else
-            find ~/.claude/debug -type f -mtime +7 -delete 2>/dev/null
+            find ~/.claude/data/debug -type f -mtime +7 -delete 2>/dev/null
             echo "  debug/: deleted $old_debug files older than 7 days"
         fi
     else
@@ -52,12 +52,12 @@ do_cleanup() {
     fi
 
     # Rotate file-history > 30 days
-    old_history=$(find ~/.claude/file-history -type f -mtime +30 2>/dev/null | wc -l)
+    old_history=$(find ~/.claude/data/file-history -type f -mtime +30 2>/dev/null | wc -l)
     if [[ $old_history -gt 0 ]]; then
         if [[ "$DRY_RUN" == true ]]; then
             echo "  file-history/: would delete $old_history files older than 30 days"
         else
-            find ~/.claude/file-history -type f -mtime +30 -delete 2>/dev/null
+            find ~/.claude/data/file-history -type f -mtime +30 -delete 2>/dev/null
             echo "  file-history/: deleted $old_history files older than 30 days"
         fi
     else
@@ -113,13 +113,13 @@ do_cleanup() {
     fi
 
     # Rotate config backups > 30 days
-    if [[ -d ~/.claude/backups ]]; then
-        old_backups=$(find ~/.claude/backups -type f -mtime +30 2>/dev/null | wc -l)
+    if [[ -d ~/.claude/data/backups ]]; then
+        old_backups=$(find ~/.claude/data/backups -type f -mtime +30 2>/dev/null | wc -l)
         if [[ $old_backups -gt 0 ]]; then
             if [[ "$DRY_RUN" == true ]]; then
                 echo "  backups/: would delete $old_backups files older than 30 days"
             else
-                find ~/.claude/backups -type f -mtime +30 -delete 2>/dev/null
+                find ~/.claude/data/backups -type f -mtime +30 -delete 2>/dev/null
                 echo "  backups/: deleted $old_backups files older than 30 days"
             fi
         else
@@ -472,8 +472,8 @@ echo ""
 
 # Disk usage / cleanup
 echo "## Disk Usage"
-debug_size=$(du -sh ~/.claude/debug 2>/dev/null | cut -f1)
-history_size=$(du -sh ~/.claude/file-history 2>/dev/null | cut -f1)
+debug_size=$(du -sh ~/.claude/data/debug 2>/dev/null | cut -f1)
+history_size=$(du -sh ~/.claude/data/file-history 2>/dev/null | cut -f1)
 echo "  debug/: $debug_size"
 echo "  file-history/: $history_size"
 
@@ -487,7 +487,7 @@ else
     echo "  temp files: ⚠ $old_temp files older than 7 days in /tmp"
 fi
 
-old_debug=$(find ~/.claude/debug -type f -mtime +7 2>/dev/null | wc -l 2>/dev/null | tr -d '[:space:]' || echo "0")
+old_debug=$(find ~/.claude/data/debug -type f -mtime +7 2>/dev/null | wc -l 2>/dev/null | tr -d '[:space:]' || echo "0")
 [[ -z "$old_debug" ]] && old_debug=0
 if [[ "$old_debug" != "0" ]]; then
     echo "  debug cleanup: ⚠ $old_debug files older than 7 days"

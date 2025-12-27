@@ -1,6 +1,7 @@
 # Credentials and secrets
 .credentials.json
 settings.local.json
+.env.local
 
 # Session and runtime data
 history.jsonl

@@ -1,4 +1,4 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """
 Notification Hook - Alert when long Bash operations complete.
 PostToolUse hook for Bash tool.

@@ -57,10 +57,44 @@ Auto-suggested by `suggest_tool_optimization.py` hook:
 | Code blocks | 50 lines | Excerpt + reference |
 | Diffs/Build/Test | Errors only | compress.sh |
 
+## Read Tool Efficiency
+
+**When you have a line reference** (e.g., `file.yml:42`):
+- Use `offset` and `limit` to read only the relevant section
+- Read ~10 lines of context around target: `offset=line-5, limit=15`
+- For top-of-file content: just use `limit` (no offset needed)
+
+**Never read entire files when:**
+- You have an exact line number from a plan, error, or previous search
+- The target is predictably located (YAML permissions → top, imports → top)
+- You just need to verify a specific section exists
+
 ## Haiku Routing (80-90% Cost Savings)
 
 **Route to Haiku**: Single-file ops, "What/Where is X?", error explanations, summarization.
 **Keep on Opus**: Architecture, complex debugging, security, code review, refactoring.
+
+## Multi-LLM Routing
+
+Route tasks to optimal provider. Use `multi-llm` skill for guidance.
+
+| Pattern | Provider | Why |
+|---------|----------|-----|
+| Large files (>100KB) | `gemini` | 1M token context |
+| Whole codebase analysis | `gemini` | Large context |
+| Boilerplate/CRUD/templates | `codex` | Cheaper, fast |
+| Architecture/security/debugging | `claude` | Best reasoning |
+| Default | `claude` | Primary tool |
+
+**Scripts:**
+- `scripts/automation/llm-route.sh` - Manual routing from terminal
+- `scripts/automation/llm-delegate.sh` - Claude delegates via tmux
+
+**Delegation example:**
+```bash
+llm-delegate.sh gemini "summarize this 500KB log"
+llm-delegate.sh codex "generate REST endpoints for User"
+```
 
 ## Task Tool Settings
 
@@ -162,7 +196,18 @@ Never read (waste tokens):
 
 ## MCP Servers
 
-See `architecture.md` for MCP server configuration.
+| Server | Purpose | Tools |
+|--------|---------|-------|
+| `memory` | Cross-session persistence | `store`, `retrieve`, `search` |
+| `puppeteer` | Browser automation | `navigate`, `screenshot`, `click`, `fill` |
+| `grep-app` | Search public GitHub | `search`, `get_file` |
+
+**Commands:**
+- `claude mcp list` - Show configured servers
+- `claude mcp add <name> ...` - Add server
+- `claude mcp remove <name>` - Remove server
+
+See `architecture.md` for full configuration.
 
 ## Plugins
 

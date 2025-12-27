@@ -1,4 +1,4 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """
 Suggestion Engine - Unified suggestion system for Claude Code.
 
@@ -23,7 +23,9 @@ from hook_utils import graceful_main, log_event
 # ============================================================================
 
 DATA_DIR = Path.home() / ".claude/data"
-SUGGESTION_CACHE = DATA_DIR / "suggestion-engine-cache.json"
+CACHE_DIR = DATA_DIR / "cache"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+SUGGESTION_CACHE = CACHE_DIR / "suggestion-engine-cache.json"
 
 _state = None
 

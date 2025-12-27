@@ -1,4 +1,4 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """
 Session Persistence Hook - Auto-saves session insights to memory MCP on Stop.
 Analyzes the transcript to extract valuable information worth persisting.

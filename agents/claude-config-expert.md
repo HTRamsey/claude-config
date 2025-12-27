@@ -21,8 +21,8 @@ Audit, analyze, improve, and maintain the user's Claude Code configuration at ~/
 | `data/usage-stats.json` | Agent/skill/command usage |
 | `data/hook-events.jsonl` | Hook execution log |
 | `data/permission-patterns.json` | Learned auto-approval patterns |
-| `data/exploration-cache.json` | Cached codebase exploration |
-| `data/research-cache.json` | Cached web research |
+| `data/cache/exploration-cache.json` | Cached codebase exploration |
+| `data/cache/research-cache.json` | Cached web research |
 | `data/session-history.json` | Session metadata for resumption |
 | `data/checkpoint-state.json` | State checkpoints for recovery |
 

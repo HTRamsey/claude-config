@@ -1,4 +1,4 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """
 Unified Cache Hook - Handles exploration and research caching.
 
@@ -24,6 +24,10 @@ except ImportError:
 sys.path.insert(0, str(Path(__file__).parent))
 from hook_utils import graceful_main, log_event, DATA_DIR
 
+# Ensure cache directory exists
+CACHE_DIR = DATA_DIR / "cache"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
 
 @dataclass
 class CacheConfig:
@@ -38,7 +42,7 @@ class CacheConfig:
 CACHES = {
     "exploration": CacheConfig(
         name="exploration",
-        file=DATA_DIR / "exploration-cache.json",
+        file=CACHE_DIR / "exploration-cache.json",
         ttl_seconds=3600,  # 60 minutes
         max_entries=50,
         fuzzy_match=True,
@@ -46,7 +50,7 @@ CACHES = {
     ),
     "research": CacheConfig(
         name="research",
-        file=DATA_DIR / "research-cache.json",
+        file=CACHE_DIR / "research-cache.json",
         ttl_seconds=86400,  # 24 hours
         max_entries=100,
         fuzzy_match=False

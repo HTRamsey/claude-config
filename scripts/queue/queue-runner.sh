@@ -4,6 +4,9 @@
 
 set -euo pipefail
 
+# Source local env (API keys, etc.) if present
+[[ -f "${HOME}/.claude/.env.local" ]] && source "${HOME}/.claude/.env.local"
+
 PID_FILE="${HOME}/.claude/data/queue-runner.pid"
 LOG_FILE="${HOME}/.claude/data/queue-runner.log"
 QUEUE_SCRIPT="${HOME}/.claude/scripts/queue/task-queue.sh"

@@ -1,4 +1,4 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """
 PreToolUse Dispatcher - Consolidates all PreToolUse hooks into single process.
 
@@ -66,6 +66,9 @@ def get_handler(name: str):
             elif name == "hierarchical_rules":
                 from hierarchical_rules import check_hierarchical_rules
                 _handlers[name] = check_hierarchical_rules
+            elif name == "subagent_lifecycle":
+                from subagent_lifecycle import handle_start
+                _handlers[name] = handle_start
             else:
                 _handlers[name] = None
         except ImportError as e:
@@ -78,7 +81,8 @@ def get_handler(name: str):
 ALL_HANDLERS = [
     "file_protection", "tdd_guard", "dangerous_command_blocker",
     "credential_scanner", "suggestion_engine", "file_monitor",
-    "state_saver", "unified_cache", "usage_tracker", "hierarchical_rules"
+    "state_saver", "unified_cache", "usage_tracker", "hierarchical_rules",
+    "subagent_lifecycle"
 ]
 
 def validate_handlers():
@@ -118,7 +122,7 @@ TOOL_HANDLERS = {
     "Bash": ["dangerous_command_blocker", "credential_scanner", "suggestion_engine"],
     "Grep": ["suggestion_engine"],
     "Glob": ["suggestion_engine"],
-    "Task": ["usage_tracker", "unified_cache"],
+    "Task": ["subagent_lifecycle", "usage_tracker", "unified_cache"],
     "Skill": ["usage_tracker"],
     "WebFetch": ["unified_cache"],
 }

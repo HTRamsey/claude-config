@@ -1,7 +1,8 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """
 SubagentLifecycle hook - tracks subagent lifecycle for metrics and timing.
-Handles both SubagentStart and SubagentStop events.
+Called via pre_tool_dispatcher (handle_start) and post_tool_dispatcher (handle_complete)
+for Task tool invocations.
 
 Also maintains Reflexion memory - a log of task outcomes and lessons
 for learning from past subagent executions.
@@ -51,9 +52,10 @@ def save_reflexion_log(entries: list):
 
 def extract_task_summary(ctx: dict) -> str:
     """Extract a summary of the task from context."""
+    tool_input = ctx.get("tool_input", {})
     # Try to get from prompt or description
-    prompt = ctx.get("prompt", "")
-    description = ctx.get("description", "")
+    prompt = tool_input.get("prompt", ctx.get("prompt", ""))
+    description = tool_input.get("description", ctx.get("description", ""))
 
     summary = description or prompt[:100]
     if len(prompt) > 100 and not description:
@@ -78,7 +80,7 @@ def extract_outcome(ctx: dict) -> str:
 def extract_lessons(ctx: dict, outcome: str) -> list:
     """Extract lessons learned from the task output."""
     lessons = []
-    output = ctx.get("output", "") or ctx.get("result", "")
+    output = ctx.get("tool_output", "") or ctx.get("output", "") or ctx.get("result", "")
 
     # For failures, try to extract what went wrong
     if outcome == "failure":
@@ -101,8 +103,9 @@ def extract_lessons(ctx: dict, outcome: str) -> list:
 
 def record_reflexion(ctx: dict, duration_s: float | None):
     """Record a reflexion entry for this subagent completion."""
-    subagent_type = ctx.get("subagent_type", "unknown")
-    prompt = ctx.get("prompt", "")
+    tool_input = ctx.get("tool_input", {})
+    subagent_type = tool_input.get("subagent_type", ctx.get("subagent_type", "unknown"))
+    prompt = tool_input.get("prompt", ctx.get("prompt", ""))
 
     # Create a hash of the task for deduplication
     task_hash = hashlib.md5(
@@ -136,9 +139,10 @@ def record_reflexion(ctx: dict, duration_s: float | None):
 
 
 def handle_start(ctx):
-    """Handle SubagentStart event - track spawn time and counts."""
-    subagent_type = ctx.get("subagent_type", "unknown")
-    subagent_id = ctx.get("subagent_id", "")
+    """Handle Task tool PreToolUse - track spawn time and counts."""
+    tool_input = ctx.get("tool_input", {})
+    subagent_type = tool_input.get("subagent_type", ctx.get("subagent_type", "unknown"))
+    subagent_id = ctx.get("subagent_id", ctx.get("tool_use_id", ""))
 
     state = get_session_state()
 
@@ -166,10 +170,11 @@ def handle_start(ctx):
 
 
 def handle_complete(ctx):
-    """Handle SubagentStop event - track completion and calculate duration."""
-    subagent_type = ctx.get("subagent_type", "unknown")
-    subagent_id = ctx.get("subagent_id", "")
-    stop_reason = ctx.get("stop_reason", "")
+    """Handle Task tool PostToolUse - track completion and calculate duration."""
+    tool_input = ctx.get("tool_input", {})
+    subagent_type = tool_input.get("subagent_type", ctx.get("subagent_type", "unknown"))
+    subagent_id = ctx.get("subagent_id", ctx.get("tool_use_id", ""))
+    stop_reason = ctx.get("stop_reason", "completed" if not ctx.get("tool_error") else "error")
 
     state = get_session_state()
     subagent_stats = state.get("subagent_stats", {})

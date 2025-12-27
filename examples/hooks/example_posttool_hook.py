@@ -1,4 +1,4 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """Example PostToolUse hook - Log tool execution metrics.
 
 This is a minimal example showing the structure of a PostToolUse hook.

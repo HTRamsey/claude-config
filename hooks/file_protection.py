@@ -1,4 +1,4 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """Block access to sensitive files (Read/Write/Edit).
 
 PreToolUse hook for Read, Write, and Edit tools.
@@ -65,6 +65,11 @@ WRITE_ONLY_PATTERNS = [
     "*/pnpm-lock.yaml",
 ]
 
+# Explicit allowlist (overrides PROTECTED_PATTERNS)
+ALLOWED_PATHS = [
+    "~/.claude/.env.local",  # Local env config for queue-runner etc.
+]
+
 
 @dispatch_handler("file_protection", event="PreToolUse")
 def check_file_protection(ctx: PreToolUseContext) -> dict | None:
@@ -84,6 +89,12 @@ def check_file_protection(ctx: PreToolUseContext) -> dict | None:
     # Expand and normalize path
     file_path = expand_path(file_path)
     is_write = ctx.is_write or ctx.is_edit
+
+    # Check allowlist first (overrides protection)
+    for allowed in ALLOWED_PATHS:
+        allowed_expanded = expand_path(allowed)
+        if file_path == allowed_expanded:
+            return None
 
     # Check protected patterns (block read and write)
     matched = Patterns.matches_glob(file_path, PROTECTED_PATTERNS)

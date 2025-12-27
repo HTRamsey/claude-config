@@ -1,4 +1,4 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """
 Output Metrics - Unified token tracking and output size monitoring.
 
@@ -23,7 +23,7 @@ from hook_utils import graceful_main, log_event, safe_load_json, safe_save_json
 
 CHARS_PER_TOKEN = 4
 DATA_DIR = Path.home() / ".claude/data"
-TRACKER_DIR = Path(os.environ.get("CLAUDE_TRACKER_DIR", Path.home() / ".claude/tracking"))
+TRACKER_DIR = Path(os.environ.get("CLAUDE_TRACKER_DIR", Path.home() / ".claude/data/tracking"))
 
 # Output size thresholds
 OUTPUT_WARNING_THRESHOLD = 10000  # Warn if output > 10K chars

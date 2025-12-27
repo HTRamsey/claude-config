@@ -1,4 +1,4 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """Block dangerous bash commands that could cause system damage.
 
 PreToolUse hook for Bash tool.

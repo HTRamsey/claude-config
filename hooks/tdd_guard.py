@@ -1,4 +1,4 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """TDD Guard - Warns about implementation files without corresponding tests.
 
 PreToolUse hook for Write/Edit tools.

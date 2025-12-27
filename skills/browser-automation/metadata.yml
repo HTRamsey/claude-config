@@ -1,0 +1,27 @@
+# Tier 1: Metadata (always loaded, ~50 tokens)
+name: browser-automation
+version: 1.0.0
+
+triggers:
+  - JS-rendered content
+  - screenshot webpage
+  - fill form
+  - click button
+  - browser automation
+  - puppeteer
+
+description: |
+  Browser automation via Puppeteer MCP. Use when WebFetch fails on
+  JS-rendered content, need screenshots, or must interact with forms.
+
+summary: |
+  NAVIGATE: puppeteer_navigate to URL
+  SCREENSHOT: puppeteer_screenshot for visual capture
+  INTERACT: click, fill, select for form automation
+  EVALUATE: run JS in page context
+
+quick_reference:
+  - "JS content → use Puppeteer instead of WebFetch"
+  - "Screenshot before/after actions for debugging"
+  - "Wait for elements before interacting"
+  - "Close browser when done"

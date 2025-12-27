@@ -6,6 +6,9 @@ SCRIPT_VERSION="1.0.0"
 
 set -euo pipefail
 
+# Source local env (API keys, etc.) if present
+[[ -f "${HOME}/.claude/.env.local" ]] && source "${HOME}/.claude/.env.local"
+
 QUEUE_FILE="${HOME}/.claude/data/task-queue.json"
 LOCK_FILE="${HOME}/.claude/data/task-queue.lock"
 MAX_PARALLEL="${MAX_PARALLEL:-3}"
@@ -19,7 +22,7 @@ uuid() { cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen || echo "task-$
 
 jq_update() {
     local tmp=$(mktemp)
-    jq "$1" "$QUEUE_FILE" > "$tmp" && mv "$tmp" "$QUEUE_FILE"
+    jq "$@" "$QUEUE_FILE" > "$tmp" && mv "$tmp" "$QUEUE_FILE"
 }
 
 usage() {
@@ -29,8 +32,8 @@ Task Queue - Manage Claude Code agent tasks
 Usage: task-queue.sh <command> [args]
 
 Commands:
-  add <prompt> [--agent TYPE] [--after ID] [--priority N] [--worktree]
-      Add a task to the queue
+  add <prompt> [--agent TYPE] [--after ID] [--priority N] [--worktree] [--mode cli|api] [--model haiku|sonnet|opus]
+      Add a task to the queue (--mode api uses direct Anthropic API)
 
   list [--status STATUS] [--json]
       List tasks (STATUS: pending|running|done|failed|all)
@@ -53,13 +56,14 @@ Commands:
 Examples:
   task-queue.sh add "Review auth module" --agent code-reviewer
   task-queue.sh add "Generate tests" --after abc123 --agent test-generator
+  task-queue.sh add "Summarize this code" --mode api --model haiku
   task-queue.sh run --max 3
   task-queue.sh list --status running
 EOF
 }
 
 cmd_add() {
-    local prompt="" agent="Explore" after="" priority=5 worktree=false
+    local prompt="" agent="Explore" after="" priority=5 worktree=false mode="cli" model="sonnet"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -67,12 +71,16 @@ cmd_add() {
             --after) after="$2"; shift 2 ;;
             --priority) priority="$2"; shift 2 ;;
             --worktree) worktree=true; shift ;;
+            --mode) mode="$2"; shift 2 ;;
+            --model) model="$2"; shift 2 ;;
             --*) echo "Unknown option: $1" >&2; exit 1 ;;
             *) prompt="$1"; shift ;;
         esac
     done
 
     [[ -z "$prompt" ]] && { echo "Error: prompt required" >&2; exit 1; }
+    [[ "$mode" != "cli" && "$mode" != "api" ]] && { echo "Error: mode must be 'cli' or 'api'" >&2; exit 1; }
+    [[ "$mode" == "api" && ! "$model" =~ ^(haiku|sonnet|opus)$ ]] && { echo "Error: model must be haiku, sonnet, or opus" >&2; exit 1; }
 
     local id=$(uuid)
     local task=$(jq -n \
@@ -82,6 +90,8 @@ cmd_add() {
         --arg after "$after" \
         --argjson priority "$priority" \
         --argjson worktree "$worktree" \
+        --arg mode "$mode" \
+        --arg model "$model" \
         --argjson created "$(now)" \
         '{
             id: $id,
@@ -90,6 +100,8 @@ cmd_add() {
             after: (if $after == "" then null else $after end),
             priority: $priority,
             worktree: $worktree,
+            mode: $mode,
+            model: $model,
             status: "pending",
             created: $created,
             started: null,
@@ -204,24 +216,60 @@ cmd_run() {
         local prompt=$(echo "$task" | jq -r '.prompt')
         local agent=$(echo "$task" | jq -r '.agent')
         local worktree=$(echo "$task" | jq -r '.worktree')
+        local mode=$(echo "$task" | jq -r '.mode // "cli"')
+        local model=$(echo "$task" | jq -r '.model // "sonnet"')
 
         # Mark as running
         jq_update --arg id "$id" --argjson started "$(now)" '
             .tasks |= map(if .id == $id then .status = "running" | .started = $started else . end)'
 
-        echo "[$(date +%H:%M:%S)] Running: $id ($agent)"
+        local output success
 
-        # Build command as array (safe - no shell injection possible)
-        local cmd_args=("claude" "--print")
-        [[ "$worktree" == "true" ]] && cmd_args+=("--worktree")
-        cmd_args+=("-p" "Using agent: $agent. Task: $prompt")
+        if [[ "$mode" == "api" ]]; then
+            # Check if API is available and enabled
+            if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
+                echo "[$(date +%H:%M:%S)] Skipping (API key not set): $id"
+                jq_update --arg id "$id" --arg error "ANTHROPIC_API_KEY not set" '
+                    .tasks |= map(if .id == $id then .status = "failed" | .error = $error else . end)'
+                return
+            fi
+            if [[ "${QUEUE_ENABLE_API:-0}" != "1" ]]; then
+                echo "[$(date +%H:%M:%S)] Skipping (API not enabled): $id"
+                jq_update --arg id "$id" --arg error "API mode not enabled (set QUEUE_ENABLE_API=1)" '
+                    .tasks |= map(if .id == $id then .status = "failed" | .error = $error else . end)'
+                return
+            fi
 
-        # Execute using array expansion (no eval needed)
-        local output
-        if output=$("${cmd_args[@]}" 2>&1); then
+            echo "[$(date +%H:%M:%S)] Running (API/$model): $id"
+            local api_executor="${HOME}/.claude/scripts/queue/api-executor.py"
+            local venv_python="${HOME}/.claude/data/venv/bin/python3"
+            local result
+            if result=$("$venv_python" "$api_executor" "$prompt" --model "$model" 2>&1); then
+                success=true
+                output=$(echo "$result" | jq -r '.output // ""')
+                local tokens=$(echo "$result" | jq -r '"\(.tokens.input)/\(.tokens.output)"')
+                echo "[$(date +%H:%M:%S)] Done: $id (tokens: $tokens)"
+            else
+                success=false
+                output=$(echo "$result" | jq -r '.error // "Unknown error"' 2>/dev/null || echo "$result")
+            fi
+        else
+            echo "[$(date +%H:%M:%S)] Running (CLI): $id ($agent)"
+            local cmd_args=("claude" "--print")
+            [[ "$worktree" == "true" ]] && cmd_args+=("--worktree")
+            cmd_args+=("-p" "Using agent: $agent. Task: $prompt")
+
+            if output=$("${cmd_args[@]}" 2>&1); then
+                success=true
+                echo "[$(date +%H:%M:%S)] Done: $id"
+            else
+                success=false
+            fi
+        fi
+
+        if [[ "$success" == "true" ]]; then
             jq_update --arg id "$id" --argjson completed "$(now)" '
                 .tasks |= map(if .id == $id then .status = "done" | .completed = $completed else . end)'
-            echo "[$(date +%H:%M:%S)] Done: $id"
         else
             local retries=$(echo "$task" | jq -r '.retries')
             local max_retries=$(echo "$task" | jq -r '.max_retries')

@@ -17,19 +17,6 @@ Map of Claude Code customizations at `~/.claude/`.
 │   └── architecture.md    # This file
 ├── docs/                  # Reference docs (not auto-loaded)
 │   └── config-patterns.md # Anti-patterns, best practices
-├── resources/             # External reference materials
-│   ├── anthropic/         # Official Anthropic resources
-│   │   └── skill-creator/ # Definitive skill creation guide
-│   └── agentskills/       # AgentSkills SDK and spec
-│       ├── skills-ref/    # Reference SDK source
-│       └── docs/          # Specification docs
-├── learnings/             # Accumulated insights (not auto-loaded)
-│   ├── skills.md          # Skill design patterns
-│   ├── hooks.md           # Hook implementation lessons
-│   ├── agents.md          # Subagent patterns
-│   ├── debugging.md       # Debugging insights
-│   ├── workflows.md       # Process improvements
-│   └── anti-patterns.md   # What NOT to do
 ├── hooks/                 # Event-triggered Python scripts
 ├── agents/                # Task tool subagent definitions
 ├── commands/              # Slash command definitions
@@ -45,7 +32,38 @@ Map of Claude Code customizations at `~/.claude/`.
 │   ├── automation/        # claude-safe, batch-process, etc.
 │   ├── lib/               # common, cache, lock, notify
 │   └── tests/             # smoke-test, validation scripts
-└── data/                  # Runtime data (caches, logs)
+├── data/                  # Runtime data (all generated files)
+│   ├── backlog/           # Task backlog
+│   ├── backups/           # Config backups
+│   ├── cache/             # Caches (exploration, research, context, etc.)
+│   ├── debug/             # Debug files (auto-cleaned)
+│   ├── downloads/         # Downloaded files
+│   ├── exports/           # Conversation exports
+│   ├── file-history/      # File change tracking
+│   ├── learnings/         # Accumulated insights
+│   ├── logs/              # Log files
+│   ├── plans/             # Plan mode files
+│   ├── projects/          # Project-specific data
+│   ├── resources/         # External reference materials
+│   ├── session-env/       # Session environment
+│   ├── shell-snapshots/   # Shell state snapshots
+│   ├── statsig/           # Feature flag cache
+│   ├── todos/             # Todo storage
+│   ├── tracking/          # Usage tracking
+│   ├── venv/              # Python virtual environment
+│   └── *.json             # State files, caches
+└── (symlinks)             # Compatibility symlinks → data/
+    ├── debug → data/debug
+    ├── file-history → data/file-history
+    ├── learnings → data/learnings
+    ├── logs → data/logs
+    ├── plans → data/plans
+    ├── projects → data/projects
+    ├── resources → data/resources
+    ├── session-env → data/session-env
+    ├── shell-snapshots → data/shell-snapshots
+    ├── statsig → data/statsig
+    └── todos → data/todos
 ```
 
 ## Path-Specific Rules
@@ -136,8 +154,7 @@ Use async for hooks that:
 | `start_viewer` | SessionStart | Start claude-code-viewer |
 | `smart_permissions` | PermissionRequest | Context-aware auto-approval with learning |
 | `state_saver` | PreCompact | Backup transcript, preserve CLAUDE.md/todos, learning reminder |
-| `subagent_start` | SubagentStart | Track subagent spawn time |
-| `subagent_complete` | SubagentStop | Handle subagent completion, calculate duration |
+| `subagent_lifecycle` | PreToolUse/PostToolUse (Task) | Track subagent spawn/completion via dispatchers |
 
 **Note**: Some hooks handle multiple events (`suggestion_engine`, `file_monitor`, `state_saver`, `unified_cache`, `smart_permissions`) and appear in multiple tables above.
 
@@ -180,7 +197,7 @@ User Input
 
 ## Python Environment
 
-Hooks use an isolated venv at `~/.claude/venv/`. The PATH is set in `settings.json` so `#!/usr/bin/env python3` automatically uses it.
+Hooks use an isolated venv at `~/.claude/data/venv/`. The PATH is set in `settings.json` so `#!/usr/bin/env python3` automatically uses it.
 
 | Task | Command |
 |------|---------|
@@ -208,8 +225,8 @@ Run `~/.claude/scripts/diagnostics/health-check.sh --cleanup` to:
 | `rules/*.md` | Auto-loaded instructions |
 | `data/task-queue.json` | Pending background tasks |
 | `data/token-usage.json` | Daily token tracking |
-| `data/exploration-cache.json` | Cached codebase exploration (unified_cache) |
-| `data/research-cache.json` | Cached web research (unified_cache) |
+| `data/cache/exploration-cache.json` | Cached codebase exploration (unified_cache) |
+| `data/cache/research-cache.json` | Cached web research (unified_cache) |
 | `data/usage-stats.json` | Agent/skill/command usage tracking |
 | `data/reflexion-log.json` | Subagent outcomes and lessons learned |
 | `data/permission-patterns.json` | Learned permission patterns |

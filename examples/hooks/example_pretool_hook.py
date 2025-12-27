@@ -1,4 +1,4 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """Example PreToolUse hook - Block writes to protected paths.
 
 This is a minimal example showing the structure of a PreToolUse hook.

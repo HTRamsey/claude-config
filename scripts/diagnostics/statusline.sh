@@ -2,7 +2,7 @@
 set -euo pipefail
 # Claude Code Status Line (v2.0.70+)
 #
-# Format: v2.0.76 | path | branch[•N] | Model | terse | 45% ⚡99% ⚠️ | +50/-10 | 79K↓ 68K↑ 5K/m | 10m API:15%
+# Format: v2.0.76 | path | branch[•N] | Model | terse | 45% ⚡99% ⚠️ | +50/-10 | 79K↓ 68K↑ 5K/m | 10m API:15% | ⏱4h32m
 #
 # Sections (logically grouped):
 #   1. Version: v2.0.76 - Claude Code version
@@ -14,9 +14,11 @@ set -euo pipefail
 #   7. Output:  +50/-10 - lines added/removed
 #   8. Tokens:  79K↓ 68K↑ 5K/m - input↓, output↑, rate per minute
 #   9. Time:    10m API:15% - duration + API latency %
+#  10. Block:   ⏱4h32m - 5-hour billing block time remaining
 #
 # Git indicators: +staged ~unstaged-modified -unstaged-deleted •untracked
 # Colors: green <40%, yellow 40-79%, red ≥80%
+# Block colors: green >2h, yellow 30m-2h, red <30m
 
 # Read JSON input from stdin
 input=$(cat)
@@ -107,6 +109,47 @@ if [[ "$duration_ms" -gt 0 ]]; then
     fi
 fi
 
+# 5-hour block timer
+block_state_file="/tmp/claude_block_start"
+now=$(date +%s)
+block_duration=$((5 * 60 * 60))  # 5 hours in seconds
+
+# Read or initialize block start time
+if [[ -f "$block_state_file" ]]; then
+    block_start=$(cat "$block_state_file")
+    elapsed=$((now - block_start))
+    if [[ "$elapsed" -ge "$block_duration" ]]; then
+        # Block expired, start new one
+        block_start=$now
+        echo "$block_start" > "$block_state_file"
+    fi
+else
+    block_start=$now
+    echo "$block_start" > "$block_state_file"
+fi
+
+# Calculate time remaining
+elapsed=$((now - block_start))
+remaining=$((block_duration - elapsed))
+remaining_hrs=$((remaining / 3600))
+remaining_mins=$(((remaining % 3600) / 60))
+
+# Format block timer display
+if [[ "$remaining_hrs" -gt 0 ]]; then
+    block_display="⏱${remaining_hrs}h${remaining_mins}m"
+else
+    block_display="⏱${remaining_mins}m"
+fi
+
+# Block timer color (green >2h, yellow 30m-2h, red <30m)
+if [[ "$remaining" -gt 7200 ]]; then
+    block_color="\033[2;32m"  # dim green
+elif [[ "$remaining" -gt 1800 ]]; then
+    block_color="\033[2;33m"  # dim yellow
+else
+    block_color="\033[2;31m"  # dim red
+fi
+
 # Cache % of context (how much context is from cache)
 cache_display=""
 if [[ "$context_used" -gt 0 && "$cache_read" -gt 1000 ]]; then
@@ -134,7 +177,7 @@ fi
 
 # Git information (single git call)
 git_info=""
-git_output=$(git -C "$cwd" --no-optional-locks status -sb 2>/dev/null)
+git_output=$(git -C "$cwd" --no-optional-locks status -sb 2>/dev/null) || true
 if [[ -n "$git_output" ]]; then
     # First line: ## branch...tracking info
     branch=$(echo "$git_output" | head -1 | sed 's/^## //; s/\.\.\..*$//')
@@ -244,8 +287,11 @@ style_section=""
 output_section=""
 [[ -n "$lines_display" ]] && output_section=" | \033[2;32m${lines_display}\033[0m"
 
+# 10. Block timer section
+block_section=" | ${block_color}${block_display}\033[0m"
+
 # Build the complete status line
 # Format: v2.0.76 | path | branch[status] | Model | terse | 45% ⚡99% ⚠️ | +N/-M | 79K↓ 68K↑ | 10m API:15%
 version_prefix=""
 [[ -n "$version" ]] && version_prefix="\033[2;90mv${version}\033[0m | "
-echo -e "${version_prefix}${path_section} | ${git_section}${model_section}${style_section} | ${context_section}${output_section}${token_section}${time_section}"
+echo -e "${version_prefix}${path_section} | ${git_section}${model_section}${style_section} | ${context_section}${output_section}${token_section}${time_section}${block_section}"

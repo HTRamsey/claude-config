@@ -7,7 +7,7 @@ set -euo pipefail
 source "$(dirname "$0")/../lib/common.sh"
 
 HOOKS_DIR="${HOME}/.claude/hooks"
-VENV_PYTHON="${HOME}/.claude/venv/bin/python3"
+VENV_PYTHON="${HOME}/.claude/data/venv/bin/python3"
 
 # Test results
 PASSED=0

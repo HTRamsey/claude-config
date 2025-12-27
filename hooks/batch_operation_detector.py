@@ -1,4 +1,4 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """
 Batch Operation Detector Hook - Detects repetitive edit patterns.
 Runs on PostToolUse for Edit|Write to suggest batching similar operations.

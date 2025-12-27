@@ -7,7 +7,7 @@
 set -euo pipefail
 
 CLAUDE_DIR="$HOME/.claude"
-BACKUP_DIR="$CLAUDE_DIR/backups"
+BACKUP_DIR="$CLAUDE_DIR/data/backups"
 DATE=$(date +%Y-%m-%d_%H%M%S)
 COMPONENT="${1:-all}"
 

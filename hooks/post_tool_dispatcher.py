@@ -1,4 +1,4 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """
 PostToolUse Dispatcher - Consolidates all PostToolUse hooks into single process.
 
@@ -66,6 +66,9 @@ def get_handler(name: str):
             elif name == "state_saver":
                 from state_saver import handle_post_tool_use
                 _handlers[name] = handle_post_tool_use
+            elif name == "subagent_lifecycle":
+                from subagent_lifecycle import handle_complete
+                _handlers[name] = handle_complete
             else:
                 _handlers[name] = None
         except ImportError as e:
@@ -78,7 +81,8 @@ def get_handler(name: str):
 ALL_HANDLERS = [
     "notify_complete", "file_monitor", "batch_operation_detector",
     "tool_success_tracker", "unified_cache", "suggestion_engine",
-    "output_metrics", "build_analyzer", "smart_permissions", "state_saver"
+    "output_metrics", "build_analyzer", "smart_permissions", "state_saver",
+    "subagent_lifecycle"
 ]
 
 def validate_handlers():
@@ -105,7 +109,7 @@ TOOL_HANDLERS = {
     "Read": ["file_monitor", "tool_success_tracker", "output_metrics", "smart_permissions"],
     "Edit": ["batch_operation_detector", "tool_success_tracker", "output_metrics", "smart_permissions"],
     "Write": ["batch_operation_detector", "tool_success_tracker", "output_metrics", "smart_permissions"],
-    "Task": ["unified_cache", "suggestion_engine", "output_metrics"],
+    "Task": ["subagent_lifecycle", "unified_cache", "suggestion_engine", "output_metrics"],
     "WebFetch": ["unified_cache"],
 }
 

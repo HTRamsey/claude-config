@@ -22,7 +22,9 @@ from hook_utils import backup_transcript, log_event, graceful_main, safe_load_js
 # Configuration
 TOKEN_WARNING_THRESHOLD = 40000  # Warn at 40K tokens
 TOKEN_CRITICAL_THRESHOLD = 80000  # Strong warning at 80K
-CACHE_FILE = Path.home() / ".claude/data/context-cache.json"
+CACHE_DIR = Path.home() / ".claude/data/cache"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+CACHE_FILE = CACHE_DIR / "context-cache.json"
 
 # Claude uses cl100k_base encoding (same as GPT-4)
 _encoder = None

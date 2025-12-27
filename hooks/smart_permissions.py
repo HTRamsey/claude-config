@@ -1,4 +1,4 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """Smart Permission Auto-Approvals with Learning.
 
 PermissionRequest hook that auto-approves safe operations based on:

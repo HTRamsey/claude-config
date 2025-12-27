@@ -1,4 +1,4 @@
-#!/home/jonglaser/.claude/venv/bin/python3
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """Remind about uncommitted changes at session end.
 
 Stop hook that checks for uncommitted git changes and reminds the user.
