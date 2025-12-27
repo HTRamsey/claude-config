@@ -315,7 +315,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Read|Write|Edit|Bash|Grep|Glob|Task|Skill|WebFetch",
+        "matcher": "Read|Write|Edit|Bash|Grep|Glob|Task|Skill|WebFetch|LSP",
         "hooks": [
           {
             "type": "command",
@@ -327,7 +327,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash|Grep|Glob|Read|Edit|Write|Task|WebFetch",
+        "matcher": "Bash|Grep|Glob|Read|Edit|Write|Task|WebFetch|LSP",
         "hooks": [
           {
             "type": "command",

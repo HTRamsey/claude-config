@@ -558,6 +558,58 @@ def get_cached_result(cache_name: str, key: str) -> str | None:
     return None
 
 
+# ============================================================================
+# Hook Configuration
+# ============================================================================
+
+def is_hook_disabled(name: str) -> bool:
+    """
+    Check if hook is disabled globally or for current session.
+
+    Priority:
+        1. Session override (takes precedence)
+        2. Global disabled list
+
+    Args:
+        name: Hook name to check
+
+    Returns:
+        True if hook should be skipped
+    """
+    # Check session override first (takes precedence)
+    session_hooks_dir = DATA_DIR / "session-hooks"
+    session_id = os.environ.get("CLAUDE_SESSION_ID", "")
+    if not session_id:
+        session_file = DATA_DIR / ".current-session"
+        if session_file.exists():
+            try:
+                session_id = session_file.read_text().strip()
+            except (IOError, OSError):
+                pass
+
+    if session_id:
+        session_override_file = session_hooks_dir / f"{session_id}.json"
+        if session_override_file.exists():
+            try:
+                session_data = safe_load_json(session_override_file)
+                override = session_data.get("overrides", {}).get(name)
+                if override is False:
+                    return True  # Disabled for session
+                elif override is True:
+                    return False  # Enabled for session (overrides global)
+            except Exception:
+                pass
+
+    # Check global disabled list
+    config_file = DATA_DIR / "hook-config.json"
+    if config_file.exists():
+        config = safe_load_json(config_file)
+        if name in config.get("disabled", []):
+            return True
+
+    return False
+
+
 # Convenience aliases for backwards compatibility
 def get_state_manager():
     """Backwards compatibility - returns module itself as the 'manager'."""

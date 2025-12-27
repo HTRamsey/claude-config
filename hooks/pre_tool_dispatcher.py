@@ -18,7 +18,7 @@ from pathlib import Path
 # Import shared utilities
 sys.path.insert(0, str(Path(__file__).parent))
 try:
-    from hook_utils import graceful_main, log_event
+    from hook_utils import graceful_main, log_event, is_hook_disabled
     HAS_UTILS = True
 except ImportError:
     HAS_UTILS = False
@@ -28,6 +28,8 @@ except ImportError:
         return decorator
     def log_event(*args, **kwargs):
         pass
+    def is_hook_disabled(name):
+        return False
 
 # Import handler modules (lazy import for speed)
 _handlers = {}
@@ -125,46 +127,8 @@ TOOL_HANDLERS = {
     "Task": ["subagent_lifecycle", "usage_tracker", "unified_cache"],
     "Skill": ["usage_tracker"],
     "WebFetch": ["unified_cache"],
+    "LSP": ["suggestion_engine"],  # Code intelligence operations
 }
-
-
-def is_hook_disabled(name: str) -> bool:
-    """Check if hook is disabled globally or for current session."""
-    import os
-    data_dir = Path.home() / ".claude" / "data"
-
-    # Check session override first (takes precedence)
-    session_hooks_dir = data_dir / "session-hooks"
-    session_id = os.environ.get("CLAUDE_SESSION_ID", "")
-    if not session_id:
-        session_file = data_dir / ".current-session"
-        if session_file.exists():
-            session_id = session_file.read_text().strip()
-
-    if session_id:
-        session_override_file = session_hooks_dir / f"{session_id}.json"
-        if session_override_file.exists():
-            try:
-                session_data = json.loads(session_override_file.read_text())
-                override = session_data.get("overrides", {}).get(name)
-                if override is False:
-                    return True  # Disabled for session
-                elif override is True:
-                    return False  # Enabled for session (overrides global)
-            except (json.JSONDecodeError, IOError):
-                pass
-
-    # Check global disabled list
-    config_file = data_dir / "hook-config.json"
-    if config_file.exists():
-        try:
-            config = json.loads(config_file.read_text())
-            if name in config.get("disabled", []):
-                return True
-        except (json.JSONDecodeError, IOError):
-            pass
-
-    return False
 
 
 def run_handler(name: str, ctx: dict) -> dict | None:
