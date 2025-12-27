@@ -77,7 +77,7 @@ EOF
     echo ""
     echo "Providers:"
     echo "  gemini    Uses -y (yolo mode) for auto-approval"
-    echo "  codex     Uses 'exec' subcommand for non-interactive"
+    echo "  codex     Uses 'exec --full-auto' for non-interactive with file edits"
     echo "  claude    Uses --dangerously-skip-permissions -p"
     echo ""
     echo "Environment:"
@@ -215,9 +215,9 @@ delegate_noninteractive() {
             ;;
         codex)
             if [[ -n "$stdin_file" ]]; then
-                cat "$stdin_file" | timeout "$TIMEOUT" codex exec "$prompt" 2>&1
+                cat "$stdin_file" | timeout "$TIMEOUT" codex exec --full-auto "$prompt" 2>&1
             else
-                timeout "$TIMEOUT" codex exec "$prompt" 2>&1
+                timeout "$TIMEOUT" codex exec --full-auto "$prompt" 2>&1
             fi
             ;;
         *)
