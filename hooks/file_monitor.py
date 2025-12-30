@@ -6,62 +6,89 @@ Consolidates:
 - file_access_tracker: Track reads, detect stale context, duplicate searches
 - preread_summarize: Suggest summarization for large files
 
-Both share file path operations and session state.
+Uses centralized session state via hook_utils.
 """
-import json
 import hashlib
+import json
 import os
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from hook_utils import graceful_main, log_event, get_session_id, safe_load_json, safe_save_json
+from hook_utils import (
+    graceful_main,
+    log_event,
+    get_session_id,
+    read_session_state,
+    write_session_state,
+)
+from config import Thresholds, Timeouts, FilePatterns
 
 # ============================================================================
-# Configuration
+# Configuration (imported from config.py)
 # ============================================================================
 
-STATE_DIR = Path.home() / ".claude/data/file-tracker"
-MAX_AGE_SECONDS = 86400  # Clear state after 24 hours
-STALE_MESSAGE_THRESHOLD = 15  # Warn if file was read >15 messages ago
-STALE_TIME_THRESHOLD = 300  # Or >5 minutes ago
-SIMILARITY_THRESHOLD = 0.8  # For fuzzy pattern matching
+STATE_NAMESPACE = "file_monitor"
+MAX_AGE_SECONDS = Timeouts.STATE_MAX_AGE  # Clear state after 24 hours
+STALE_MESSAGE_THRESHOLD = Thresholds.STALE_MESSAGE_THRESHOLD  # Warn if file was read >15 messages ago
+STALE_TIME_THRESHOLD = Timeouts.STALE_TIME_THRESHOLD  # Or >5 minutes ago
+SIMILARITY_THRESHOLD = Thresholds.SIMILARITY_THRESHOLD  # For fuzzy pattern matching
 
-# Large file thresholds
-LARGE_FILE_LINES = 200
-LARGE_FILE_BYTES = 15000
-ALWAYS_SUMMARIZE_EXTENSIONS = {'.log', '.csv', '.json', '.xml', '.yaml', '.yml'}
-SKIP_EXTENSIONS = {'.md', '.txt', '.ini', '.cfg', '.env'}
+# State pruning limits (from centralized config)
+MAX_READS = Thresholds.MAX_READS_TRACKED
+MAX_SEARCHES = Thresholds.MAX_SEARCHES_TRACKED
+
+# Large file thresholds (from centralized config)
+LARGE_FILE_LINES = Thresholds.LARGE_FILE_LINES
+LARGE_FILE_BYTES = Thresholds.LARGE_FILE_BYTES
+ALWAYS_SUMMARIZE_EXTENSIONS = FilePatterns.ALWAYS_SUMMARIZE
+SKIP_EXTENSIONS = FilePatterns.SKIP_SUMMARIZE
 
 # ============================================================================
 # Shared State Management
 # ============================================================================
 
-def get_state_file(session_id: str) -> Path:
-    """Get session-specific state file path."""
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    return STATE_DIR / f"tracker_{session_id}.json"
-
 def load_state(session_id: str) -> dict:
-    """Load unified state for session."""
-    state_file = get_state_file(session_id)
+    """Load unified state for session using centralized session state."""
     default = {
         "reads": {},
         "searches": {},
         "message_count": 0,
         "last_update": time.time()
     }
-    state = safe_load_json(state_file, default)
+    state = read_session_state(STATE_NAMESPACE, session_id, default)
     if time.time() - state.get("last_update", 0) > MAX_AGE_SECONDS:
         return default
     return state
 
+
+def prune_state(state: dict) -> dict:
+    """Prune old entries from state to prevent unbounded growth."""
+    # Prune reads - keep most recent MAX_READS entries
+    reads = state.get("reads", {})
+    if len(reads) > MAX_READS:
+        sorted_reads = sorted(reads.items(),
+                             key=lambda x: x[1].get("time", 0),
+                             reverse=True)
+        state["reads"] = dict(sorted_reads[:MAX_READS])
+
+    # Prune searches - keep most recent MAX_SEARCHES entries
+    searches = state.get("searches", {})
+    if len(searches) > MAX_SEARCHES:
+        sorted_searches = sorted(searches.items(),
+                                key=lambda x: x[1].get("time", 0),
+                                reverse=True)
+        state["searches"] = dict(sorted_searches[:MAX_SEARCHES])
+
+    return state
+
+
 def save_state(session_id: str, state: dict):
-    """Save unified state."""
+    """Save unified state with automatic pruning."""
+    state = prune_state(state)
     state["last_update"] = time.time()
-    state_file = get_state_file(session_id)
-    safe_save_json(state_file, state)
+    write_session_state(STATE_NAMESPACE, state, session_id)
 
 # ============================================================================
 # Shared Utilities
@@ -357,7 +384,8 @@ def main():
     except json.JSONDecodeError:
         sys.exit(0)
 
-    if "tool_result" in ctx:
+    # Claude Code uses "tool_response" for PostToolUse hooks
+    if "tool_response" in ctx or "tool_result" in ctx:
         result = track_file_post(ctx)
         if result:
             msg = result.get("hookSpecificOutput", {}).get("message", "")

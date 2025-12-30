@@ -8,46 +8,24 @@ obvious next steps that Claude should continue with automatically.
 Rate limited to prevent infinite loops.
 """
 import json
-import os
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+from config import Timeouts, Thresholds, AutoContinue, STATE_FILES
 from hook_utils import graceful_main, log_event
 
 # Configuration
-STATE_FILE = Path.home() / ".claude/data/auto-continue-state.json"
-MAX_CONTINUATIONS = 3  # Max per window
-WINDOW_SECONDS = 300   # 5 minutes
-MODEL = os.environ.get("DOUBLE_SHOT_LATTE_MODEL", "claude-haiku-3-5-20241022")
+STATE_FILE = STATE_FILES["auto_continue"]
+MAX_CONTINUATIONS = Thresholds.MAX_CONTINUATIONS
+WINDOW_SECONDS = Timeouts.CONTINUE_WINDOW
 
 # Patterns that suggest work is incomplete
-INCOMPLETE_PATTERNS = [
-    "todo list",
-    "next step",
-    "pending",
-    "in_progress",
-    "will now",
-    "let me continue",
-    "moving on to",
-    "batch",
-    "item",
-]
+INCOMPLETE_PATTERNS = AutoContinue.INCOMPLETE_PATTERNS
 
 # Patterns that suggest work is complete or needs input
-COMPLETE_PATTERNS = [
-    "done",
-    "complete",
-    "finished",
-    "waiting for",
-    "need your input",
-    "what would you like",
-    "shall i",
-    "would you like",
-    "please confirm",
-    "let me know",
-]
+COMPLETE_PATTERNS = AutoContinue.COMPLETE_PATTERNS
 
 
 def load_state() -> dict:

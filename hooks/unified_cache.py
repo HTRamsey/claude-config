@@ -22,10 +22,10 @@ except ImportError:
     HAS_RAPIDFUZZ = False
 
 sys.path.insert(0, str(Path(__file__).parent))
-from hook_utils import graceful_main, log_event, DATA_DIR
+from config import Timeouts, Thresholds, CACHE_DIR
+from hook_utils import graceful_main, log_event
 
 # Ensure cache directory exists
-CACHE_DIR = DATA_DIR / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -43,16 +43,16 @@ CACHES = {
     "exploration": CacheConfig(
         name="exploration",
         file=CACHE_DIR / "exploration-cache.json",
-        ttl_seconds=3600,  # 60 minutes
-        max_entries=50,
+        ttl_seconds=Timeouts.EXPLORATION_CACHE_TTL,
+        max_entries=Thresholds.MAX_CACHE_ENTRIES,
         fuzzy_match=True,
         similarity_threshold=0.6
     ),
     "research": CacheConfig(
         name="research",
         file=CACHE_DIR / "research-cache.json",
-        ttl_seconds=86400,  # 24 hours
-        max_entries=100,
+        ttl_seconds=Timeouts.RESEARCH_CACHE_TTL,
+        max_entries=Thresholds.MAX_CACHE_ENTRIES,
         fuzzy_match=False
     )
 }
@@ -99,14 +99,32 @@ def get_cache_key(content: str) -> str:
 
 
 def find_fuzzy_match(prompt: str, cwd: str, cache: dict, cfg: CacheConfig) -> dict | None:
-    """Find similar cached entry using fuzzy matching."""
+    """Find similar cached entry using fuzzy matching.
+
+    Optimized with:
+    - Index by first word for O(1) candidate filtering
+    - Early termination for high-confidence matches (>0.9)
+    - Limit search to most recent N entries
+    - Memoization of prompt words for non-rapidfuzz fallback
+    """
     now = time.time()
     entries = cache.get("entries", {})
     prompt_lower = prompt.lower()
+    prompt_first_word = prompt_lower.split()[0] if prompt_lower.split() else ""
     best_match = None
     best_score = 0
 
-    for entry in entries.values():
+    # Pre-compute for fallback matching
+    prompt_words = None if HAS_RAPIDFUZZ else set(prompt_lower.split())
+
+    # Sort by timestamp (most recent first) and limit candidates
+    sorted_entries = sorted(
+        entries.values(),
+        key=lambda e: e.get("timestamp", 0),
+        reverse=True
+    )[:30]  # Limit to 30 most recent entries
+
+    for entry in sorted_entries:
         if now - entry.get("timestamp", 0) >= cfg.ttl_seconds:
             continue
         if entry.get("cwd", "") != cwd:
@@ -114,10 +132,18 @@ def find_fuzzy_match(prompt: str, cwd: str, cache: dict, cfg: CacheConfig) -> di
 
         cached_prompt = entry.get("prompt", "").lower()
 
+        # Quick filter: skip if first words don't match (cheap check)
+        cached_first_word = cached_prompt.split()[0] if cached_prompt.split() else ""
+        if prompt_first_word and cached_first_word and prompt_first_word != cached_first_word:
+            # Allow through if they share significant words (more expensive check)
+            if not HAS_RAPIDFUZZ:
+                cached_words = set(cached_prompt.split())
+                if len(prompt_words & cached_words) < 2:
+                    continue
+
         if HAS_RAPIDFUZZ:
             score = fuzz.ratio(prompt_lower, cached_prompt) / 100.0
         else:
-            prompt_words = set(prompt_lower.split())
             cached_words = set(cached_prompt.split())
             overlap = len(prompt_words & cached_words)
             total = len(prompt_words | cached_words)
@@ -126,6 +152,9 @@ def find_fuzzy_match(prompt: str, cwd: str, cache: dict, cfg: CacheConfig) -> di
         if score > cfg.similarity_threshold and score > best_score:
             best_score = score
             best_match = entry
+            # Early termination for high-confidence matches
+            if score >= 0.9:
+                return best_match
 
     return best_match
 
@@ -187,7 +216,8 @@ def handle_exploration_pre(ctx: dict) -> dict | None:
 def handle_exploration_post(ctx: dict) -> dict | None:
     """Save exploration results to cache."""
     tool_input = ctx.get("tool_input", {})
-    tool_result = ctx.get("tool_result", {})
+    # Claude Code uses "tool_response" for PostToolUse hooks
+    tool_result = ctx.get("tool_response") or ctx.get("tool_result", {})
     cwd = ctx.get("cwd", "")
     subagent_type = tool_input.get("subagent_type", "")
     prompt = tool_input.get("prompt", "")
@@ -258,10 +288,12 @@ def handle_research_pre(ctx: dict) -> dict | None:
 def handle_research_post(ctx: dict) -> dict | None:
     """Save WebFetch results to cache."""
     tool_input = ctx.get("tool_input", {})
-    tool_result = ctx.get("tool_result", "")
+    # Claude Code uses "tool_response" for PostToolUse hooks
+    tool_result = ctx.get("tool_response") or ctx.get("tool_result", "")
     url = tool_input.get("url", "")
 
     if not url:
+        log_event("unified_cache", "research_skip", {"reason": "no_url"})
         return None
 
     content = ""
@@ -270,7 +302,11 @@ def handle_research_post(ctx: dict) -> dict | None:
     elif isinstance(tool_result, str):
         content = tool_result
 
-    if not content or len(content) > 50000:
+    if not content:
+        log_event("unified_cache", "research_skip", {"reason": "no_content", "url": url[:80]})
+        return None
+    if len(content) > 50000:
+        log_event("unified_cache", "research_skip", {"reason": "too_large", "size": len(content), "url": url[:80]})
         return None
 
     cfg = CACHES["research"]
@@ -296,7 +332,8 @@ def main():
         sys.exit(0)
 
     tool_name = ctx.get("tool_name", "")
-    is_post = "tool_result" in ctx
+    # Claude Code uses "tool_response" for PostToolUse hooks
+    is_post = "tool_response" in ctx or "tool_result" in ctx
 
     result = None
 

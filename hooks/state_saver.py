@@ -9,13 +9,13 @@ Runs on:
 - PreCompact: Backup transcript before compaction
 """
 import json
-import re
 import sys
 import time
 from pathlib import Path
 from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent))
+from config import Timeouts, Thresholds, StateSaver, DATA_DIR, STATE_FILES
 from hook_utils import (
     graceful_main,
     log_event,
@@ -25,23 +25,10 @@ from hook_utils import (
 )
 
 # Configuration
-STATE_FILE = Path.home() / ".claude/data/checkpoint-state.json"
-ERROR_BACKUP_DIR = Path.home() / ".claude/data/error-backups"
-CHECKPOINT_INTERVAL = 300  # Min seconds between checkpoints
-MAX_ERROR_BACKUPS = 20  # Keep last N error backups
-
-RISKY_PATTERNS = [
-    r'(config|settings|env)\.(json|yaml|yml|toml)$',
-    r'package\.json$',
-    r'Cargo\.toml$',
-    r'pyproject\.toml$',
-    r'docker-compose',
-    r'Dockerfile',
-    r'\.github/workflows/',
-    r'migrations/',
-    r'schema\.',
-]
-RISKY_KEYWORDS = ['delete', 'remove', 'drop', 'truncate', 'reset', 'destroy']
+STATE_FILE = STATE_FILES["checkpoint"]
+ERROR_BACKUP_DIR = DATA_DIR / "error-backups"
+CHECKPOINT_INTERVAL = Timeouts.CHECKPOINT_INTERVAL
+MAX_ERROR_BACKUPS = Thresholds.MAX_ERROR_BACKUPS
 
 
 def load_state() -> dict:
@@ -69,12 +56,14 @@ def is_risky_operation(file_path: str, content: str = "") -> tuple[bool, str]:
     """Determine if operation is risky and needs checkpoint."""
     path_str = str(file_path).lower()
 
-    for pattern in RISKY_PATTERNS:
-        if re.search(pattern, path_str, re.IGNORECASE):
-            return True, f"config/critical file: {pattern}"
+    # Get compiled risky patterns from config
+    risky_patterns = StateSaver.get_patterns()
+    for pattern in risky_patterns:
+        if pattern.search(path_str):
+            return True, f"risky pattern detected"
 
     content_lower = content.lower()
-    for keyword in RISKY_KEYWORDS:
+    for keyword in StateSaver.RISKY_KEYWORDS:
         if keyword in content_lower:
             return True, f"contains '{keyword}' operation"
 
@@ -199,7 +188,8 @@ def handle_post_tool_use(ctx: dict) -> dict | None:
         return None
 
     tool_input = ctx.get("tool_input", {})
-    tool_result = ctx.get("tool_result", {})
+    # Claude Code uses "tool_response" for PostToolUse hooks
+    tool_result = ctx.get("tool_response") or ctx.get("tool_result", {})
 
     command = tool_input.get("command", "")
 

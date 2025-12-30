@@ -19,56 +19,7 @@ from hook_sdk import (
     expand_path,
     log_event,
 )
-
-
-# Patterns that block both read and write
-PROTECTED_PATTERNS = [
-    # Environment and secrets
-    ".env",
-    ".env.*",
-    "*/.env",
-    "*/.env.*",
-    "*/secrets/*",
-    "*secrets*",
-    "*credentials*",
-
-    # Private keys and certificates
-    "*.pem",
-    "*.key",
-    "*.p12",
-    "*.pfx",
-    "*id_rsa*",
-
-    # SSH/Cloud config
-    "*/.ssh/*",
-    "*/.aws/*",
-    "*/.config/gcloud/*",
-
-    # Auth tokens and configs
-    "*token*",
-    "*/.npmrc",
-    "*/.pypirc",
-    "*/.netrc",
-    "*/.docker/config.json",
-    "*/.kube/config",
-]
-
-# Patterns only blocked for write/edit (not read)
-WRITE_ONLY_PATTERNS = [
-    ".git/*",
-    "*/.git/*",
-    "package-lock.json",
-    "*/package-lock.json",
-    "yarn.lock",
-    "*/yarn.lock",
-    "pnpm-lock.yaml",
-    "*/pnpm-lock.yaml",
-]
-
-# Explicit allowlist (overrides PROTECTED_PATTERNS)
-ALLOWED_PATHS = [
-    "~/.claude/.env.local",  # Local env config for queue-runner etc.
-]
+from config import ProtectedFiles
 
 
 @dispatch_handler("file_protection", event="PreToolUse")
@@ -91,13 +42,13 @@ def check_file_protection(ctx: PreToolUseContext) -> dict | None:
     is_write = ctx.is_write or ctx.is_edit
 
     # Check allowlist first (overrides protection)
-    for allowed in ALLOWED_PATHS:
+    for allowed in ProtectedFiles.ALLOWED_PATHS:
         allowed_expanded = expand_path(allowed)
         if file_path == allowed_expanded:
             return None
 
     # Check protected patterns (block read and write)
-    matched = Patterns.matches_glob(file_path, PROTECTED_PATTERNS)
+    matched = Patterns.matches_glob(file_path, ProtectedFiles.PROTECTED_PATTERNS)
     if matched:
         action = "write to" if is_write else "read"
         log_event("file_protection", "blocked", {
@@ -111,7 +62,7 @@ def check_file_protection(ctx: PreToolUseContext) -> dict | None:
 
     # Check write-only patterns (only block write/edit, allow read)
     if is_write:
-        matched = Patterns.matches_glob(file_path, WRITE_ONLY_PATTERNS)
+        matched = Patterns.matches_glob(file_path, ProtectedFiles.WRITE_ONLY_PATTERNS)
         if matched:
             log_event("file_protection", "blocked", {
                 "file": file_path,

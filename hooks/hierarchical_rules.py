@@ -25,14 +25,15 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from hook_utils import graceful_main, log_event, read_state, write_state
+from config import Timeouts
 
-# Cache for directory scans
-CACHE_KEY = "hierarchical-rules-cache"
-CACHE_TTL = 300  # 5 minutes
+# In-memory cache for directory hierarchy lookups (5-second TTL)
+_hierarchy_cache = {}
 
 
 def parse_frontmatter(content: str) -> tuple[dict, str]:
@@ -80,7 +81,7 @@ def matches_path_pattern(file_path: str, pattern: str) -> bool:
     """
     # Handle brace expansion {a,b}
     if "{" in pattern and "}" in pattern:
-        match = re.match(r"(.*)\\{([^}]+)\\}(.*)", pattern)
+        match = re.match(r"(.*)\{([^}]+)\}(.*)", pattern)
         if match:
             prefix, options, suffix = match.groups()
             for option in options.split(","):
@@ -105,7 +106,20 @@ def find_claude_files(start_dir: str, stop_at: str = None) -> list[tuple[str, st
 
     Returns:
         List of (directory, content) tuples, closest first
+
+    Uses an in-memory cache with 5-second TTL to avoid repeated filesystem walks.
     """
+    global _hierarchy_cache
+
+    cache_key = f"{start_dir}:{stop_at or '/'}"
+    now = time.time()
+
+    # Check cache
+    if cache_key in _hierarchy_cache:
+        cached_time, cached_results = _hierarchy_cache[cache_key]
+        if now - cached_time < Timeouts.HIERARCHY_CACHE_TTL:
+            return cached_results
+
     results = []
     current = Path(start_dir).resolve()
     stop = Path(stop_at).resolve() if stop_at else Path("/")
@@ -132,6 +146,24 @@ def find_claude_files(start_dir: str, stop_at: str = None) -> list[tuple[str, st
         if current == current.parent:
             break
         current = current.parent
+
+    # Update cache
+    _hierarchy_cache[cache_key] = (now, results)
+
+    # Prune cache: remove entries older than 30s AND keep at most 20
+    if len(_hierarchy_cache) > 10:
+        to_delete = []
+        for k, (ts, _) in _hierarchy_cache.items():
+            if now - ts > 30:  # Timestamp-based expiry
+                to_delete.append(k)
+        for k in to_delete:
+            del _hierarchy_cache[k]
+        # If still too many, remove oldest
+        if len(_hierarchy_cache) > 20:
+            oldest_keys = sorted(_hierarchy_cache.keys(),
+                               key=lambda k: _hierarchy_cache[k][0])[:10]
+            for k in oldest_keys:
+                del _hierarchy_cache[k]
 
     return results
 

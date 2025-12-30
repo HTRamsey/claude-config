@@ -30,9 +30,9 @@ if [[ $duration_secs -lt 30 ]]; then
     exit 0
 fi
 
-# Extract command and exit code
+# Extract command and exit code (Claude Code uses "tool_response", fallback to "tool_result")
 command=$(echo "$ctx" | jq -r '.tool_input.command // ""' | head -c 50)
-exit_code=$(echo "$ctx" | jq -r '.tool_result.exit_code // 0')
+exit_code=$(echo "$ctx" | jq -r '.tool_response.exit_code // .tool_result.exit_code // 0')
 
 # Determine notification type
 if [[ "$exit_code" == "0" ]]; then
@@ -68,11 +68,13 @@ speak_text() {
             if [[ -z "$ELEVENLABS_API_KEY" ]]; then
                 provider="local"
             else
-                # ElevenLabs API
+                # ElevenLabs API - use jq for safe JSON escaping
+                local json_payload
+                json_payload=$(jq -n --arg t "$text" '{text: $t, model_id: "eleven_monolingual_v1"}')
                 curl -s -X POST "https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM" \
                     -H "xi-api-key: $ELEVENLABS_API_KEY" \
                     -H "Content-Type: application/json" \
-                    -d "{\"text\": \"$text\", \"model_id\": \"eleven_monolingual_v1\"}" \
+                    -d "$json_payload" \
                     --output /tmp/claude_tts.mp3 2>/dev/null
                 if [[ -f /tmp/claude_tts.mp3 ]]; then
                     if command -v mpv &>/dev/null; then
@@ -89,11 +91,13 @@ speak_text() {
             if [[ -z "$OPENAI_API_KEY" ]]; then
                 provider="local"
             else
-                # OpenAI TTS API
+                # OpenAI TTS API - use jq for safe JSON escaping
+                local json_payload
+                json_payload=$(jq -n --arg t "$text" '{model: "tts-1", input: $t, voice: "alloy"}')
                 curl -s -X POST "https://api.openai.com/v1/audio/speech" \
                     -H "Authorization: Bearer $OPENAI_API_KEY" \
                     -H "Content-Type: application/json" \
-                    -d "{\"model\": \"tts-1\", \"input\": \"$text\", \"voice\": \"alloy\"}" \
+                    -d "$json_payload" \
                     --output /tmp/claude_tts.mp3 2>/dev/null
                 if [[ -f /tmp/claude_tts.mp3 ]]; then
                     if command -v mpv &>/dev/null; then
@@ -114,11 +118,13 @@ speak_text() {
     elif command -v espeak-ng &>/dev/null; then
         espeak-ng -v en -s 150 "$text" 2>/dev/null
     elif [[ -f "$HOME/.claude/data/venv/bin/python3" ]]; then
-        "$HOME/.claude/data/venv/bin/python3" -c "
+        # Use environment variable to safely pass text to Python
+        SPEAK_TEXT="$text" "$HOME/.claude/data/venv/bin/python3" -c "
+import os
 try:
     import pyttsx3
     engine = pyttsx3.init()
-    engine.say('$text')
+    engine.say(os.environ.get('SPEAK_TEXT', ''))
     engine.runAndWait()
 except:
     pass

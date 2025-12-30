@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-set -euo pipefail
 # lock.sh - File-based locking/semaphore for scripts
 #
 # Usage:
@@ -14,7 +13,7 @@ set -euo pipefail
 #   --release <name>  Force release a lock
 #   --list            List all current locks
 
-set -uo pipefail
+set -uo pipefail  # Note: -e omitted to handle lock failures gracefully
 
 # Load common utilities
 source "$(dirname "$0")/common.sh"
@@ -68,19 +67,27 @@ lock_file() {
     echo "$LOCK_DIR/${1}.lock"
 }
 
-# Create lock with metadata
-create_lock() {
-    local name="$1"
-    local file=$(lock_file "$name")
-
-    cat > "$file" << EOF
+# Write lock metadata to a file
+# Used by both create_lock and acquire_lock
+_write_lock_metadata() {
+    local file="$1"
+    shift
+    cat > "$file" << LOCKEOF
 pid=$$
 user=$(whoami)
 host=$(hostname)
 command=$*
 created=$(date +%s)
 created_human=$(date)
-EOF
+LOCKEOF
+}
+
+# Create lock with metadata
+create_lock() {
+    local name="$1"
+    shift
+    local file=$(lock_file "$name")
+    _write_lock_metadata "$file" "$@"
 }
 
 # Check if lock exists and is valid
@@ -123,15 +130,8 @@ acquire_lock() {
         # Try to create lock atomically - write full content to tmp, then move
         local tmp_file="$file.tmp.$$"
         if ( set -o noclobber; echo "$$" > "$tmp_file" ) 2>/dev/null; then
-            # Write lock metadata to tmp file
-            cat > "$tmp_file" << LOCKEOF
-pid=$$
-user=$(whoami)
-host=$(hostname)
-command=$*
-created=$(date +%s)
-created_human=$(date)
-LOCKEOF
+            # Write lock metadata to tmp file (reuse shared function)
+            _write_lock_metadata "$tmp_file" "$@"
             # Atomic move
             if mv "$tmp_file" "$file" 2>/dev/null; then
                 return 0

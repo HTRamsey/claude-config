@@ -16,24 +16,25 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from hook_utils import graceful_main, log_event, safe_load_json, safe_save_json
+from config import Thresholds, FilePatterns
 
 # ============================================================================
-# Shared Configuration
+# Shared Configuration (imported from config.py)
 # ============================================================================
 
-CHARS_PER_TOKEN = 4
+CHARS_PER_TOKEN = Thresholds.CHARS_PER_TOKEN
 DATA_DIR = Path.home() / ".claude/data"
 TRACKER_DIR = Path(os.environ.get("CLAUDE_TRACKER_DIR", Path.home() / ".claude/data/tracking"))
 
-# Output size thresholds
-OUTPUT_WARNING_THRESHOLD = 10000  # Warn if output > 10K chars
-OUTPUT_CRITICAL_THRESHOLD = 50000  # Strong warning if > 50K chars
+# Output size thresholds (from centralized config)
+OUTPUT_WARNING_THRESHOLD = Thresholds.OUTPUT_WARNING
+OUTPUT_CRITICAL_THRESHOLD = Thresholds.OUTPUT_CRITICAL
 
-# Token tracking thresholds
-DAILY_WARNING_THRESHOLD = 500000  # Warn at 500K tokens/day
+# Token tracking thresholds (from centralized config)
+DAILY_WARNING_THRESHOLD = Thresholds.DAILY_TOKEN_WARNING
 
-# Tools with expected large output (less aggressive warnings)
-LARGE_OUTPUT_TOOLS = ["Task", "WebFetch", "WebSearch"]
+# Tools with expected large output (from centralized config)
+LARGE_OUTPUT_TOOLS = FilePatterns.LARGE_OUTPUT_TOOLS
 
 # ============================================================================
 # Shared Utilities
@@ -63,34 +64,61 @@ def get_content_size(content) -> int:
 # Token Tracker
 # ============================================================================
 
+# In-memory cache for daily stats (reduces file I/O)
+_daily_stats_cache = {"data": None, "date": None}
+_STATS_FLUSH_INTERVAL = 10  # Flush to disk every N tool calls
+
+
 def get_daily_log_path() -> Path:
     """Get path to today's token log."""
     today = datetime.now().strftime("%Y-%m-%d")
     return TRACKER_DIR / f"tokens-{today}.json"
 
+
 def load_daily_stats() -> dict:
-    """Load today's statistics."""
+    """Load today's statistics with caching."""
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # Return cached if same day
+    if _daily_stats_cache["date"] == today and _daily_stats_cache["data"] is not None:
+        return _daily_stats_cache["data"]
+
+    # New day or first load
     log_path = get_daily_log_path()
     default = {
-        "date": datetime.now().strftime("%Y-%m-%d"),
+        "date": today,
         "total_tokens": 0,
         "tool_calls": 0,
         "by_tool": {},
         "sessions": 0,
     }
-    return safe_load_json(log_path, default)
+    data = safe_load_json(log_path, default)
 
-def save_daily_stats(stats: dict):
-    """Save today's statistics."""
-    TRACKER_DIR.mkdir(parents=True, exist_ok=True)
-    log_path = get_daily_log_path()
-    safe_save_json(log_path, stats)
+    _daily_stats_cache["data"] = data
+    _daily_stats_cache["date"] = today
+    return data
+
+
+def save_daily_stats(stats: dict, force: bool = False):
+    """Save today's statistics with batching.
+
+    Only flushes to disk every _STATS_FLUSH_INTERVAL calls or when forced,
+    reducing disk I/O by ~90%.
+    """
+    _daily_stats_cache["data"] = stats
+
+    # Only flush every N calls or when forced
+    if force or stats.get("tool_calls", 0) % _STATS_FLUSH_INTERVAL == 0:
+        TRACKER_DIR.mkdir(parents=True, exist_ok=True)
+        log_path = get_daily_log_path()
+        safe_save_json(log_path, stats)
 
 def track_tokens(ctx: dict) -> dict | None:
     """Track token usage and warn if approaching daily limit."""
     tool_name = ctx.get("tool_name", "unknown")
     tool_input = ctx.get("tool_input", {})
-    tool_result = ctx.get("tool_result", {})
+    # Claude Code uses "tool_response" for PostToolUse hooks
+    tool_result = ctx.get("tool_response") or ctx.get("tool_result", {})
 
     input_tokens = estimate_tokens(tool_input)
     output_tokens = estimate_tokens(tool_result)
@@ -125,7 +153,8 @@ def track_tokens(ctx: dict) -> dict | None:
 def check_output_size(ctx: dict) -> dict | None:
     """Check output size and warn if too large."""
     tool_name = ctx.get("tool_name", "")
-    tool_result = ctx.get("tool_result", {})
+    # Claude Code uses "tool_response" for PostToolUse hooks
+    tool_result = ctx.get("tool_response") or ctx.get("tool_result", {})
 
     output_size = get_content_size(tool_result)
     if output_size == 0:

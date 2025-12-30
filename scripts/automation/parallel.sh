@@ -29,12 +29,6 @@ FAIL_FAST=false
 TIMEOUT=""
 COMMANDS=()
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -143,7 +137,7 @@ run_command() {
 # Start a job
 start_job() {
     local cmd="$1"
-    local output_file=$(mktemp)
+    local output_file=$(mktemp "/tmp/parallel-output-$$.XXXXXX")
 
     run_command "$cmd" > "$output_file" 2>&1 &
     local pid=$!
@@ -164,14 +158,19 @@ wait_for_job() {
     if [[ ${BASH_VERSINFO[0]} -ge 5 && ${BASH_VERSINFO[1]} -ge 1 ]]; then
         wait -n -p pid 2>/dev/null || wait_status=$?
     else
-        # Fallback for older bash: wait for any job, then find which one finished
-        wait -n 2>/dev/null || wait_status=$?
-        # Find a PID that's no longer in jobs list but was in PIDS
-        for p in "${!PIDS[@]}"; do
-            if ! kill -0 "$p" 2>/dev/null; then
-                pid="$p"
-                break
-            fi
+        # Fallback for older bash: poll for finished processes
+        # More reliable than wait -n which may not be available
+        while true; do
+            for p in "${!PIDS[@]}"; do
+                if ! kill -0 "$p" 2>/dev/null; then
+                    pid="$p"
+                    # Get exit status via wait
+                    wait "$p" 2>/dev/null || wait_status=$?
+                    break 2
+                fi
+            done
+            # Small sleep to avoid busy-wait
+            sleep 0.1
         done
     fi
 

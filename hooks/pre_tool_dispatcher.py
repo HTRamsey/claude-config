@@ -2,281 +2,183 @@
 """
 PreToolUse Dispatcher - Consolidates all PreToolUse hooks into single process.
 
-STATUS: READY - All hooks export handler functions.
-
 Benefits:
 - Consolidates 9 handlers into single process, avoiding 8 Python interpreter startups
 - Shared compiled patterns and state
 - Typical handler latency: 20-70ms per handler
 
-Dispatches to handler functions based on tool name matching.
+Environment variables:
+- HOOK_PROFILE=1: Enable per-handler timing output to stderr
+- HANDLER_TIMEOUT=<ms>: Handler timeout in milliseconds (default: 1000)
 """
-import json
 import sys
 from pathlib import Path
+from typing import Any
 
-# Import shared utilities
 sys.path.insert(0, str(Path(__file__).parent))
-try:
-    from hook_utils import graceful_main, log_event, is_hook_disabled
-    HAS_UTILS = True
-except ImportError:
-    HAS_UTILS = False
-    def graceful_main(name):
-        def decorator(func):
-            return func
-        return decorator
-    def log_event(*args, **kwargs):
-        pass
-    def is_hook_disabled(name):
-        return False
-
-# Import handler modules (lazy import for speed)
-_handlers = {}
-
-def get_handler(name: str):
-    """Lazy-load handler module."""
-    if name not in _handlers:
-        try:
-            if name == "file_protection":
-                from file_protection import check_file_protection
-                _handlers[name] = check_file_protection
-            elif name == "tdd_guard":
-                from tdd_guard import check_tdd
-                _handlers[name] = check_tdd
-            elif name == "dangerous_command_blocker":
-                from dangerous_command_blocker import check_dangerous_command
-                _handlers[name] = check_dangerous_command
-            elif name == "credential_scanner":
-                from credential_scanner import scan_for_sensitive, get_staged_diff, is_allowlisted
-                _handlers[name] = (scan_for_sensitive, get_staged_diff, is_allowlisted)
-            elif name == "suggestion_engine":
-                from suggestion_engine import suggest_skill, suggest_subagent, suggest_optimization
-                _handlers[name] = (suggest_skill, suggest_subagent, suggest_optimization)
-            elif name == "file_monitor":
-                from file_monitor import track_file_pre
-                _handlers[name] = track_file_pre
-            elif name == "state_saver":
-                from state_saver import handle_pre_tool_use as save_checkpoint
-                _handlers[name] = save_checkpoint
-            elif name == "unified_cache":
-                from unified_cache import handle_exploration_pre, handle_research_pre
-                _handlers[name] = (handle_exploration_pre, handle_research_pre)
-            elif name == "usage_tracker":
-                from usage_tracker import track_usage
-                _handlers[name] = track_usage
-            elif name == "hierarchical_rules":
-                from hierarchical_rules import check_hierarchical_rules
-                _handlers[name] = check_hierarchical_rules
-            elif name == "subagent_lifecycle":
-                from subagent_lifecycle import handle_start
-                _handlers[name] = handle_start
-            else:
-                _handlers[name] = None
-        except ImportError as e:
-            log_event("pre_tool_dispatcher", "import_error", {"handler": name, "error": str(e)})
-            _handlers[name] = None
-    return _handlers.get(name)
+from dispatcher_base import BaseDispatcher, graceful_main, log_event
 
 
-# All handler names for validation
-ALL_HANDLERS = [
-    "file_protection", "tdd_guard", "dangerous_command_blocker",
-    "credential_scanner", "suggestion_engine", "file_monitor",
-    "state_saver", "unified_cache", "usage_tracker", "hierarchical_rules",
-    "subagent_lifecycle"
-]
+class PreToolDispatcher(BaseDispatcher):
+    """Dispatcher for PreToolUse hooks."""
 
-def validate_handlers():
-    """Validate all handlers can be imported and are callable."""
-    failed = []
-    for name in ALL_HANDLERS:
-        handler = get_handler(name)
-        if handler is None and name in _handlers:
-            failed.append(name)
-        elif handler is not None and not callable(handler):
-            # Handle tuple of handlers (like credential_scanner, suggestion_engine)
-            if isinstance(handler, tuple):
-                if not all(callable(h) for h in handler):
-                    failed.append(f"{name} (not all callable)")
-            else:
-                failed.append(f"{name} (not callable)")
-    if failed:
-        log_event("pre_tool_dispatcher", "startup_validation", {
-            "failed_handlers": failed,
-            "count": len(failed)
-        })
-        # Also print to stderr for visibility
-        print(f"[pre_tool_dispatcher] Warning: {len(failed)} handlers failed to import: {', '.join(failed)}", file=sys.stderr)
+    DISPATCHER_NAME = "pre_tool_dispatcher"
+    HOOK_EVENT_NAME = "PreToolUse"
 
-    # Check optional dependencies
-    try:
-        import tiktoken
-    except ImportError:
-        print("[pre_tool_dispatcher] Warning: tiktoken not available, token counting disabled", file=sys.stderr)
+    ALL_HANDLERS = [
+        "file_protection", "tdd_guard", "dangerous_command_blocker",
+        "credential_scanner", "suggestion_engine", "file_monitor",
+        "state_saver", "unified_cache", "usage_tracker", "hierarchical_rules",
+        "subagent_lifecycle"
+    ]
 
+    # Tool-to-handler mapping (order matters - deny hooks first)
+    TOOL_HANDLERS = {
+        "Read": ["file_protection", "file_monitor", "hierarchical_rules", "suggestion_engine"],
+        "Write": ["file_protection", "tdd_guard", "hierarchical_rules", "suggestion_engine", "state_saver"],
+        "Edit": ["file_protection", "tdd_guard", "hierarchical_rules", "suggestion_engine", "file_monitor", "state_saver"],
+        "Bash": ["dangerous_command_blocker", "credential_scanner", "suggestion_engine"],
+        "Grep": ["suggestion_engine"],
+        "Glob": ["suggestion_engine"],
+        "Task": ["subagent_lifecycle", "usage_tracker", "unified_cache"],
+        "Skill": ["usage_tracker"],
+        "WebFetch": ["unified_cache"],
+        "LSP": ["suggestion_engine"],
+    }
 
-# Tool-to-handler mapping (order matters - deny hooks first)
-TOOL_HANDLERS = {
-    "Read": ["file_protection", "file_monitor", "hierarchical_rules", "suggestion_engine"],
-    "Write": ["file_protection", "tdd_guard", "hierarchical_rules", "suggestion_engine", "state_saver"],
-    "Edit": ["file_protection", "tdd_guard", "hierarchical_rules", "suggestion_engine", "file_monitor", "state_saver"],
-    "Bash": ["dangerous_command_blocker", "credential_scanner", "suggestion_engine"],
-    "Grep": ["suggestion_engine"],
-    "Glob": ["suggestion_engine"],
-    "Task": ["subagent_lifecycle", "usage_tracker", "unified_cache"],
-    "Skill": ["usage_tracker"],
-    "WebFetch": ["unified_cache"],
-    "LSP": ["suggestion_engine"],  # Code intelligence operations
-}
-
-
-def run_handler(name: str, ctx: dict) -> dict | None:
-    """Run a single handler and return its result."""
-    import time
-
-    # Check if hook is disabled
-    if is_hook_disabled(name):
-        log_event("pre_tool_dispatcher", "handler_skipped", {"handler": name, "reason": "disabled"})
+    def _import_handler(self, name: str) -> Any:
+        """Import handler by name."""
+        if name == "file_protection":
+            from file_protection import check_file_protection
+            return check_file_protection
+        elif name == "tdd_guard":
+            from tdd_guard import check_tdd
+            return check_tdd
+        elif name == "dangerous_command_blocker":
+            from dangerous_command_blocker import check_dangerous_command
+            return check_dangerous_command
+        elif name == "credential_scanner":
+            from credential_scanner import scan_for_sensitive, get_staged_diff, is_allowlisted
+            return (scan_for_sensitive, get_staged_diff, is_allowlisted)
+        elif name == "suggestion_engine":
+            from suggestion_engine import suggest_skill, suggest_subagent, suggest_optimization
+            return (suggest_skill, suggest_subagent, suggest_optimization)
+        elif name == "file_monitor":
+            from file_monitor import track_file_pre
+            return track_file_pre
+        elif name == "state_saver":
+            from state_saver import handle_pre_tool_use as save_checkpoint
+            return save_checkpoint
+        elif name == "unified_cache":
+            from unified_cache import handle_exploration_pre, handle_research_pre
+            return (handle_exploration_pre, handle_research_pre)
+        elif name == "usage_tracker":
+            from usage_tracker import track_usage
+            return track_usage
+        elif name == "hierarchical_rules":
+            from hierarchical_rules import check_hierarchical_rules
+            return check_hierarchical_rules
+        elif name == "subagent_lifecycle":
+            from subagent_lifecycle import handle_start
+            return handle_start
         return None
 
-    handler = get_handler(name)
-    if handler is None:
-        return None
-
-    start_time = time.perf_counter()
-    result = None
-    error = None
-
-    try:
-        # Special handling for credential_scanner (needs full context check)
+    def _execute_handler(self, name: str, handler: Any, ctx: dict) -> dict | None:
+        """Execute handler with special-case handling."""
+        # Special handling for credential_scanner
         if name == "credential_scanner":
             scan_func, get_diff, is_allowed = handler
             command = ctx.get("tool_input", {}).get("command", "")
             if not command.strip().startswith("git commit"):
-                pass  # result stays None
-            else:
-                diff_content, staged_files = get_diff()
-                if diff_content:
-                    non_allowlisted = [f for f in staged_files if not is_allowed(f)]
-                    if non_allowlisted:
-                        findings = scan_func(diff_content)
-                        if findings:
-                            unique_types = list(set(n for n, _ in findings))[:5]
-                            result = {
-                                "hookSpecificOutput": {
-                                    "hookEventName": "PreToolUse",
-                                    "permissionDecision": "deny",
-                                    "permissionDecisionReason": (
-                                        f"Potential credentials detected: {', '.join(unique_types)}. "
-                                        f"Files: {', '.join(non_allowlisted[:3])}. "
-                                        "Review with: git diff --cached"
-                                    )
-                                }
+                return None
+            diff_content, staged_files = get_diff()
+            if diff_content:
+                non_allowlisted = [f for f in staged_files if not is_allowed(f)]
+                if non_allowlisted:
+                    findings = scan_func(diff_content)
+                    if findings:
+                        unique_types = list(set(n for n, _ in findings))[:5]
+                        return {
+                            "hookSpecificOutput": {
+                                "hookEventName": "PreToolUse",
+                                "permissionDecision": "deny",
+                                "permissionDecisionReason": (
+                                    f"Potential credentials detected: {', '.join(unique_types)}. "
+                                    f"Files: {', '.join(non_allowlisted[:3])}. "
+                                    "Review with: git diff --cached"
+                                )
                             }
+                        }
+            return None
 
-        # Special handling for suggestion_engine (consolidates skill, subagent, optimization)
-        elif name == "suggestion_engine":
+        # Special handling for suggestion_engine
+        if name == "suggestion_engine":
             suggest_skill, suggest_subagent, suggest_optimization = handler
             tool_name = ctx.get("tool_name", "")
             if tool_name in ("Write", "Edit"):
-                result = suggest_skill(ctx)
+                return suggest_skill(ctx)
             elif tool_name in ("Grep", "Glob", "Read"):
-                result = suggest_subagent(ctx) or suggest_optimization(ctx)
+                return suggest_subagent(ctx) or suggest_optimization(ctx)
             elif tool_name == "Bash":
-                result = suggest_optimization(ctx)
+                return suggest_optimization(ctx)
+            return None
 
-        # Special handling for unified_cache (has separate handlers for Task vs WebFetch)
-        elif name == "unified_cache":
+        # Special handling for unified_cache
+        if name == "unified_cache":
             exploration_handler, research_handler = handler
             tool_name = ctx.get("tool_name", "")
             if tool_name == "Task":
-                result = exploration_handler(ctx)
+                return exploration_handler(ctx)
             elif tool_name == "WebFetch":
-                result = research_handler(ctx)
+                return research_handler(ctx)
+            return None
 
-        # For other handlers, call directly with context
-        else:
-            result = handler(ctx)
+        return handler(ctx)
 
-    except Exception as e:
-        error = str(e)
-        log_event("pre_tool_dispatcher", "handler_error", {"handler": name, "error": error})
+    def _should_terminate(self, result: dict, handler_name: str, tool_name: str) -> bool:
+        """PreToolUse terminates on deny decisions."""
+        hook_output = result.get("hookSpecificOutput", {})
+        if hook_output.get("permissionDecision") == "deny":
+            log_event(self.DISPATCHER_NAME, "denied", {
+                "tool": tool_name,
+                "handler": handler_name
+            })
+            return True
+        return False
 
-    # Log timing
-    elapsed_ms = (time.perf_counter() - start_time) * 1000
-    log_event("pre_tool_dispatcher", "handler_timing", {
-        "handler": name,
-        "elapsed_ms": round(elapsed_ms, 2),
-        "tool": ctx.get("tool_name", ""),
-        "success": error is None
-    })
+    def _extract_message(self, hook_output: dict) -> str:
+        """Extract permissionDecisionReason for PreToolUse."""
+        return hook_output.get("permissionDecisionReason", "")
 
-    return result
-
-
-def dispatch(ctx: dict) -> dict | None:
-    """Dispatch to appropriate handlers based on tool name."""
-    tool_name = ctx.get("tool_name", "")
-
-    handlers = TOOL_HANDLERS.get(tool_name, [])
-    if not handlers:
+    def _build_result(self, messages: list[str]) -> dict | None:
+        """Build PreToolUse result with allow decision."""
+        if messages:
+            return {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "allow",
+                    "permissionDecisionReason": " | ".join(messages[:3])
+                }
+            }
         return None
 
-    messages = []
-
-    for handler_name in handlers:
-        result = run_handler(handler_name, ctx)
-
-        if result and isinstance(result, dict):
-            hook_output = result.get("hookSpecificOutput", {})
-            decision = hook_output.get("permissionDecision", "")
-
-            # Deny stops immediately
-            if decision == "deny":
-                log_event("pre_tool_dispatcher", "denied", {
-                    "tool": tool_name,
-                    "handler": handler_name
-                })
-                return result
-
-            # Collect messages from allow/info responses
-            reason = hook_output.get("permissionDecisionReason", "")
-            if reason:
-                messages.append(reason)
-
-    # If we have messages but no deny, return combined info
-    if messages:
-        return {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "allow",
-                "permissionDecisionReason": " | ".join(messages[:3])
-            }
-        }
-
-    return None
+    def validate_handlers(self) -> None:
+        """Extended validation including tiktoken check."""
+        super().validate_handlers()
+        try:
+            import tiktoken
+        except ImportError:
+            print("[pre_tool_dispatcher] Warning: tiktoken not available, token counting disabled",
+                  file=sys.stderr)
 
 
-_validated = False
+# Singleton dispatcher instance
+_dispatcher = PreToolDispatcher()
+
 
 @graceful_main("pre_tool_dispatcher")
 def main():
-    global _validated
-    if not _validated:
-        validate_handlers()
-        _validated = True
-
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
-    result = dispatch(ctx)
-    if result:
-        print(json.dumps(result))
-
-    sys.exit(0)
+    _dispatcher.run()
 
 
 if __name__ == "__main__":

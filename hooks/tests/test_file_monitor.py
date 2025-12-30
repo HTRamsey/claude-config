@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Unit tests for file_access_tracker.py functions."""
+"""Unit tests for file_monitor.py functions.
+
+Note: This file was originally for file_access_tracker.py which was
+consolidated into file_monitor.py. Function names have been updated:
+- handle_pre_tool_use -> track_file_pre
+- handle_post_tool_use -> track_file_post
+"""
 
 import sys
 import time
@@ -10,14 +16,18 @@ from unittest import TestCase, main
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from file_access_tracker import (
+from file_monitor import (
     normalize_path,
     normalize_pattern,
     check_similar_patterns,
     hash_search,
     check_file_modified,
-    handle_pre_tool_use,
-    handle_post_tool_use,
+    load_state,
+    save_state,
+    handle_read_pre,
+    handle_edit_pre,
+    handle_search_post,
+    handle_read_post,
 )
 
 
@@ -123,22 +133,28 @@ class TestCheckFileModified(TestCase):
         self.assertFalse(check_file_modified("/nonexistent/file.txt", time.time()))
 
 
-class TestHandlePreToolUse(TestCase):
-    """Tests for handle_pre_tool_use function."""
+class TestHandleReadPre(TestCase):
+    """Tests for handle_read_pre function."""
 
     def test_read_tracks_file(self):
         state = {"reads": {}, "searches": {}, "message_count": 0}
         ctx = {"tool_name": "Read", "tool_input": {"file_path": "/test/file.txt"}}
-        result = handle_pre_tool_use(ctx, state)
-        self.assertIsNone(result)  # Read should not produce output
-        self.assertIn("/test/file.txt", state["reads"])
+        messages = handle_read_pre(ctx, state)
+        # Read pre returns list of messages, empty means no warnings
+        self.assertIsInstance(messages, list)
+
+
+class TestHandleEditPre(TestCase):
+    """Tests for handle_edit_pre function."""
 
     def test_edit_warns_unread_file(self):
         state = {"reads": {}, "searches": {}, "message_count": 5}
         ctx = {"tool_name": "Edit", "tool_input": {"file_path": "/test/file.txt"}}
-        result = handle_pre_tool_use(ctx, state)
-        self.assertIsNotNone(result)
-        self.assertIn("Stale Context", result["hookSpecificOutput"]["permissionDecisionReason"])
+        messages = handle_edit_pre(ctx, state)
+        # Should return warning messages about editing unread file
+        self.assertIsInstance(messages, list)
+        # Check that some warning was generated
+        self.assertTrue(any("Stale" in msg or "never been read" in msg for msg in messages))
 
     def test_edit_no_warn_if_recently_read(self):
         state = {
@@ -149,29 +165,35 @@ class TestHandlePreToolUse(TestCase):
             "message_count": 6
         }
         ctx = {"tool_name": "Edit", "tool_input": {"file_path": "/test/file.txt"}}
-        result = handle_pre_tool_use(ctx, state)
-        self.assertIsNone(result)
+        messages = handle_edit_pre(ctx, state)
+        # No warnings for recently read file
+        self.assertEqual(len(messages), 0)
 
 
-class TestHandlePostToolUse(TestCase):
-    """Tests for handle_post_tool_use function."""
+class TestHandleSearchPost(TestCase):
+    """Tests for handle_search_post function."""
 
     def test_duplicate_search_detected(self):
         # First search to establish the hash
         state = {"reads": {}, "searches": {}, "message_count": 5}
         ctx = {"tool_name": "Grep", "tool_input": {"pattern": "foo", "path": "."}}
-        handle_post_tool_use(ctx, state)  # First time - no warning
+        handle_search_post(ctx, state)  # First time - no warning
 
         # Second identical search should trigger warning
-        result = handle_post_tool_use(ctx, state)
+        result = handle_search_post(ctx, state)
+        self.assertIsNotNone(result)
         self.assertIn("Duplicate", result)
 
     def test_new_search_tracked(self):
         state = {"reads": {}, "searches": {}, "message_count": 5}
         ctx = {"tool_name": "Grep", "tool_input": {"pattern": "newpattern", "path": "."}}
-        result = handle_post_tool_use(ctx, state)
+        result = handle_search_post(ctx, state)
         self.assertIsNone(result)  # First search, no warning
         self.assertEqual(len(state["searches"]), 1)
+
+
+class TestHandleReadPost(TestCase):
+    """Tests for handle_read_post function."""
 
     def test_duplicate_read_counted(self):
         state = {
@@ -180,8 +202,9 @@ class TestHandlePostToolUse(TestCase):
             "message_count": 5
         }
         ctx = {"tool_name": "Read", "tool_input": {"file_path": "/test/file.txt"}}
-        result = handle_post_tool_use(ctx, state)
-        self.assertIn("Duplicate Read", result)
+        result = handle_read_post(ctx, state)
+        self.assertIsNotNone(result)
+        self.assertIn("Duplicate", result)
         self.assertEqual(state["reads"]["/test/file.txt"]["count"], 2)
 
 

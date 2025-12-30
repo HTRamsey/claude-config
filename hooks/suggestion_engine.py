@@ -17,13 +17,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from hook_utils import graceful_main, log_event
+from config import DATA_DIR, CACHE_DIR
 
 # ============================================================================
 # Shared State
 # ============================================================================
 
-DATA_DIR = Path.home() / ".claude/data"
-CACHE_DIR = DATA_DIR / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 SUGGESTION_CACHE = CACHE_DIR / "suggestion-engine-cache.json"
 
@@ -45,9 +44,14 @@ def get_state() -> dict:
     return _state
 
 def save_state():
-    """Persist state to disk."""
+    """Persist state to disk with size limits."""
     if _state is not None:
         try:
+            # Prune state to prevent unbounded growth
+            if "skills_suggested" in _state:
+                _state["skills_suggested"] = list(_state["skills_suggested"])[-100:]
+            if "recent_patterns" in _state:
+                _state["recent_patterns"] = _state["recent_patterns"][-10:]
             DATA_DIR.mkdir(parents=True, exist_ok=True)
             with open(SUGGESTION_CACHE, "w") as f:
                 json.dump(_state, f)
@@ -59,10 +63,10 @@ def save_state():
 # ============================================================================
 
 SKILL_SUGGESTIONS = [
-    {"pattern": r"\.claude/hooks/.*\.py$", "skill": "hook-creator", "type": "hook"},
-    {"pattern": r"\.claude/agents/.*\.md$", "skill": "agent-creator", "type": "agent"},
-    {"pattern": r"\.claude/commands/.*\.md$", "skill": "command-creator", "type": "command"},
-    {"pattern": r"\.claude/skills/.*/SKILL\.md$", "skill": "skill-creator", "type": "skill"},
+    {"pattern": re.compile(r"\.claude/hooks/.*\.py$"), "skill": "hook-creator", "type": "hook"},
+    {"pattern": re.compile(r"\.claude/agents/.*\.md$"), "skill": "agent-creator", "type": "agent"},
+    {"pattern": re.compile(r"\.claude/commands/.*\.md$"), "skill": "command-creator", "type": "command"},
+    {"pattern": re.compile(r"\.claude/skills/.*/SKILL\.md$"), "skill": "skill-creator", "type": "skill"},
 ]
 
 def suggest_skill(ctx: dict) -> dict | None:
@@ -79,7 +83,7 @@ def suggest_skill(ctx: dict) -> dict | None:
     suggested = set(state.get("skills_suggested", []))
 
     for rule in SKILL_SUGGESTIONS:
-        if re.search(rule["pattern"], file_path):
+        if rule["pattern"].search(file_path):
             cache_key = f"{rule['skill']}:{Path(file_path).name}"
             if cache_key in suggested:
                 return None
@@ -190,7 +194,8 @@ def _subagent_suggestion(agent_type: str, reason: str) -> dict:
 # Tool Optimization (PreToolUse: Bash, Grep, Read)
 # ============================================================================
 
-BASH_ALTERNATIVES = {
+# Pre-compiled patterns for performance
+_BASH_ALTERNATIVES_RAW = {
     r"^grep\s": ("offload-grep.sh", "97% token savings"),
     r"^rg\s": ("offload-grep.sh", "97% token savings"),
     r"^find\s": ("offload-find.sh", "95% token savings"),
@@ -217,6 +222,10 @@ BASH_ALTERNATIVES = {
     r"^grep.*function\s": ("smart-ast.sh", "uses ast-grep, finds function definitions structurally"),
     r"^grep.*import\s": ("smart-ast.sh", "uses ast-grep, finds imports structurally"),
 }
+BASH_ALTERNATIVES = [
+    (re.compile(p, re.IGNORECASE), alt, reason)
+    for p, (alt, reason) in _BASH_ALTERNATIVES_RAW.items()
+]
 
 def suggest_optimization(ctx: dict) -> dict | None:
     """Suggest better tool alternatives."""
@@ -227,8 +236,8 @@ def suggest_optimization(ctx: dict) -> dict | None:
 
     if tool_name == "Bash":
         command = tool_input.get("command", "").strip()
-        for pattern, (alt, reason) in BASH_ALTERNATIVES.items():
-            if re.search(pattern, command, re.IGNORECASE):
+        for pattern, alt, reason in BASH_ALTERNATIVES:
+            if pattern.search(command):
                 suggestion = f"Consider ~/.claude/scripts/{alt} ({reason})"
                 break
 
@@ -262,7 +271,8 @@ def suggest_optimization(ctx: dict) -> dict | None:
 # Agent Chaining (PostToolUse: Task)
 # ============================================================================
 
-CHAIN_RULES = [
+# Pre-compiled chain rules for performance
+_CHAIN_RULES_RAW = [
     {
         "patterns": [
             r"(?i)(sql injection|xss|csrf|command injection|path traversal)",
@@ -311,6 +321,14 @@ CHAIN_RULES = [
         "reason": "Potential dead code - code review for cleanup recommended",
     },
 ]
+CHAIN_RULES = [
+    {
+        "patterns": [re.compile(p) for p in rule["patterns"]],
+        "agent": rule["agent"],
+        "reason": rule["reason"],
+    }
+    for rule in _CHAIN_RULES_RAW
+]
 
 CHAINABLE_AGENTS = {"code-reviewer", "Explore", "error-explainer", "quick-lookup"}
 
@@ -318,7 +336,8 @@ def suggest_chain(ctx: dict) -> dict | None:
     """Suggest follow-up specialists based on Task output."""
     tool_name = ctx.get("tool_name", "")
     tool_input = ctx.get("tool_input", {})
-    tool_output = ctx.get("tool_result", ctx.get("tool_response", {}))
+    # Claude Code uses "tool_response" for PostToolUse hooks (prefer it first)
+    tool_output = ctx.get("tool_response") or ctx.get("tool_result", {})
 
     if tool_name != "Task":
         return None
@@ -341,7 +360,7 @@ def suggest_chain(ctx: dict) -> dict | None:
 
     for rule in CHAIN_RULES:
         for pattern in rule["patterns"]:
-            if re.search(pattern, output):
+            if pattern.search(output):
                 agent = rule["agent"]
                 if agent not in seen_agents and agent != source_agent:
                     recommendations.append({"agent": agent, "reason": rule["reason"]})

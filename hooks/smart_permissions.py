@@ -11,21 +11,23 @@ for a pattern (tool + directory), it's added to auto-approve list.
 import json
 import re
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
 # Import shared utilities
 sys.path.insert(0, str(Path(__file__).parent))
 from hook_utils import graceful_main, log_event
+from config import DATA_DIR
 
 # Learned patterns file
-PATTERNS_FILE = Path.home() / ".claude" / "data" / "permission-patterns.json"
+PATTERNS_FILE = DATA_DIR / "permission-patterns.json"
 
 # Approval threshold before auto-approving a pattern
 APPROVAL_THRESHOLD = 3
 
-# Auto-approve patterns for Read operations (static)
-READ_AUTO_APPROVE = [
+# Auto-approve patterns for Read operations (static) - pre-compiled
+_READ_PATTERNS_RAW = [
     r'\.md$', r'\.txt$', r'\.rst$',
     r'README', r'LICENSE', r'CHANGELOG', r'CONTRIBUTING',
     r'\.json$', r'\.yaml$', r'\.yml$', r'\.toml$', r'\.ini$', r'\.cfg$',
@@ -34,44 +36,65 @@ READ_AUTO_APPROVE = [
     r'package-lock\.json$', r'yarn\.lock$', r'pnpm-lock\.yaml$',
     r'Cargo\.lock$', r'poetry\.lock$', r'Pipfile\.lock$',
 ]
+READ_AUTO_APPROVE = [re.compile(p, re.IGNORECASE) for p in _READ_PATTERNS_RAW]
 
-# Auto-approve patterns for Edit/Write (static)
-WRITE_AUTO_APPROVE = [
+# Auto-approve patterns for Edit/Write (static) - pre-compiled
+_WRITE_PATTERNS_RAW = [
     r'test[_/]', r'_test\.', r'\.test\.', r'\.spec\.',
     r'__tests__/', r'tests/', r'fixtures/', r'mocks/', r'__mocks__/',
 ]
+WRITE_AUTO_APPROVE = [re.compile(p, re.IGNORECASE) for p in _WRITE_PATTERNS_RAW]
 
-# Never auto-approve (deny patterns take precedence)
-NEVER_AUTO_APPROVE = [
+# Never auto-approve (deny patterns take precedence) - pre-compiled
+_NEVER_PATTERNS_RAW = [
     r'\.env', r'secrets?', r'credentials?', r'password',
     r'\.pem$', r'\.key$', r'id_rsa', r'\.ssh/', r'\.aws/', r'\.git/',
 ]
+NEVER_AUTO_APPROVE = [re.compile(p, re.IGNORECASE) for p in _NEVER_PATTERNS_RAW]
 
 
 def matches_any(path: str, patterns: list) -> bool:
-    """Check if path matches any pattern."""
+    """Check if path matches any pre-compiled pattern."""
     path_lower = path.lower()
-    return any(re.search(p, path_lower, re.IGNORECASE) for p in patterns)
+    return any(p.search(path_lower) for p in patterns)
+
+
+# In-memory cache for learned patterns (5-second TTL)
+_patterns_cache = {"data": None, "time": 0}
+_PATTERNS_CACHE_TTL = 5.0
 
 
 def load_patterns() -> dict:
-    """Load learned patterns from file."""
+    """Load learned patterns from file with caching."""
+    now = time.time()
+
+    if _patterns_cache["data"] is not None and now - _patterns_cache["time"] < _PATTERNS_CACHE_TTL:
+        return _patterns_cache["data"]
+
     if not PATTERNS_FILE.exists():
-        return {"patterns": {}, "updated": None}
-    try:
-        with open(PATTERNS_FILE) as f:
-            return json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return {"patterns": {}, "updated": None}
+        data = {"patterns": {}, "updated": None}
+    else:
+        try:
+            with open(PATTERNS_FILE) as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            data = {"patterns": {}, "updated": None}
+
+    _patterns_cache["data"] = data
+    _patterns_cache["time"] = now
+    return data
 
 
 def save_patterns(data: dict):
-    """Save learned patterns to file."""
+    """Save learned patterns to file and invalidate cache."""
     data["updated"] = datetime.now().isoformat()
     PATTERNS_FILE.parent.mkdir(parents=True, exist_ok=True)
     try:
         with open(PATTERNS_FILE, 'w') as f:
             json.dump(data, f, indent=2)
+        # Invalidate cache
+        _patterns_cache["data"] = data
+        _patterns_cache["time"] = 0  # Force reload on next access
     except IOError:
         pass
 

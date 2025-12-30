@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-set -euo pipefail
 # notify.sh - Desktop notification when tasks complete
 #
 # Usage:
@@ -15,7 +14,7 @@ set -euo pipefail
 #   --wrap               Run command and notify on completion
 #   --sound              Play sound (if available)
 
-set -uo pipefail
+set -uo pipefail  # Note: -e omitted to handle notification failures gracefully
 
 # Defaults
 TITLE="Claude Code"
