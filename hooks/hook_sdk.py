@@ -41,6 +41,10 @@ from hook_utils import (
     log_event,
     read_state,
     write_state,
+    read_session_state,
+    write_session_state,
+    update_session_state,
+    cleanup_old_sessions,
     get_session_id,
     DATA_DIR,
 )
@@ -225,7 +229,8 @@ class PostToolUseContext(BaseContext):
 
     @property
     def tool_result(self) -> ToolResult:
-        return ToolResult(self.raw.get("tool_result", {}))
+        # Claude Code uses "tool_response" for PostToolUse hooks
+        return ToolResult(self.raw.get("tool_response") or self.raw.get("tool_result", {}))
 
     @property
     def duration_ms(self) -> int:
@@ -363,7 +368,7 @@ class Patterns:
 
     @staticmethod
     def matches_command(command: str, patterns: list[str]) -> str | None:
-        """
+        r"""
         Check if command matches any pattern.
         Patterns can be:
         - Simple prefix: "git push"

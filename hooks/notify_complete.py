@@ -50,9 +50,12 @@ def check_notify(ctx: dict) -> dict | None:
     tool_input = ctx.get("tool_input", {})
     command = tool_input.get("command", "")[:50]  # Truncate
 
-    # Check if it succeeded or failed
-    tool_result = ctx.get("tool_result", {})
-    exit_code = tool_result.get("exit_code", 0)
+    # Check if it succeeded or failed (Claude Code uses "tool_response")
+    tool_result = ctx.get("tool_response") or ctx.get("tool_result", {})
+    # Check both exit_code and exitCode variants
+    exit_code = tool_result.get("exit_code")
+    if exit_code is None:
+        exit_code = tool_result.get("exitCode", 0)
 
     if exit_code == 0:
         title = "✓ Command Complete"

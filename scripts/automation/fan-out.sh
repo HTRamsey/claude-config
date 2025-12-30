@@ -169,22 +169,33 @@ File: $file" --max-turns 10 2>&1); then
     export PROMPT
 
     # Use xargs for parallel execution (PROMPT already exported above)
+    # Note: PROMPT is passed via environment variable to avoid shell injection
     if command -v parallel &>/dev/null; then
-        parallel -j "$PARALLEL" --bar bash -c 'claude -p "$PROMPT
+        # GNU parallel reads PROMPT from environment
+        parallel -j "$PARALLEL" --bar bash -c '
+            claude -p "${PROMPT}
 
-File: $1" --max-turns 10' _ {} :::: "$TASK_FILE"
+File: {}" --max-turns 10
+        ' :::: "$TASK_FILE"
     else
-        # Fallback: xargs (use environment variable for prompt to avoid injection)
-        export PROMPT
-        xargs -P "$PARALLEL" -I {} bash -c '
-            if claude -p "$PROMPT
+        # Fallback: xargs with safe environment variable usage
+        # The file path is passed as a positional argument, PROMPT from env
+        while IFS= read -r file; do
+            (
+                if claude -p "${PROMPT}
 
-File: $1" --max-turns 10 >/dev/null 2>&1; then
-                echo "✓ $1"
-            else
-                echo "✗ $1" >&2
-            fi
-        ' _ {} < "$TASK_FILE"
+File: ${file}" --max-turns 10 >/dev/null 2>&1; then
+                    echo "✓ ${file}"
+                else
+                    echo "✗ ${file}" >&2
+                fi
+            ) &
+            # Limit parallelism
+            while [[ $(jobs -r -p | wc -l) -ge $PARALLEL ]]; do
+                sleep 0.1
+            done
+        done < "$TASK_FILE"
+        wait
     fi
 
     rm "$TASK_FILE"

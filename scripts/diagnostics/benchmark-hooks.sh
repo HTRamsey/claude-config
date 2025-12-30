@@ -12,11 +12,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOOKS_DIR="$HOME/.claude/hooks"
 ITERATIONS="${BENCHMARK_ITERATIONS:-5}"
 
-# Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+# Source common library for colors and utilities
+source "$HOME/.claude/scripts/lib/common.sh"
 
 # Test payloads
 PRETOOL_READ='{"tool_name":"Read","tool_input":{"file_path":"/tmp/test.txt"}}'

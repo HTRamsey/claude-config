@@ -4,18 +4,13 @@
 #
 # Usage: validate-config.sh [--fix] [--verbose]
 
-set -uo pipefail
+set -euo pipefail
 source "$HOME/.claude/scripts/lib/common.sh"
 
 CLAUDE_DIR="$HOME/.claude"
 SETTINGS="$CLAUDE_DIR/settings.json"
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+# Colors already exported by common.sh
 
 ERRORS=0
 WARNINGS=0
@@ -37,7 +32,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 pass() {
-    [[ "$VERBOSE" == true ]] && echo -e "${GREEN}✓${NC} $1"
+    [[ "$VERBOSE" == true ]] && echo -e "${GREEN}✓${NC} $1" || true
 }
 warn() {
     echo -e "${YELLOW}⚠${NC} $1"
@@ -95,24 +90,41 @@ fi
 section "Hook Validation"
 
 # Get registered hooks from settings.json
-REGISTERED_HOOKS=$(jq -r '.. | objects | select(.command?) | .command' "$SETTINGS" 2>/dev/null | grep 'hooks/' | sed 's|.*hooks/||' | sed 's|\.py.*|.py|' | sort -u)
+# Extract hook filenames, handling both .py and .sh extensions
+REGISTERED_HOOKS=$(jq -r '.. | objects | select(.command?) | .command' "$SETTINGS" 2>/dev/null | \
+    grep 'hooks/' | \
+    sed 's|.*hooks/||' | \
+    sed -E 's/(\.py|\.sh).*/\1/' | \
+    sort -u)
 
 # Check each registered hook
 for hook in $REGISTERED_HOOKS; do
     hook_path="$CLAUDE_DIR/hooks/$hook"
     if [[ ! -f "$hook_path" ]]; then
         fail "Registered hook missing: $hook"
-    elif ! python3 -m py_compile "$hook_path" 2>/dev/null; then
-        fail "Syntax error in: $hook"
-    elif [[ ! -x "$hook_path" ]]; then
-        if [[ "$FIX" == true ]]; then
-            chmod +x "$hook_path"
-            warn "Fixed: made $hook executable"
-        else
-            warn "Not executable: $hook (run with --fix)"
-        fi
     else
-        pass "Hook OK: $hook"
+        # Check syntax based on file extension
+        syntax_ok=false
+        if [[ "$hook" == *.py ]]; then
+            python3 -m py_compile "$hook_path" 2>/dev/null && syntax_ok=true
+        elif [[ "$hook" == *.sh ]]; then
+            bash -n "$hook_path" 2>/dev/null && syntax_ok=true
+        else
+            syntax_ok=true  # Unknown extension, skip syntax check
+        fi
+
+        if [[ "$syntax_ok" != true ]]; then
+            fail "Syntax error in: $hook"
+        elif [[ ! -x "$hook_path" ]]; then
+            if [[ "$FIX" == true ]]; then
+                chmod +x "$hook_path"
+                warn "Fixed: made $hook executable"
+            else
+                warn "Not executable: $hook (run with --fix)"
+            fi
+        else
+            pass "Hook OK: $hook"
+        fi
     fi
 done
 
@@ -137,7 +149,7 @@ for dispatcher in "$CLAUDE_DIR/hooks"/*_dispatcher.py; do
     dname=$(basename "$dispatcher" .py)
 
     # Extract handler names from ALL_HANDLERS list (looking for the array definition)
-    handlers=$(grep -A5 "^ALL_HANDLERS = \[" "$dispatcher" 2>/dev/null | grep -oP '"[a-z_]+"' | tr -d '"')
+    handlers=$(grep -A5 "^ALL_HANDLERS = \[" "$dispatcher" 2>/dev/null | grep -oP '"[a-z_]+"' | tr -d '"' || true)
     handler_count=0
     handler_ok=0
     for handler in $handlers; do
@@ -146,7 +158,7 @@ for dispatcher in "$CLAUDE_DIR/hooks"/*_dispatcher.py; do
         # Check if handler has a corresponding .py file
         if [[ -f "$CLAUDE_DIR/hooks/$handler.py" ]]; then
             handler_ok=$((handler_ok + 1))
-            [[ "$VERBOSE" == true ]] && pass "$dname handler: $handler"
+            [[ "$VERBOSE" == true ]] && pass "$dname handler: $handler" || true
         else
             warn "$dname references missing handler: $handler"
         fi
@@ -193,6 +205,7 @@ section "Skill Validation"
 for skill_dir in "$CLAUDE_DIR/skills"/*/; do
     [[ -d "$skill_dir" ]] || continue
     name=$(basename "$skill_dir")
+    [[ "$name" == "archive" ]] && continue  # Skip archive meta-directory
 
     if [[ ! -f "$skill_dir/SKILL.md" ]]; then
         fail "Skill missing SKILL.md: $name"
@@ -222,7 +235,7 @@ while IFS= read -r script; do
         SCRIPT_ERRORS=$((SCRIPT_ERRORS + 1))
     else
         SCRIPT_OK=$((SCRIPT_OK + 1))
-        [[ "$VERBOSE" == true ]] && pass "Script OK: $rel_path"
+        [[ "$VERBOSE" == true ]] && pass "Script OK: $rel_path" || true
     fi
 done < <(find "$CLAUDE_DIR/scripts" -name "*.sh" -type f 2>/dev/null)
 
@@ -267,7 +280,7 @@ section "Cross-Reference Check"
 # Check rules reference correct counts
 HOOK_COUNT=$(find "$CLAUDE_DIR/hooks" -maxdepth 1 -name "*.py" -type f 2>/dev/null | grep -v hook_utils | grep -v __pycache__ | grep -v __init__ | wc -l)
 AGENT_COUNT=$(find "$CLAUDE_DIR/agents" -maxdepth 1 -name "*.md" -type f 2>/dev/null | wc -l)
-SKILL_COUNT=$(find "$CLAUDE_DIR/skills" -maxdepth 1 -type d 2>/dev/null | tail -n +2 | wc -l)
+SKILL_COUNT=$(find "$CLAUDE_DIR/skills" -maxdepth 1 -type d ! -name archive 2>/dev/null | tail -n +2 | wc -l)
 COMMAND_COUNT=$(find "$CLAUDE_DIR/commands" -maxdepth 1 -name "*.md" -type f 2>/dev/null | wc -l)
 SCRIPT_COUNT=$(find "$CLAUDE_DIR/scripts" -name "*.sh" -type f 2>/dev/null | wc -l)
 

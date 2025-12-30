@@ -13,7 +13,17 @@ echo "=== Find Summary for '$PATTERN' in '$SEARCH_PATH' ==="
 echo ""
 
 # Find files matching pattern
-MATCHES=$(find "$SEARCH_PATH" -name "$PATTERN" -type f 2>/dev/null)
+MATCHES=$(find "$SEARCH_PATH" -name "$PATTERN" -type f 2>/dev/null || true)
+
+# Handle empty results gracefully
+if [[ -z "$MATCHES" ]]; then
+    echo "## Statistics:"
+    echo "Total matches: 0"
+    echo ""
+    echo "No files found matching pattern."
+    exit 0
+fi
+
 TOTAL=$(echo "$MATCHES" | grep -c . || echo 0)
 
 echo "## Statistics:"

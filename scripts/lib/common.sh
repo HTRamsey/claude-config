@@ -85,7 +85,13 @@ strict_mode() {
 #
 
 # Cache for tool lookups (persists for session)
-declare -A _TOOL_CACHE 2>/dev/null || true
+# Requires bash 4.0+ for associative arrays
+if [[ ${BASH_VERSINFO[0]} -ge 4 ]]; then
+    declare -A _TOOL_CACHE 2>/dev/null || _TOOL_CACHE=()
+else
+    # Fallback: no caching on older bash (functions still work, just slower)
+    _TOOL_CACHE=()
+fi
 
 # Find command with fallbacks (cached)
 find_command() {
@@ -260,10 +266,13 @@ relative_path() {
     # Use realpath if available (preferred, no python dependency)
     if command -v realpath &>/dev/null; then
         realpath --relative-to="$cwd" "$path" 2>/dev/null || echo "$path"
-    else
+    elif command -v python3 &>/dev/null; then
         # Fallback to python if realpath not available
         # Use environment variables to safely pass values (no shell injection)
         PATH_ARG="$path" CWD_ARG="$cwd" python3 -c 'import os; print(os.path.relpath(os.environ["PATH_ARG"], os.environ["CWD_ARG"]))' 2>/dev/null || echo "$path"
+    else
+        # No realpath or python3, return original path
+        echo "$path"
     fi
 }
 
@@ -280,9 +289,11 @@ temp_file() {
 }
 
 # Cleanup temp files on exit
+# Use specific patterns to avoid deleting unrelated files
 cleanup_temps() {
-    local pattern="${1:-/tmp/claude.*}"
-    trap "rm -f $pattern" EXIT
+    local pattern="${1:-/tmp/claude-$$-*}"
+    # Safety: only delete files matching our pattern in /tmp
+    trap 'find /tmp -maxdepth 1 -name "$(basename "$pattern")" -user "$(id -u)" -delete 2>/dev/null || true' EXIT
 }
 
 #
@@ -312,17 +323,27 @@ git_branch() {
 detect_language() {
     local p="$1"
     if [[ -d "$p" ]]; then
-        # Check directory for common file types
-        if find "$p" -maxdepth 1 -name "*.py" -print -quit 2>/dev/null | grep -q .; then echo "python"
-        elif find "$p" -maxdepth 1 -name "*.ts" -print -quit 2>/dev/null | grep -q .; then echo "typescript"
-        elif find "$p" -maxdepth 1 -name "*.js" -print -quit 2>/dev/null | grep -q .; then echo "javascript"
-        elif find "$p" -maxdepth 1 -name "*.rs" -print -quit 2>/dev/null | grep -q .; then echo "rust"
-        elif find "$p" -maxdepth 1 -name "*.go" -print -quit 2>/dev/null | grep -q .; then echo "go"
-        elif find "$p" -maxdepth 1 -name "*.cpp" -print -quit 2>/dev/null | grep -q .; then echo "cpp"
-        elif find "$p" -maxdepth 1 -name "*.java" -print -quit 2>/dev/null | grep -q .; then echo "java"
-        elif find "$p" -maxdepth 1 -name "*.rb" -print -quit 2>/dev/null | grep -q .; then echo "ruby"
-        else echo "unknown"
+        # Check directory for common file types (single find call, early exit)
+        local first_file
+        first_file=$(find "$p" -maxdepth 1 -type f \( \
+            -name "*.py" -o -name "*.ts" -o -name "*.js" -o \
+            -name "*.rs" -o -name "*.go" -o -name "*.cpp" -o \
+            -name "*.java" -o -name "*.rb" \) -print -quit 2>/dev/null)
+
+        if [[ -n "$first_file" ]]; then
+            # Detect from the first matching file's extension
+            case "$first_file" in
+                *.py) echo "python"; return ;;
+                *.ts) echo "typescript"; return ;;
+                *.js) echo "javascript"; return ;;
+                *.rs) echo "rust"; return ;;
+                *.go) echo "go"; return ;;
+                *.cpp) echo "cpp"; return ;;
+                *.java) echo "java"; return ;;
+                *.rb) echo "ruby"; return ;;
+            esac
         fi
+        echo "unknown"
     else
         case "$p" in
             *.py) echo "python" ;;

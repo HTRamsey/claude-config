@@ -77,8 +77,9 @@ def start_viewer() -> bool:
         # Wait briefly for server to start, then open browser
         import time
         time.sleep(1)
+        # Use xdg-open for cross-browser compatibility (Linux)
         subprocess.Popen(
-            ["firefox", f"http://localhost:{DEFAULT_PORT}"],
+            ["xdg-open", f"http://localhost:{DEFAULT_PORT}"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True

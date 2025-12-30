@@ -194,5 +194,16 @@ def run_hook(context: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@graceful_main("transcript_converter")
+def main():
+    try:
+        ctx = json.load(sys.stdin)
+    except json.JSONDecodeError:
+        sys.exit(0)
+    result = run_hook(ctx)
+    if result.get("message"):
+        print(result["message"])
+
+
 if __name__ == "__main__":
-    graceful_main(run_hook)
+    main()

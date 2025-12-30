@@ -18,8 +18,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from hook_utils import graceful_main, output_message
 
-# Build command patterns
-BUILD_COMMANDS = [
+# Build command patterns - pre-compiled for performance
+_BUILD_PATTERNS_RAW = [
     r'\bmake\b', r'\bcmake\b', r'\bninja\b',
     r'\bcargo\s+(build|check|test|clippy)',
     r'\bnpm\s+(run\s+)?build', r'\byarn\s+build', r'\bpnpm\s+build',
@@ -32,44 +32,49 @@ BUILD_COMMANDS = [
     r'\btsc\b',  # TypeScript compiler
     r'\bwebpack\b', r'\bvite\s+build', r'\besbuild\b',
 ]
+BUILD_COMMANDS = [re.compile(p, re.IGNORECASE) for p in _BUILD_PATTERNS_RAW]
 
-# Error patterns by build tool
-ERROR_PATTERNS = {
+# Error patterns by build tool - pre-compiled for performance
+_ERROR_PATTERNS_RAW = {
     'gcc_clang': [
-        (r'(\S+):(\d+):(\d+): error: (.+)', 'file', 'line', 'col', 'msg'),
-        (r'(\S+):(\d+): error: (.+)', 'file', 'line', 'msg'),
-        (r"undefined reference to `(.+)'", 'symbol'),
-        (r'fatal error: (.+): No such file or directory', 'header'),
+        r'(\S+):(\d+):(\d+): error: (.+)',
+        r'(\S+):(\d+): error: (.+)',
+        r"undefined reference to `(.+)'",
+        r'fatal error: (.+): No such file or directory',
     ],
     'rust': [
-        (r'error\[E(\d+)\]: (.+)', 'code', 'msg'),
-        (r'--> (\S+):(\d+):(\d+)', 'file', 'line', 'col'),
-        (r"cannot find .+ `(.+)` in", 'symbol'),
+        r'error\[E(\d+)\]: (.+)',
+        r'--> (\S+):(\d+):(\d+)',
+        r"cannot find .+ `(.+)` in",
     ],
     'typescript': [
-        (r'(\S+)\((\d+),(\d+)\): error TS(\d+): (.+)', 'file', 'line', 'col', 'code', 'msg'),
-        (r"Property '(.+)' does not exist", 'prop'),
-        (r"Cannot find module '(.+)'", 'module'),
+        r'(\S+)\((\d+),(\d+)\): error TS(\d+): (.+)',
+        r"Property '(.+)' does not exist",
+        r"Cannot find module '(.+)'",
     ],
     'python': [
-        (r'(\S+\.py):(\d+): (.+Error:.+)', 'file', 'line', 'msg'),
-        (r'ModuleNotFoundError: No module named \'(.+)\'', 'module'),
-        (r'SyntaxError: (.+)', 'msg'),
+        r'(\S+\.py):(\d+): (.+Error:.+)',
+        r'ModuleNotFoundError: No module named \'(.+)\'',
+        r'SyntaxError: (.+)',
     ],
     'go': [
-        (r'(\S+\.go):(\d+):(\d+): (.+)', 'file', 'line', 'col', 'msg'),
-        (r'undefined: (\S+)', 'symbol'),
-        (r'cannot find package "(.+)"', 'package'),
+        r'(\S+\.go):(\d+):(\d+): (.+)',
+        r'undefined: (\S+)',
+        r'cannot find package "(.+)"',
     ],
     'npm': [
-        (r'npm ERR! (.+)', 'msg'),
-        (r'Module not found: (.+)', 'module'),
-        (r"Cannot find module '(.+)'", 'module'),
+        r'npm ERR! (.+)',
+        r'Module not found: (.+)',
+        r"Cannot find module '(.+)'",
     ],
     'make': [
-        (r'make.*: \*\*\* \[(.+)\] Error (\d+)', 'target', 'code'),
-        (r'make.*: (.+): No such file or directory', 'file'),
+        r'make.*: \*\*\* \[(.+)\] Error (\d+)',
+        r'make.*: (.+): No such file or directory',
     ],
+}
+ERROR_PATTERNS = {
+    tool: [re.compile(p, re.IGNORECASE) for p in patterns]
+    for tool, patterns in _ERROR_PATTERNS_RAW.items()
 }
 
 # Common fix suggestions
@@ -92,7 +97,7 @@ FIX_SUGGESTIONS = {
 def is_build_command(command: str) -> bool:
     """Check if command is a build-related command."""
     for pattern in BUILD_COMMANDS:
-        if re.search(pattern, command, re.IGNORECASE):
+        if pattern.search(command):
             return True
     return False
 
@@ -137,22 +142,20 @@ def extract_errors(output: str, tool: str) -> list:
         if not line:
             continue
 
-        for pattern_tuple in patterns:
-            pattern = pattern_tuple[0]
-            match = re.search(pattern, line, re.IGNORECASE)
+        for pattern in patterns:
+            match = pattern.search(line)
             if match:
                 errors.append({
-                    'line': line[:200],  # Truncate long lines
+                    'line': line[:200],
                     'match': match.group(0)[:150],
                 })
                 break
 
-        # Also catch generic error lines
         if len(errors) < 20 and 'error' in line.lower() and line not in [e['line'] for e in errors]:
             if not any(skip in line.lower() for skip in ['warning', 'note:', 'help:']):
                 errors.append({'line': line[:200], 'match': None})
 
-    return errors[:15]  # Limit to 15 errors
+    return errors[:15]
 
 
 def get_suggestions(errors: list, output: str) -> list:
@@ -242,7 +245,8 @@ def analyze_build_post(ctx: dict) -> dict | None:
         return None
 
     tool_input = ctx.get('tool_input', {})
-    tool_result = ctx.get('tool_result', {})
+    # Claude Code uses "tool_response" for PostToolUse hooks
+    tool_result = ctx.get('tool_response') or ctx.get('tool_result', {})
 
     command = tool_input.get('command', '')
     output = str(tool_result.get('stdout', '')) + str(tool_result.get('stderr', ''))
@@ -265,7 +269,12 @@ def analyze_build_post(ctx: dict) -> dict | None:
 
     if analysis:
         summary = format_summary(analysis)
-        return {"message": summary}
+        return {
+            "hookSpecificOutput": {
+                "hookEventName": "PostToolUse",
+                "message": summary
+            }
+        }
 
     return None
 
@@ -276,7 +285,9 @@ def main():
     ctx = json.load(sys.stdin)
     result = analyze_build_post(ctx)
     if result:
-        output_message(result.get("message", ""))
+        msg = result.get("hookSpecificOutput", {}).get("message", "")
+        if msg:
+            output_message(msg)
 
 
 if __name__ == "__main__":

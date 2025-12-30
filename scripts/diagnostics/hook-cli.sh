@@ -14,6 +14,9 @@
 
 set -euo pipefail
 
+# Source common library for colors and utilities
+source "$HOME/.claude/scripts/lib/common.sh"
+
 HOOKS_DIR="${HOME}/.claude/hooks"
 DATA_DIR="${HOME}/.claude/data"
 SESSION_HOOKS_DIR="${DATA_DIR}/session-hooks"
@@ -21,13 +24,6 @@ CONFIG_FILE="${DATA_DIR}/hook-config.json"
 LOG_FILE="${DATA_DIR}/hook-events.jsonl"
 SETTINGS_FILE="${HOME}/.claude/settings.json"
 VENV_PYTHON="${HOME}/.claude/data/venv/bin/python3"
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
 
 usage() {
     cat <<EOF

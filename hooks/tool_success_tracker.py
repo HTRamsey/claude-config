@@ -3,7 +3,7 @@
 Tool Success Tracker Hook - Tracks tool failures and suggests alternatives.
 Runs on PostToolUse to monitor errors and recommend better approaches.
 
-Tracks failures in a session-specific temp file.
+Uses centralized session state via hook_utils.
 """
 import json
 import re
@@ -13,16 +13,21 @@ from pathlib import Path
 
 # Import shared utilities
 sys.path.insert(0, str(Path(__file__).parent))
-from hook_utils import graceful_main, log_event, get_session_id
+from hook_utils import (
+    graceful_main,
+    log_event,
+    get_session_id,
+    read_session_state,
+    write_session_state,
+)
 
 # Configuration
-STATE_DIR = Path.home() / ".claude/data/tool-tracker"
+STATE_NAMESPACE = "tool_tracker"
 MAX_AGE_SECONDS = 3600  # Clear state after 1 hour
 FAILURE_THRESHOLD = 2  # Suggest alternative after 2 failures
 
-# Error patterns and their suggested fixes
-ERROR_PATTERNS = {
-    # Edit failures
+# Error patterns and their suggested fixes - pre-compiled for performance
+_ERROR_PATTERNS_RAW = {
     r"old_string.*not found|not unique|no match": {
         "tool": "Edit",
         "suggestion": "Re-read the file to get current content, or use Read tool first",
@@ -33,43 +38,38 @@ ERROR_PATTERNS = {
         "suggestion": "Check file path with: smart-find.sh <pattern> .",
         "action": "find_file"
     },
-    # Permission errors
     r"permission denied|access denied|not permitted": {
         "tool": "*",
         "suggestion": "Check file permissions or try Task(subagent_type=Explore) for read-only exploration",
         "action": "check_perms"
     },
-    # Grep/search failures
     r"no matches|no results|pattern not found": {
         "tool": "Grep",
         "suggestion": "Try broader pattern or use Task(subagent_type=Explore) for fuzzy search",
         "action": "broaden_search"
     },
-    # Build failures
     r"build failed|compilation error|make.*error": {
         "tool": "Bash",
         "suggestion": "Pipe through compress.sh --type build to focus on errors",
         "action": "compress_output"
     },
-    # Test failures
     r"test.*failed|assertion.*error|pytest.*failed": {
         "tool": "Bash",
         "suggestion": "Pipe through compress.sh --type tests to focus on failures",
         "action": "compress_output"
     },
-    # Git errors
     r"conflict|merge.*failed|rebase.*failed": {
         "tool": "Bash",
         "suggestion": "Use smart-diff.sh to understand conflicts",
         "action": "use_diff"
     },
-    # Timeout
     r"timeout|timed out|killed": {
         "tool": "*",
         "suggestion": "Command too slow - try limiting scope or using more specific patterns",
         "action": "reduce_scope"
     },
 }
+ERROR_PATTERNS = [(re.compile(p, re.IGNORECASE), info) for p, info in _ERROR_PATTERNS_RAW.items()]
 
 # Tool-specific alternative suggestions after repeated failures
 TOOL_ALTERNATIVES = {
@@ -80,37 +80,34 @@ TOOL_ALTERNATIVES = {
     "Bash": "For build/test commands, pipe through compress-*.sh scripts",
 }
 
-def get_state_file(session_id: str) -> Path:
-    """Get session-specific state file path."""
-    STATE_DIR.mkdir(exist_ok=True)
-    return STATE_DIR / f"failures_{session_id}.json"
-
 def load_state(session_id: str) -> dict:
-    """Load failure history state for session."""
-    state_file = get_state_file(session_id)
-    if state_file.exists():
-        try:
-            with open(state_file) as f:
-                state = json.load(f)
-                if time.time() - state.get("last_update", 0) > MAX_AGE_SECONDS:
-                    return {"failures": {}, "last_update": time.time()}
-                return state
-        except (json.JSONDecodeError, IOError):
-            pass
-    return {"failures": {}, "last_update": time.time()}
+    """Load failure history state for session using centralized session state."""
+    now = time.time()
+    default = {"failures": {}, "last_update": now}
+    state = read_session_state(STATE_NAMESPACE, session_id, default)
+    if now - state.get("last_update", 0) > MAX_AGE_SECONDS:
+        return default
+    return state
+
 
 def save_state(session_id: str, state: dict):
-    """Save failure history state."""
+    """Save failure history state using centralized session state."""
     state["last_update"] = time.time()
-    state_file = get_state_file(session_id)
-    try:
-        with open(state_file, "w") as f:
-            json.dump(state, f)
-    except IOError:
-        pass
+    write_session_state(STATE_NAMESPACE, state, session_id)
 
-def extract_error_info(tool_result: dict) -> tuple[bool, str]:
-    """Extract error status and message from tool result."""
+def extract_error_info(tool_result) -> tuple[bool, str]:
+    """Extract error status and message from tool result.
+
+    Handles both dict and string tool_result formats.
+    """
+    # Handle string tool_result (direct output)
+    if isinstance(tool_result, str):
+        return False, tool_result[:500]
+
+    # Handle non-dict types gracefully
+    if not isinstance(tool_result, dict):
+        return False, str(tool_result)[:500] if tool_result else ""
+
     # Check various error indicators
     is_error = tool_result.get("is_error", False)
     error_msg = ""
@@ -125,28 +122,20 @@ def extract_error_info(tool_result: dict) -> tuple[bool, str]:
                 if text:
                     error_msg += text + "\n"
 
-    # Check for error patterns in content even if not marked as error
-    if not is_error:
-        error_indicators = ["error", "failed", "not found", "denied", "exception"]
-        content_lower = error_msg.lower()
-        if any(ind in content_lower for ind in error_indicators):
-            # Could be an error even without is_error flag
-            pass
-
     return is_error, error_msg[:500]  # Limit error message length
 
 def match_error_pattern(error_msg: str) -> dict | None:
-    """Match error message against known patterns."""
-    error_lower = error_msg.lower()
-    for pattern, info in ERROR_PATTERNS.items():
-        if re.search(pattern, error_lower, re.IGNORECASE):
+    """Match error message against pre-compiled patterns."""
+    for compiled, info in ERROR_PATTERNS:
+        if compiled.search(error_msg):
             return info
     return None
 
 def track_success(ctx: dict) -> dict | None:
     """Handler function for dispatcher. Returns result dict or None."""
     tool_name = ctx.get("tool_name", "")
-    tool_result = ctx.get("tool_result", {})
+    # Claude Code uses "tool_response" for PostToolUse hooks
+    tool_result = ctx.get("tool_response") or ctx.get("tool_result", {})
     session_id = get_session_id(ctx)
 
     if not tool_name:

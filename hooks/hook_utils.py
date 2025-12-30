@@ -23,10 +23,17 @@ DATA_DIR = Path(os.environ.get("CLAUDE_DATA_DIR", Path.home() / ".claude" / "dat
 LOG_FILE = DATA_DIR / "hook-events.jsonl"
 SESSION_STATE_FILE = DATA_DIR / "session-state.json"
 
+# ============================================================================
+# Standard TTL Constants (centralized for consistency)
+# ============================================================================
+CACHE_TTL = 5.0           # In-memory cache default (seconds)
+HOOK_DISABLED_TTL = 10.0  # Hook disabled status cache (longer - rarely changes)
+SESSION_TTL = 3600        # 1 hour for per-session state
+DAILY_TTL = 86400         # 24 hours for daily state
+
 # In-memory cache for state files
 _cache: dict[str, tuple[float, Any]] = {}
 _cache_lock = threading.Lock()
-CACHE_TTL = 5.0  # seconds
 
 def ensure_data_dir():
     """Ensure data directory exists."""
@@ -82,6 +89,36 @@ def log_event(hook_name: str, event_type: str, data: dict = None, level: str = "
     except Exception:
         pass  # Never fail on logging
 
+def get_tool_response(ctx: dict, default=None) -> Any:
+    """
+    Get tool response from PostToolUse context.
+
+    Claude Code uses "tool_response" key, but some older docs say "tool_result".
+    This function handles both for compatibility.
+
+    Args:
+        ctx: Hook context dictionary
+        default: Default value if no response found
+
+    Returns:
+        Tool response content (dict, str, or default)
+    """
+    return ctx.get("tool_response") or ctx.get("tool_result") or default
+
+
+def is_post_tool_use(ctx: dict) -> bool:
+    """
+    Check if context is from a PostToolUse event.
+
+    Args:
+        ctx: Hook context dictionary
+
+    Returns:
+        True if this is a PostToolUse context
+    """
+    return "tool_response" in ctx or "tool_result" in ctx
+
+
 def graceful_main(hook_name: str):
     """
     Decorator for hook main functions.
@@ -124,8 +161,6 @@ def get_session_id(ctx: dict = None, transcript_path: str = None) -> str:
         3. Hash of transcript_path if provided
         4. "default" as final fallback
     """
-    import time
-
     # Priority 1: Context session_id
     if ctx and ctx.get("session_id"):
         return ctx["session_id"]
@@ -436,6 +471,163 @@ def invalidate_cache(name: str = None):
 
 
 # ============================================================================
+# Session-Aware State Functions
+# ============================================================================
+
+# Session state directory and constants
+SESSION_STATE_DIR = DATA_DIR / "sessions"
+SESSION_STATE_MAX_AGE = 3600 * 24  # 24 hours - auto-cleanup old sessions
+
+# Cache for session state (separate from global cache)
+_session_cache: dict[str, tuple[float, dict]] = {}
+_session_cache_lock = threading.Lock()
+
+
+def _get_session_state_file(session_id: str) -> Path:
+    """Get session state file path, creating directory if needed."""
+    SESSION_STATE_DIR.mkdir(parents=True, exist_ok=True)
+    return SESSION_STATE_DIR / f"{session_id}.json"
+
+
+def read_session_state(namespace: str, session_id: str = None, default: dict = None) -> dict:
+    """
+    Read namespaced state for a session.
+
+    Args:
+        namespace: State namespace (e.g., "batch_detector", "file_monitor")
+        session_id: Session ID (auto-detected if not provided)
+        default: Default value if state doesn't exist
+
+    Returns:
+        State dict for the namespace
+    """
+    if default is None:
+        default = {}
+
+    if not session_id:
+        session_id = os.environ.get("CLAUDE_SESSION_ID", "")
+        if not session_id:
+            session_file = DATA_DIR / ".current-session"
+            if session_file.exists():
+                try:
+                    session_id = session_file.read_text().strip()
+                except (IOError, OSError):
+                    pass
+
+    if not session_id:
+        return default.copy()
+
+    cache_key = f"session:{session_id}"
+    now = datetime.now().timestamp()
+
+    # Check cache
+    with _session_cache_lock:
+        if cache_key in _session_cache:
+            cached_time, cached_data = _session_cache[cache_key]
+            if now - cached_time < CACHE_TTL:
+                return cached_data.get("namespaces", {}).get(namespace, default).copy()
+
+    # Load from file
+    state_file = _get_session_state_file(session_id)
+    session_data = safe_load_json(state_file, {"namespaces": {}, "updated": now})
+
+    # Update cache
+    with _session_cache_lock:
+        _session_cache[cache_key] = (now, session_data)
+
+    return session_data.get("namespaces", {}).get(namespace, default).copy()
+
+
+def write_session_state(namespace: str, data: dict, session_id: str = None) -> bool:
+    """
+    Write namespaced state for a session.
+
+    Args:
+        namespace: State namespace
+        data: Data to write
+        session_id: Session ID (auto-detected if not provided)
+
+    Returns:
+        True on success
+    """
+    if not session_id:
+        session_id = os.environ.get("CLAUDE_SESSION_ID", "")
+        if not session_id:
+            session_file = DATA_DIR / ".current-session"
+            if session_file.exists():
+                try:
+                    session_id = session_file.read_text().strip()
+                except (IOError, OSError):
+                    pass
+
+    if not session_id:
+        return False
+
+    state_file = _get_session_state_file(session_id)
+    now = datetime.now().timestamp()
+
+    # Load existing or create new
+    session_data = safe_load_json(state_file, {"namespaces": {}, "updated": now})
+
+    # Update namespace
+    session_data["namespaces"][namespace] = data
+    session_data["updated"] = now
+
+    # Write atomically
+    success = atomic_write_json(state_file, session_data)
+
+    # Update cache
+    if success:
+        cache_key = f"session:{session_id}"
+        with _session_cache_lock:
+            _session_cache[cache_key] = (now, session_data)
+
+    return success
+
+
+def update_session_state(
+    namespace: str,
+    updater: Callable[[dict], dict],
+    session_id: str = None,
+    default: dict = None
+) -> bool:
+    """
+    Read-modify-write pattern for session state.
+
+    Args:
+        namespace: State namespace
+        updater: Function that takes current state and returns updated state
+        session_id: Session ID (auto-detected if not provided)
+        default: Default state if namespace doesn't exist
+
+    Returns:
+        True on success
+    """
+    data = read_session_state(namespace, session_id, default)
+    updated = updater(data)
+    return write_session_state(namespace, updated, session_id)
+
+
+def cleanup_old_sessions(max_age_secs: int = SESSION_STATE_MAX_AGE):
+    """
+    Remove session state files older than max_age_secs.
+    Called periodically by hooks or maintenance scripts.
+    """
+    if not SESSION_STATE_DIR.exists():
+        return
+
+    now = datetime.now().timestamp()
+    cutoff = now - max_age_secs
+
+    for state_file in SESSION_STATE_DIR.glob("*.json"):
+        try:
+            if state_file.stat().st_mtime < cutoff:
+                state_file.unlink()
+        except (IOError, OSError):
+            pass
+
+
+# ============================================================================
 # Specialized State Accessors
 # ============================================================================
 
@@ -562,6 +754,10 @@ def get_cached_result(cache_name: str, key: str) -> str | None:
 # Hook Configuration
 # ============================================================================
 
+# Cache for hook disabled status (uses centralized HOOK_DISABLED_TTL)
+_hook_disabled_cache: dict[str, tuple[float, bool]] = {}
+
+
 def is_hook_disabled(name: str) -> bool:
     """
     Check if hook is disabled globally or for current session.
@@ -575,7 +771,24 @@ def is_hook_disabled(name: str) -> bool:
 
     Returns:
         True if hook should be skipped
+
+    Note: Results are cached for 10 seconds to avoid repeated file I/O.
     """
+    now = datetime.now().timestamp()
+
+    # Check cache first
+    if name in _hook_disabled_cache:
+        cached_time, cached_result = _hook_disabled_cache[name]
+        if now - cached_time < HOOK_DISABLED_TTL:
+            return cached_result
+
+    result = _check_hook_disabled_uncached(name)
+    _hook_disabled_cache[name] = (now, result)
+    return result
+
+
+def _check_hook_disabled_uncached(name: str) -> bool:
+    """Uncached implementation of is_hook_disabled."""
     # Check session override first (takes precedence)
     session_hooks_dir = DATA_DIR / "session-hooks"
     session_id = os.environ.get("CLAUDE_SESSION_ID", "")
@@ -610,8 +823,3 @@ def is_hook_disabled(name: str) -> bool:
     return False
 
 
-# Convenience aliases for backwards compatibility
-def get_state_manager():
-    """Backwards compatibility - returns module itself as the 'manager'."""
-    import hook_utils
-    return hook_utils

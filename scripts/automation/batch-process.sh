@@ -142,4 +142,11 @@ fi
 
 echo "=== Summary ==="
 echo "Processed $TOTAL items in $BATCHES batches"
-echo "Token savings: ~$((TOTAL * 30))% vs individual operations"
+# Token savings estimate: batching reduces overhead from N tool calls to BATCHES calls
+# Each tool call has ~50 tokens overhead, so savings = (TOTAL - BATCHES) * 50
+if [[ $TOTAL -gt 0 && $BATCHES -gt 0 ]]; then
+    OVERHEAD_SAVED=$(( (TOTAL - BATCHES) * 50 ))
+    echo "Estimated token savings: ~${OVERHEAD_SAVED} tokens (vs ${TOTAL} individual operations)"
+else
+    echo "No token savings calculated"
+fi

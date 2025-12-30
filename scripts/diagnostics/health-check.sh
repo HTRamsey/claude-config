@@ -8,7 +8,7 @@
 
 SCRIPT_VERSION="1.3.0"
 
-set -uo pipefail
+set -euo pipefail
 source "$HOME/.claude/scripts/lib/common.sh"
 
 CLEANUP=false
@@ -129,7 +129,8 @@ do_cleanup() {
 
 
     # Clean session state directories > 7 days
-    for state_dir in batch-state file-tracker tool-tracker; do
+    # Note: sessions/ is the new unified location; batch-state/, file-tracker/, tool-tracker/ are deprecated
+    for state_dir in sessions batch-state file-tracker tool-tracker; do
         if [[ -d ~/.claude/data/$state_dir ]]; then
             old_state=$(find ~/.claude/data/$state_dir -type f -mtime +7 2>/dev/null | wc -l)
             if [[ $old_state -gt 0 ]]; then

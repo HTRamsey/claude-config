@@ -240,42 +240,53 @@ compress_tests() {
 
     local total_lines=$(echo "$input" | wc -l)
 
-    # Pytest
-    if echo "$input" | grep -q "FAILED\|PASSED\|pytest\|==="; then
-        echo "=== PYTEST FAILURES ==="
-        echo "$input" | grep -E "(FAILED|ERROR|::.*FAILED)" | head -50
-        echo ""
-        echo "=== ERROR DETAILS ==="
-        echo "$input" | awk '/^E       |^>       |AssertionError|assert |FAILED/{print}' | head -100
-        echo ""
-        echo "=== SUMMARY ==="
-        echo "$input" | grep -E "^(FAILED|PASSED|ERROR|=====.*=====)" | tail -10
-    # Jest/Mocha
-    elif echo "$input" | grep -qE "(FAIL |PASS |✓|✕|expect\(|describe\()"; then
-        echo "=== JEST/MOCHA FAILURES ==="
-        echo "$input" | awk '/FAIL |✕|Error:|expect\(.*\)\./{found=1} found{print; if(/^$/) found=0}' | head -100
-        echo ""
-        echo "=== SUMMARY ==="
-        echo "$input" | grep -E "(Tests:|Test Suites:|FAIL |PASS )" | tail -10
-    # Cargo
-    elif echo "$input" | grep -qE "(test .* \.\.\. (ok|FAILED)|running [0-9]+ tests)"; then
-        echo "=== CARGO TEST FAILURES ==="
-        echo "$input" | grep -E "FAILED|panicked|^thread .* panicked" | head -50
-        echo ""
-        echo "=== SUMMARY ==="
-        echo "$input" | grep -E "^test result:|failures:" | tail -10
-    # Go
-    elif echo "$input" | grep -qE "(--- FAIL|--- PASS|=== RUN)"; then
-        echo "=== GO TEST FAILURES ==="
-        echo "$input" | awk '/--- FAIL/,/--- (PASS|FAIL)|^FAIL/{print}' | head -100
-        echo ""
-        echo "=== SUMMARY ==="
-        echo "$input" | grep -E "^(FAIL|PASS|ok)\s" | tail -10
-    # Generic
-    else
-        echo "=== TEST OUTPUT (filtered) ==="
-        echo "$input" | grep -iE "(fail|error|exception|assert|expected|actual)" | head -100
-    fi
+    # Detect test framework once (single pass with awk for efficiency)
+    local framework
+    framework=$(echo "$input" | awk '
+        /FAILED|PASSED|pytest|=====/ { print "pytest"; exit }
+        /FAIL |PASS |✓|✕|expect\(|describe\(/ { print "jest"; exit }
+        /test .* \.\.\. (ok|FAILED)|running [0-9]+ tests/ { print "cargo"; exit }
+        /--- FAIL|--- PASS|=== RUN/ { print "go"; exit }
+        END { if (!printed) print "generic" }
+    ')
+
+    case "$framework" in
+        pytest)
+            echo "=== PYTEST FAILURES ==="
+            echo "$input" | grep -E "(FAILED|ERROR|::.*FAILED)" | head -50
+            echo ""
+            echo "=== ERROR DETAILS ==="
+            echo "$input" | awk '/^E       |^>       |AssertionError|assert |FAILED/{print}' | head -100
+            echo ""
+            echo "=== SUMMARY ==="
+            echo "$input" | grep -E "^(FAILED|PASSED|ERROR|=====.*=====)" | tail -10
+            ;;
+        jest)
+            echo "=== JEST/MOCHA FAILURES ==="
+            echo "$input" | awk '/FAIL |✕|Error:|expect\(.*\)\./{found=1} found{print; if(/^$/) found=0}' | head -100
+            echo ""
+            echo "=== SUMMARY ==="
+            echo "$input" | grep -E "(Tests:|Test Suites:|FAIL |PASS )" | tail -10
+            ;;
+        cargo)
+            echo "=== CARGO TEST FAILURES ==="
+            echo "$input" | grep -E "FAILED|panicked|^thread .* panicked" | head -50
+            echo ""
+            echo "=== SUMMARY ==="
+            echo "$input" | grep -E "^test result:|failures:" | tail -10
+            ;;
+        go)
+            echo "=== GO TEST FAILURES ==="
+            echo "$input" | awk '/--- FAIL/,/--- (PASS|FAIL)|^FAIL/{print}' | head -100
+            echo ""
+            echo "=== SUMMARY ==="
+            echo "$input" | grep -E "^(FAIL|PASS|ok)\s" | tail -10
+            ;;
+        *)
+            echo "=== TEST OUTPUT (filtered) ==="
+            echo "$input" | grep -iE "(fail|error|exception|assert|expected|actual)" | head -100
+            ;;
+    esac
 
     echo ""
     echo "[Compressed from $total_lines lines]"

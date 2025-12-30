@@ -88,6 +88,23 @@ SIZE_KB=$((TOTAL_SIZE / 1024))
 LANG=$(detect_language "$FILE")
 BAT=$(find_bat)
 
+# Common structure patterns by language (shared between summary and structure views)
+# Returns: pattern for grep -nE
+get_structure_pattern() {
+    local lang="$1"
+    case "$lang" in
+        python)      echo "^(class |def |async def )" ;;
+        typescript|javascript) echo "^(export |function |class |interface |type |const .* = \\()" ;;
+        c|cpp)       echo "^(struct |class |enum |void |int |char |bool |auto |[a-zA-Z_].*\\(.*\\)[ ]*\\{$)" ;;
+        go)          echo "^(func |type )" ;;
+        rust)        echo "^(pub |fn |struct |enum |trait |impl )" ;;
+        java|kotlin) echo "^(public |private |protected |class |interface )" ;;
+        qml)         echo "^[A-Z][a-zA-Z]* \\{$|^    [a-z]*:|^    function |^    signal " ;;
+        bash)        echo "^[a-zA-Z_][a-zA-Z0-9_]*\\(\\) \\{" ;;
+        *)           echo "^[A-Z]|^#|^function |^def |^class " ;;
+    esac
+}
+
 # Auto-select mode based on size
 if [[ "$MODE" == "auto" ]]; then
     if [[ $TOTAL_LINES -lt $SMALL_THRESHOLD ]]; then
@@ -245,24 +262,9 @@ view_preview() {
     echo "[Preview: ~$shown of $TOTAL_LINES lines]"
 }
 
-# Structure only
+# Structure only (uses shared pattern function)
 view_structure() {
     case "$LANG" in
-        python)
-            grep -nE "^(class |def |async def )" "$FILE" 2>/dev/null | head -30 || true
-            ;;
-        typescript|javascript)
-            grep -nE "^(export |function |class |interface |type )" "$FILE" 2>/dev/null | head -30 || true
-            ;;
-        c|cpp)
-            grep -nE "^(struct |class |enum |void |int |char |bool |auto )" "$FILE" 2>/dev/null | head -30 || true
-            ;;
-        go)
-            grep -nE "^(func |type )" "$FILE" 2>/dev/null | head -30 || true
-            ;;
-        rust)
-            grep -nE "^(pub |fn |struct |enum |trait |impl )" "$FILE" 2>/dev/null | head -30 || true
-            ;;
         json)
             if has_command jq; then
                 jq -r 'paths | select(length == 1) | .[0]' "$FILE" 2>/dev/null | head -20 || true
@@ -271,7 +273,9 @@ view_structure() {
             fi
             ;;
         *)
-            grep -nE "^[A-Z]|^#|^function |^def |^class " "$FILE" 2>/dev/null | head -30 || true
+            local pattern
+            pattern=$(get_structure_pattern "$LANG")
+            grep -nE "$pattern" "$FILE" 2>/dev/null | head -30 || true
             ;;
     esac
 }
