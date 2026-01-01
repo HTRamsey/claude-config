@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tdd_guard import (
+from hooks.handlers.tdd_guard import (
     get_test_paths,
     find_test_file,
     count_recent_warnings,

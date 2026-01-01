@@ -4,9 +4,10 @@ Metrics utilities - Token estimation and content size measurement.
 Consolidates token estimation from tool_analytics.py and context_monitor.py.
 """
 import json
+from datetime import datetime
 from typing import Any
 
-from config import Thresholds
+from hooks.config import Thresholds
 
 # Character-based estimation (fast, approximate)
 CHARS_PER_TOKEN = Thresholds.CHARS_PER_TOKEN
@@ -94,3 +95,8 @@ def count_tokens_accurate(text: str) -> int:
     Falls back to character estimation if tiktoken unavailable.
     """
     return estimate_tokens(text, accurate=True)
+
+
+def get_timestamp() -> str:
+    """Return ISO format timestamp for consistent logging."""
+    return datetime.now().isoformat()

@@ -56,6 +56,7 @@ class TimeoutConfig:
     cache_ttl: float = 5.0  # In-memory cache TTL (seconds)
     hook_disabled_ttl: float = 10.0  # Hook disabled check cache TTL
     hierarchy_cache_ttl: float = 30.0  # Hierarchical rules cache (CLAUDE.md files rarely change)
+    patterns_cache_ttl: float = 5.0  # Smart permissions learned patterns cache TTL
     exploration_cache_ttl: int = 3600  # 1 hour for exploration results
     research_cache_ttl: int = 86400  # 24 hours for web research
 
@@ -75,6 +76,12 @@ class TimeoutConfig:
 
     # Tool success tracker
     tool_tracker_max_age: int = 3600  # Clear tool tracker state after 1 hour
+
+    # Daily stats cache
+    daily_stats_cache_ttl: int = 300  # 5 minutes
+
+    # Token cache (context monitor)
+    token_cache_ttl: float = 60.0  # 1 minute
 
     def __post_init__(self):
         object.__setattr__(self, 'handler_timeout_s', self.handler_timeout_ms / 1000.0)
@@ -99,6 +106,10 @@ class TimeoutConfig:
     @property
     def HIERARCHY_CACHE_TTL(self) -> float:
         return self.hierarchy_cache_ttl
+
+    @property
+    def PATTERNS_CACHE_TTL(self) -> float:
+        return self.patterns_cache_ttl
 
     @property
     def EXPLORATION_CACHE_TTL(self) -> int:
@@ -135,6 +146,14 @@ class TimeoutConfig:
     @property
     def TOOL_TRACKER_MAX_AGE(self) -> int:
         return self.tool_tracker_max_age
+
+    @property
+    def DAILY_STATS_CACHE_TTL(self) -> int:
+        return self.daily_stats_cache_ttl
+
+    @property
+    def TOKEN_CACHE_TTL(self) -> float:
+        return self.token_cache_ttl
 
 
 # Create singleton instance with same name for backwards compatibility
@@ -524,6 +543,117 @@ class SmartPermissions:
 
 
 # =============================================================================
+# Credential Scanner Patterns
+# =============================================================================
+
+@dataclass(frozen=True)
+class CredentialConfig:
+    """Credential scanner patterns for detecting secrets."""
+    sensitive_patterns: tuple[tuple[str, str], ...] = (('(?i)(api[_-]?key|apikey)\\s*[=:]\\s*["\\\']?[a-zA-Z0-9_-]{20,}', 'API key'), ('(?i)(secret[_-]?key|secretkey)\\s*[=:]\\s*["\\\']?[a-zA-Z0-9_-]{20,}', 'Secret key'), ('(?i)(access[_-]?token|accesstoken)\\s*[=:]\\s*["\\\']?[a-zA-Z0-9_-]{20,}', 'Access token'), ('(?i)(auth[_-]?token|authtoken)\\s*[=:]\\s*["\\\']?[a-zA-Z0-9_-]{20,}', 'Auth token'), ('AKIA[0-9A-Z]{16}', 'AWS Access Key ID'), ('(?i)aws[_-]?secret[_-]?access[_-]?key\\s*[=:]\\s*["\\\']?[A-Za-z0-9/+=]{40}', 'AWS Secret Key'), ('-----BEGIN (RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY-----', 'Private key'), ('-----BEGIN CERTIFICATE-----', 'Certificate'), ('sk-[a-zA-Z0-9]{48}', 'OpenAI API key'), ('sk-ant-[a-zA-Z0-9\\-_]{90,}', 'Anthropic API key'), ('AIza[0-9A-Za-z\\-_]{35}', 'Google API key'), ('ghp_[a-zA-Z0-9]{36}', 'GitHub PAT'), ('gho_[a-zA-Z0-9]{36}', 'GitHub OAuth token'), ('ghs_[a-zA-Z0-9]{36}', 'GitHub App token'), ('ghu_[a-zA-Z0-9]{36}', 'GitHub user-to-server token'), ('glpat-[a-zA-Z0-9\\-_]{20,}', 'GitLab PAT'), ('xox[baprs]-[a-zA-Z0-9-]+', 'Slack token'), ('sk_live_[a-zA-Z0-9]{24,}', 'Stripe secret key'), ('rk_live_[a-zA-Z0-9]{24,}', 'Stripe restricted key'), ('sq0csp-[a-zA-Z0-9\\-_]{43}', 'Square access token'), ('sq0atp-[a-zA-Z0-9\\-_]{22}', 'Square OAuth token'), ('[MN][a-zA-Z0-9]{23,26}\\.[a-zA-Z0-9]{6}\\.[a-zA-Z0-9_-]{27}', 'Discord bot token'), ('\\d{17,19}:[a-zA-Z0-9_-]{35}', 'Telegram bot token'), ('SG\\.[a-zA-Z0-9_-]{22}\\.[a-zA-Z0-9_-]{43}', 'SendGrid API key'), ('key-[a-zA-Z0-9]{32}', 'Mailgun API key'), ('npm_[a-zA-Z0-9]{36}', 'npm access token'), ('pypi-[a-zA-Z0-9_-]{80,}', 'PyPI API token'), ('rubygems_[a-zA-Z0-9]{48}', 'RubyGems API key'), ('travis-[a-zA-Z0-9]{22}', 'Travis CI token'), ('circle-token-[a-zA-Z0-9]{40}', 'CircleCI token'), ('dop_v1_[a-zA-Z0-9]{64}', 'DigitalOcean PAT'), ('hf_[a-zA-Z0-9]{34,}', 'HuggingFace token'), ('FLWSECK_TEST-[a-zA-Z0-9]{32}', 'Flutterwave secret key'), ('whsec_[a-zA-Z0-9]{32,}', 'Webhook secret'), ('DefaultEndpointsProtocol=https.*AccountKey=[A-Za-z0-9+/=]+', 'Azure connection string'), ('(?i)azure[_-]?storage[_-]?key\\s*[=:]\\s*["\\\']?[A-Za-z0-9+/=]{80,}', 'Azure storage key'), ('(mysql|postgresql|postgres|mongodb|redis|amqp)://[^:]+:[^@]+@', 'Database URI with password'), ('(mssql|sqlserver)://[^:]+:[^@]+@', 'SQL Server URI with password'), ('mongodb\\+srv://[^:]+:[^@]+@', 'MongoDB SRV URI with password'), ('(?i)password\\s*[=:]\\s*["\\\'][^"\\\']{8,}["\\\']', 'Hardcoded password'), ('(?i)passwd\\s*[=:]\\s*["\\\'][^"\\\']{8,}["\\\']', 'Hardcoded password'), ('eyJ[a-zA-Z0-9_-]*\\.eyJ[a-zA-Z0-9_-]*\\.[a-zA-Z0-9_-]*', 'JWT token'))
+
+    allowlist_patterns: tuple[str, ...] = ('.example', '.sample', '.template', 'test', 'mock', 'fake', 'dummy')
+
+    @staticmethod
+    def get_compiled_patterns():
+        """Get compiled sensitive credential patterns."""
+        return _compile_credential_patterns()
+
+
+# Create singleton instance with same name for backwards compatibility
+Credentials = CredentialConfig()
+
+
+# =============================================================================
+# Build Analyzer Configuration
+# =============================================================================
+
+@dataclass(frozen=True)
+class BuildConfig:
+    """Build analyzer patterns and suggestions."""
+
+    BUILD_COMMANDS_RAW: tuple = (
+        r"^make\b", r"^cmake\b", r"^ninja\b", r"^meson\b",
+        r"^cargo\s+(build|test|check|run)", r"^rustc\b",
+        r"^gcc\b", r"^g\+\+\b", r"^clang\b", r"^clang\+\+\b",
+        r"^npm\s+(run\s+)?(build|test|start)", r"^yarn\s+(build|test)",
+        r"^pnpm\s+(build|test)", r"^bun\s+(build|test)",
+        r"^go\s+(build|test|run)", r"^mvn\b", r"^gradle\b",
+        r"^python.*setup\.py", r"^pip\s+install",
+        r"^pytest\b", r"^python\s+-m\s+pytest",
+    )
+
+    ERROR_PATTERNS_RAW: dict = None  # Set in __post_init__
+
+    FIX_SUGGESTIONS: dict = None  # Set in __post_init__
+
+    def __post_init__(self):
+        error_patterns = {
+            "gcc_clang": [
+                (r"error:\s*(.+)", "compile"),
+                (r"undefined reference to", "linker"),
+                (r"cannot find -l", "linker"),
+                (r"fatal error:\s*(.+\.h)", "header"),
+            ],
+            "rust": [
+                (r"error\[E\d+\]:\s*(.+)", "compile"),
+                (r"cannot find", "import"),
+            ],
+            "typescript": [
+                (r"error TS\d+:\s*(.+)", "compile"),
+                (r"Cannot find module", "import"),
+            ],
+            "python": [
+                (r"ModuleNotFoundError:\s*(.+)", "import"),
+                (r"ImportError:\s*(.+)", "import"),
+                (r"SyntaxError:\s*(.+)", "syntax"),
+            ],
+            "go": [
+                (r"cannot find package", "import"),
+                (r"undefined:\s*(.+)", "compile"),
+            ],
+            "npm": [
+                (r"npm ERR!", "npm"),
+                (r"ENOENT", "file"),
+            ],
+            "make": [
+                (r"make:\s*\*\*\*\s*(.+)", "make"),
+                (r"No rule to make target", "make"),
+            ],
+        }
+        object.__setattr__(self, 'ERROR_PATTERNS_RAW', error_patterns)
+
+        fix_suggestions = {
+            "missing_module": "Check imports and install missing packages",
+            "undefined_reference": "Check function declarations and library linking",
+            "syntax_error": "Review recent changes for syntax issues",
+            "type_error": "Check type annotations and function signatures",
+            "permission_denied": "Check file permissions",
+            "file_not_found": "Verify file paths exist",
+            "network_error": "Check network connectivity",
+            "memory_error": "Consider reducing memory usage or increasing limits",
+            "timeout": "Consider optimizing or increasing timeout",
+            "test_failure": "Review failing test assertions",
+            "lint_error": "Run linter and fix style issues",
+            "dependency_conflict": "Check package versions for compatibility",
+        }
+        object.__setattr__(self, 'FIX_SUGGESTIONS', fix_suggestions)
+
+    @staticmethod
+    def get_build_commands():
+        """Get compiled build command patterns."""
+        return _compile_build_commands()
+
+    @staticmethod
+    def get_error_patterns():
+        """Get compiled error patterns by tool."""
+        return _compile_error_patterns()
+
+
+# Create singleton instance
+Build = BuildConfig()
+
+
+# =============================================================================
 # State Limits (centralized magic numbers)
 # =============================================================================
 
@@ -538,12 +668,16 @@ class LimitConfig:
     max_backups: int = 20
     max_chain_recommendations: int = 2
     max_messages_joined: int = 3
+    patterns_cache_maxsize: int = 1  # Single entry for learned patterns cache
+    hierarchy_cache_maxsize: int = 256  # LRU cache for hierarchy lookups
     content_truncate_summary: int = 500
     content_truncate_cache: int = 2000
     content_truncate_full: int = 10000
     prompt_truncate: int = 100
     command_truncate: int = 500
     url_truncate: int = 80
+    daily_stats_cache_maxsize: int = 1  # Single entry for daily stats cache
+    token_cache_maxsize: int = 10  # Token cache (context monitor)
 
     # Backwards compatibility: UPPER_CASE aliases
     @property
@@ -591,6 +725,14 @@ class LimitConfig:
         return self.content_truncate_full
 
     @property
+    def PATTERNS_CACHE_MAXSIZE(self) -> int:
+        return self.patterns_cache_maxsize
+
+    @property
+    def HIERARCHY_CACHE_MAXSIZE(self) -> int:
+        return self.hierarchy_cache_maxsize
+
+    @property
     def PROMPT_TRUNCATE(self) -> int:
         return self.prompt_truncate
 
@@ -602,45 +744,39 @@ class LimitConfig:
     def URL_TRUNCATE(self) -> int:
         return self.url_truncate
 
+    @property
+    def DAILY_STATS_CACHE_MAXSIZE(self) -> int:
+        return self.daily_stats_cache_maxsize
+
+    @property
+    def TOKEN_CACHE_MAXSIZE(self) -> int:
+        return self.token_cache_maxsize
+
 
 # Create singleton instance with same name for backwards compatibility
 Limits = LimitConfig()
 
 
 # =============================================================================
-# JSON Serialization (msgspec when available)
+# JSON Serialization (msgspec for 10x faster parsing)
 # =============================================================================
 
-try:
-    import msgspec
-    _decoder = msgspec.json.Decoder()
-    _encoder = msgspec.json.Encoder()
+import msgspec
 
-    def fast_json_loads(data: bytes | str) -> dict:
-        """Fast JSON decode using msgspec."""
-        if isinstance(data, str):
-            data = data.encode()
-        return _decoder.decode(data)
+_decoder = msgspec.json.Decoder()
+_encoder = msgspec.json.Encoder()
 
-    def fast_json_dumps(obj: dict) -> bytes:
-        """Fast JSON encode using msgspec."""
-        return _encoder.encode(obj)
 
-    HAS_MSGSPEC = True
-except ImportError:
-    import json
+def fast_json_loads(data: bytes | str) -> dict:
+    """Fast JSON decode using msgspec."""
+    if isinstance(data, str):
+        data = data.encode()
+    return _decoder.decode(data)
 
-    def fast_json_loads(data: bytes | str) -> dict:
-        """Fallback JSON decode."""
-        if isinstance(data, bytes):
-            data = data.decode()
-        return json.loads(data)
 
-    def fast_json_dumps(obj: dict) -> bytes:
-        """Fallback JSON encode."""
-        return json.dumps(obj).encode()
-
-    HAS_MSGSPEC = False
+def fast_json_dumps(obj: dict) -> bytes:
+    """Fast JSON encode using msgspec."""
+    return _encoder.encode(obj)
 
 
 # =============================================================================
@@ -720,6 +856,15 @@ def _compile_never_permissions_patterns():
 
 
 @lru_cache(maxsize=1)
+def _compile_credential_patterns():
+    """Compile credential scanner patterns."""
+    return [
+        (re.compile(p), n)
+        for p, n in Credentials.sensitive_patterns
+    ]
+
+
+@lru_cache(maxsize=1)
 def get_protected_patterns_compiled():
     """Get compiled protected file patterns."""
     return [re.compile(p) for p in ProtectedFiles.PROTECTED_PATTERNS]
@@ -735,3 +880,18 @@ def get_write_only_patterns_compiled():
 def get_allowed_patterns_compiled():
     """Get compiled allowed override patterns."""
     return [re.compile(p) for p in ProtectedFiles.ALLOWED_PATHS]
+
+
+@lru_cache(maxsize=1)
+def _compile_build_commands():
+    """Compile build command patterns."""
+    return [re.compile(p, re.IGNORECASE) for p in Build.BUILD_COMMANDS_RAW]
+
+
+@lru_cache(maxsize=1)
+def _compile_error_patterns():
+    """Compile error patterns by tool."""
+    result = {}
+    for tool, patterns in Build.ERROR_PATTERNS_RAW.items():
+        result[tool] = [(re.compile(p), cat) for p, cat in patterns]
+    return result

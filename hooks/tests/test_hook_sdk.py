@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from hook_sdk import detect_event, RateLimiter, EventType
+from hooks.hook_sdk import detect_event, RateLimiter, EventType
 
 
 class TestDetectEvent:
@@ -64,22 +64,22 @@ class TestRateLimiter:
 
     def test_rate_limiter_allows_within_limit(self, tmp_path):
         """Should allow requests within rate limit."""
-        with patch('hook_sdk.read_state', return_value={"timestamps": []}):
-            with patch('hook_sdk.write_state'):
+        with patch('hooks.hook_sdk.read_state', return_value={"timestamps": []}):
+            with patch('hooks.hook_sdk.write_state'):
                 limiter = RateLimiter("test1", max_count=3, window_secs=1)
                 assert limiter.consume() is True
 
     def test_rate_limiter_blocks_over_limit(self, tmp_path):
         """Should block requests exceeding rate limit."""
         now = time.time()
-        with patch('hook_sdk.read_state', return_value={"timestamps": [now, now]}):
-            with patch('hook_sdk.write_state'):
+        with patch('hooks.hook_sdk.read_state', return_value={"timestamps": [now, now]}):
+            with patch('hooks.hook_sdk.write_state'):
                 limiter = RateLimiter("test2", max_count=2, window_secs=1)
                 assert limiter.consume() is False
 
     def test_rate_limiter_check_doesnt_consume(self, tmp_path):
         """check() should not consume quota."""
-        with patch('hook_sdk.read_state', return_value={"timestamps": []}):
+        with patch('hooks.hook_sdk.read_state', return_value={"timestamps": []}):
             limiter = RateLimiter("test3", max_count=1, window_secs=1)
             assert limiter.check() is True
             assert limiter.check() is True  # Still true, didn't consume
@@ -87,7 +87,7 @@ class TestRateLimiter:
     def test_rate_limiter_expires_old_timestamps(self, tmp_path):
         """Should expire timestamps older than window."""
         old_time = time.time() - 100  # Very old
-        with patch('hook_sdk.read_state', return_value={"timestamps": [old_time, old_time]}):
-            with patch('hook_sdk.write_state'):
+        with patch('hooks.hook_sdk.read_state', return_value={"timestamps": [old_time, old_time]}):
+            with patch('hooks.hook_sdk.write_state'):
                 limiter = RateLimiter("test4", max_count=2, window_secs=1)
                 assert limiter.consume() is True  # Old timestamps expired

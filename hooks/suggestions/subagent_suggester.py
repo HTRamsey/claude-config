@@ -3,8 +3,8 @@ Subagent Suggester - Suggests agent delegation for exploration patterns.
 
 PreToolUse: Grep, Glob, Read
 """
-from .shared import get_state, update_state, save_state
-from hook_sdk import PreToolUseContext, Response
+from hooks.suggestions.shared import get_state, update_state, save_state
+from hooks.hook_sdk import PreToolUseContext, Response
 
 
 AGENT_RECOMMENDATIONS = {

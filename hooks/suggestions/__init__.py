@@ -11,11 +11,11 @@ Modules:
 - agent_chainer: Suggests follow-up specialists after Task
 """
 
-from .skill_suggester import suggest_skill
-from .subagent_suggester import suggest_subagent
-from .tool_optimizer import suggest_optimization
-from .agent_chainer import suggest_chain
-from .shared import get_state, update_state, save_state
+from hooks.suggestions.skill_suggester import suggest_skill
+from hooks.suggestions.subagent_suggester import suggest_subagent
+from hooks.suggestions.tool_optimizer import suggest_optimization
+from hooks.suggestions.agent_chainer import suggest_chain
+from hooks.suggestions.shared import get_state, update_state, save_state
 
 __all__ = [
     "suggest_skill",

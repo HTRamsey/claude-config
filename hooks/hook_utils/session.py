@@ -8,7 +8,6 @@ import json
 import os
 import threading
 import time
-from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
@@ -16,6 +15,7 @@ from cachetools import TTLCache, LRUCache
 
 from .io import safe_load_json, atomic_write_json, file_lock
 from .logging import DATA_DIR, ensure_data_dir
+from .metrics import get_timestamp
 
 # Import centralized config
 try:
@@ -84,7 +84,7 @@ def is_new_session(ctx: dict = None, transcript_path: str = None) -> bool:
             seen_sessions.append(session_id)
             state["seen_sessions"] = seen_sessions[-100:]
             state["last_session"] = session_id
-            state["last_session_start"] = datetime.now().isoformat()
+            state["last_session_start"] = get_timestamp()
 
             atomic_write_json(SESSION_STATE_FILE, state)
             return True

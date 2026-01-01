@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from build_analyzer import (
+from hooks.handlers.build_analyzer import (
     is_build_command,
     detect_build_tool,
     extract_errors,

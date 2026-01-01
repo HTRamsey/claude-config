@@ -275,13 +275,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/session_start.py",
-            "timeout": 3
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/start_viewer.py",
-            "timeout": 3
+            "command": "$HOME/.claude/hooks/dispatchers/session_start.py",
+            "timeout": 5
           }
         ]
       }
@@ -291,7 +286,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/user_prompt_dispatcher.py",
+            "command": "$HOME/.claude/hooks/dispatchers/user_prompt.py",
             "timeout": 5
           }
         ]
@@ -303,7 +298,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/smart_permissions.py",
+            "command": "$HOME/.claude/hooks/dispatchers/permission.py",
             "timeout": 2
           }
         ]
@@ -315,7 +310,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/pre_tool_dispatcher.py",
+            "command": "$HOME/.claude/hooks/dispatchers/pre_tool.py",
             "timeout": 5
           }
         ]
@@ -327,7 +322,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/post_tool_dispatcher.py",
+            "command": "$HOME/.claude/hooks/dispatchers/post_tool.py",
             "timeout": 5
           }
         ]
@@ -348,7 +343,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/stop_handler.py",
+            "command": "$HOME/.claude/hooks/dispatchers/stop.py",
             "timeout": 5
           }
         ]
@@ -359,7 +354,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/session_end_handler.py",
+            "command": "$HOME/.claude/hooks/dispatchers/session_end.py",
             "timeout": 10
           }
         ]
@@ -370,7 +365,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/state_saver.py",
+            "command": "$HOME/.claude/hooks/handlers/state_saver.py",
             "timeout": 5
           }
         ]

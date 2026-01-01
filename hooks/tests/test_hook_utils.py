@@ -10,14 +10,14 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from hook_utils import (
+from hooks.hook_utils import (
     file_lock, safe_load_json, atomic_write_json,
     log_event, graceful_main, DATA_DIR,
     read_state, write_state,
     get_session_id, read_session_state, write_session_state,
     is_hook_disabled, record_usage,
 )
-import hook_utils.hooks as hooks_module
+import hooks.hook_utils.hooks as hooks_module
 
 
 class TestIO:
@@ -65,14 +65,14 @@ class TestState:
 
     def test_read_write_state_roundtrip(self, tmp_path):
         """State should roundtrip through read/write."""
-        with patch('hook_utils.state.DATA_DIR', tmp_path):
+        with patch('hooks.hook_utils.state.DATA_DIR', tmp_path):
             write_state("test_key", {"data": 123})
             result = read_state("test_key")
             assert result == {"data": 123}
 
     def test_read_state_default(self, tmp_path):
         """read_state should return default for missing key."""
-        with patch('hook_utils.state.DATA_DIR', tmp_path):
+        with patch('hooks.hook_utils.state.DATA_DIR', tmp_path):
             result = read_state("missing_key", {"default": True})
             assert result == {"default": True}
 

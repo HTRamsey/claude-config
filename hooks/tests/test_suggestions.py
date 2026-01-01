@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from suggestions import (
+from hooks.suggestions import (
     suggest_skill,
     suggest_subagent,
     suggest_optimization,
@@ -24,7 +24,7 @@ class TestSkillSuggester:
 
     def test_suggest_skill_detects_hook_pattern(self):
         """Should recognize hook file patterns."""
-        from suggestions.skill_suggester import SKILL_SUGGESTIONS
+        from hooks.suggestions.skill_suggester import SKILL_SUGGESTIONS
         # Verify the pattern exists in suggestions
         hook_patterns = [s for s in SKILL_SUGGESTIONS if s["skill"] == "hook-creator"]
         assert len(hook_patterns) > 0
@@ -35,7 +35,7 @@ class TestSkillSuggester:
 
     def test_suggest_skill_detects_agent_pattern(self):
         """Should recognize agent file patterns."""
-        from suggestions.skill_suggester import SKILL_SUGGESTIONS
+        from hooks.suggestions.skill_suggester import SKILL_SUGGESTIONS
         agent_patterns = [s for s in SKILL_SUGGESTIONS if s["skill"] == "agent-creator"]
         assert len(agent_patterns) > 0
         import re
@@ -44,7 +44,7 @@ class TestSkillSuggester:
 
     def test_suggest_skill_detects_command_pattern(self):
         """Should recognize command file patterns."""
-        from suggestions.skill_suggester import SKILL_SUGGESTIONS
+        from hooks.suggestions.skill_suggester import SKILL_SUGGESTIONS
         cmd_patterns = [s for s in SKILL_SUGGESTIONS if s["skill"] == "command-creator"]
         assert len(cmd_patterns) > 0
         import re

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from batch_operation_detector import (
+from hooks.handlers.batch_operation_detector import (
     normalize_content,
     extract_pattern,
     find_similar_edits,

@@ -6,7 +6,7 @@ PreToolUse: Bash, Grep, Read
 import re
 from pathlib import Path
 
-from hook_sdk import PreToolUseContext, Response
+from hooks.hook_sdk import PreToolUseContext, Response
 
 
 # Pre-compiled patterns for performance

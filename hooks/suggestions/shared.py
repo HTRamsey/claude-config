@@ -5,7 +5,7 @@ import json
 import threading
 from pathlib import Path
 
-from config import DATA_DIR, CACHE_DIR, Limits
+from hooks.config import DATA_DIR, CACHE_DIR, Limits
 
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 SUGGESTION_CACHE = CACHE_DIR / "suggestion-engine-cache.json"

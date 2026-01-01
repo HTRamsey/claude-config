@@ -4,11 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from hierarchical_rules import (
+from hooks.handlers.hierarchical_rules import (
     parse_frontmatter,
-    matches_path_pattern,
-    _compile_glob_pattern,
 )
+from hooks.hook_sdk import Patterns
 
 
 class TestParseFrontmatter:
@@ -52,23 +51,23 @@ class TestMatchesPathPattern:
 
     def test_double_star_matches_deep(self):
         """** should match multiple directories."""
-        assert matches_path_pattern("src/a/b/c/file.ts", "**/*.ts") is True
+        assert Patterns.matches_path_pattern("src/a/b/c/file.ts", "**/*.ts") is True
 
     def test_single_star_no_slash(self):
         """* should not match slashes."""
-        assert matches_path_pattern("src/file.ts", "*.ts") is False
-        assert matches_path_pattern("file.ts", "*.ts") is True
+        assert Patterns.matches_path_pattern("src/file.ts", "*.ts") is False
+        assert Patterns.matches_path_pattern("file.ts", "*.ts") is True
 
     def test_specific_directory(self):
         """Should match specific directory patterns."""
-        assert matches_path_pattern("src/api/users.ts", "src/**/*.ts") is True
-        assert matches_path_pattern("lib/utils.ts", "src/**/*.ts") is False
+        assert Patterns.matches_path_pattern("src/api/users.ts", "src/**/*.ts") is True
+        assert Patterns.matches_path_pattern("lib/utils.ts", "src/**/*.ts") is False
 
     def test_brace_expansion(self):
         """Should expand {a,b} patterns."""
-        assert matches_path_pattern("src/file.ts", "{src,lib}/*.ts") is True
-        assert matches_path_pattern("lib/file.ts", "{src,lib}/*.ts") is True
-        assert matches_path_pattern("other/file.ts", "{src,lib}/*.ts") is False
+        assert Patterns.matches_path_pattern("src/file.ts", "{src,lib}/*.ts") is True
+        assert Patterns.matches_path_pattern("lib/file.ts", "{src,lib}/*.ts") is True
+        assert Patterns.matches_path_pattern("other/file.ts", "{src,lib}/*.ts") is False
 
 
 class TestPatternCaching:
@@ -77,26 +76,26 @@ class TestPatternCaching:
     def test_cache_stores_patterns(self):
         """Cache should store compiled patterns."""
         # Clear cache
-        _compile_glob_pattern.cache_clear()
-        
+        Patterns.compile_pattern.cache_clear()
+
         # First call
-        _compile_glob_pattern("**/*.ts")
-        info = _compile_glob_pattern.cache_info()
+        Patterns.compile_pattern("**/*.ts")
+        info = Patterns.compile_pattern.cache_info()
         assert info.misses == 1
-        
+
         # Second call - should hit cache
-        _compile_glob_pattern("**/*.ts")
-        info = _compile_glob_pattern.cache_info()
+        Patterns.compile_pattern("**/*.ts")
+        info = Patterns.compile_pattern.cache_info()
         assert info.hits == 1
 
     def test_different_patterns_cached_separately(self):
         """Different patterns should be cached separately."""
-        _compile_glob_pattern.cache_clear()
-        
-        _compile_glob_pattern("**/*.ts")
-        _compile_glob_pattern("**/*.py")
-        _compile_glob_pattern("src/**/*")
-        
-        info = _compile_glob_pattern.cache_info()
+        Patterns.compile_pattern.cache_clear()
+
+        Patterns.compile_pattern("**/*.ts")
+        Patterns.compile_pattern("**/*.py")
+        Patterns.compile_pattern("src/**/*")
+
+        info = Patterns.compile_pattern.cache_info()
         assert info.misses == 3
         assert info.currsize == 3

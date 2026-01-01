@@ -9,7 +9,7 @@ instead of raising exceptions, making them suitable for non-critical operations
 where missing data is acceptable.
 
 Usage:
-    from hook_utils.file_ops import safe_read_file, safe_mtime, safe_exists
+    from hooks.hook_utils.file_ops import safe_read_file, safe_mtime, safe_exists
 
     content = safe_read_file("/path/to/file.txt")  # Empty string if error
     mtime = safe_mtime("/path/to/file.txt")        # 0.0 if error

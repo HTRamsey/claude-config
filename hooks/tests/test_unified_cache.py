@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from unified_cache import (
+from hooks.handlers.unified_cache import (
     find_fuzzy_match,
     get_cache_key,
     load_cache,

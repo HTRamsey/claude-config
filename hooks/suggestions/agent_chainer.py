@@ -7,8 +7,8 @@ import re
 
 import sys
 from pathlib import Path
-from config import Limits
-from hook_sdk import PostToolUseContext, Response
+from hooks.config import Limits
+from hooks.hook_sdk import PostToolUseContext, Response
 
 
 # Pre-compiled chain rules for performance

@@ -10,11 +10,11 @@ from typing import Any
 from unittest import TestCase, main
 from unittest.mock import patch, MagicMock
 
-from dispatcher_base import BaseDispatcher
+from hooks.dispatchers.base import BaseDispatcher, PostToolStrategy
 
 
-class TestDispatcher(BaseDispatcher):
-    """Concrete implementation for testing."""
+class MockDispatcher(BaseDispatcher):
+    """Concrete implementation for testing (not a pytest class)."""
 
     DISPATCHER_NAME = "test_dispatcher"
     HOOK_EVENT_NAME = "TestEvent"
@@ -41,12 +41,16 @@ class TestDispatcher(BaseDispatcher):
         # Return None for unknown handlers
         return None
 
+    def _create_result_strategy(self):
+        """Create result strategy for testing - use PostTool (no termination)."""
+        return PostToolStrategy()
+
 
 class TestBaseDispatcher(TestCase):
     """Tests for BaseDispatcher class."""
 
     def setUp(self):
-        self.dispatcher = TestDispatcher()
+        self.dispatcher = MockDispatcher()
 
     def test_get_handler_caches(self):
         """Handler should be cached after first load."""
@@ -104,7 +108,7 @@ class TestBaseDispatcher(TestCase):
 
     def test_run_handler_returns_none_when_disabled(self):
         """Disabled handlers should be skipped."""
-        with patch('dispatcher_base.is_hook_disabled', return_value=True):
+        with patch('hooks.dispatchers.base.is_hook_disabled', return_value=True):
             result = self.dispatcher.run_handler("handler_a", {})
             self.assertIsNone(result)
 
@@ -116,7 +120,7 @@ class TestBaseDispatcher(TestCase):
 
         self.dispatcher.set_mock_handler("handler_a", slow_handler)
 
-        with patch('dispatcher_base._HANDLER_TIMEOUT', 0.1):
+        with patch('hooks.dispatchers.base._HANDLER_TIMEOUT', 0.1):
             start = time.time()
             result = self.dispatcher.run_handler("handler_a", {})
             elapsed = time.time() - start
@@ -166,7 +170,7 @@ class TestDispatcherTermination(TestCase):
     """Tests for early termination behavior."""
 
     def setUp(self):
-        self.dispatcher = TestDispatcher()
+        self.dispatcher = MockDispatcher()
 
     def test_should_terminate_default_false(self):
         """Default implementation should not terminate."""
@@ -180,7 +184,7 @@ class TestDispatcherIntegration(TestCase):
 
     def test_full_dispatch_cycle(self):
         """Test complete dispatch with multiple handlers."""
-        dispatcher = TestDispatcher()
+        dispatcher = MockDispatcher()
 
         call_order = []
 

@@ -9,7 +9,7 @@ Provides:
 - Handler decorators for cleaner hook code
 
 Usage:
-    from hook_sdk import (
+    from hooks.hook_sdk import (
         PreToolUseContext,
         hook_handler,
         Response,
@@ -22,7 +22,6 @@ Usage:
         return None
 """
 import fnmatch
-import hashlib
 import json
 import os
 import re
@@ -30,18 +29,15 @@ import sys
 import threading
 import time
 from dataclasses import dataclass, field
-from functools import wraps
-from pathlib import Path
+from functools import lru_cache, wraps
 from typing import Any, Callable, Literal
 
 # Import base utilities
-from hook_utils import (
+from hooks.hook_utils import (
     graceful_main,
     log_event,
     read_state,
     write_state,
-    read_session_state,
-    write_session_state,
     update_session_state,
     cleanup_old_sessions,
     get_session_id,
@@ -74,10 +70,14 @@ EventType = Literal[
 
 @dataclass
 class ToolInput:
-    """Parsed tool input with typed accessors."""
+    """Parsed tool input with typed accessors.
+
+    Supports attribute access via __getattr__ for dynamic fields.
+    Explicit properties below provide IDE autocomplete and type hints.
+    """
     raw: dict = field(default_factory=dict)
 
-    # Common fields
+    # Explicit properties for IDE autocomplete and type hints
     @property
     def file_path(self) -> str:
         return self.raw.get("file_path", "")
@@ -87,48 +87,22 @@ class ToolInput:
         return self.raw.get("command", "")
 
     @property
-    def pattern(self) -> str:
-        return self.raw.get("pattern", "")
-
-    @property
-    def path(self) -> str:
-        return self.raw.get("path", "")
-
-    @property
-    def output_mode(self) -> str:
-        return self.raw.get("output_mode", "")
-
-    @property
-    def head_limit(self) -> int | None:
-        return self.raw.get("head_limit")
-
-    @property
     def content(self) -> str:
         return self.raw.get("content", "")
 
     @property
-    def old_string(self) -> str:
-        return self.raw.get("old_string", "")
-
-    @property
-    def new_string(self) -> str:
-        return self.raw.get("new_string", "")
+    def pattern(self) -> str:
+        return self.raw.get("pattern", "")
 
     @property
     def prompt(self) -> str:
         return self.raw.get("prompt", "")
 
-    @property
-    def url(self) -> str:
-        return self.raw.get("url", "")
-
-    @property
-    def subagent_type(self) -> str:
-        return self.raw.get("subagent_type", "")
-
-    @property
-    def skill(self) -> str:
-        return self.raw.get("skill", "")
+    def __getattr__(self, name: str) -> Any:
+        """Fallback for any attribute not explicitly defined."""
+        if name.startswith('_'):
+            raise AttributeError(name)
+        return self.raw.get(name)
 
     def get(self, key: str, default: Any = None) -> Any:
         return self.raw.get(key, default)
@@ -136,12 +110,18 @@ class ToolInput:
 
 @dataclass
 class ToolResult:
-    """Parsed tool result with typed accessors."""
+    """Parsed tool result with typed accessors.
+
+    Provides convenience properties for exit code, stdout/stderr, and success status.
+    """
     raw: dict = field(default_factory=dict)
 
     @property
     def exit_code(self) -> int | None:
-        code = self.raw.get("exit_code") or self.raw.get("exitCode")
+        """Exit code (handles both exit_code and exitCode keys)."""
+        code = self.raw.get("exit_code")
+        if code is None:
+            code = self.raw.get("exitCode")
         return int(code) if code is not None else None
 
     @property
@@ -160,6 +140,12 @@ class ToolResult:
     @property
     def success(self) -> bool:
         return self.exit_code == 0 if self.exit_code is not None else True
+
+    def __getattr__(self, name: str) -> Any:
+        """Fallback for any attribute not explicitly defined."""
+        if name.startswith('_'):
+            raise AttributeError(name)
+        return self.raw.get(name)
 
     def get(self, key: str, default: Any = None) -> Any:
         return self.raw.get(key, default)
@@ -181,6 +167,12 @@ class BaseContext:
     @property
     def transcript_path(self) -> str:
         return self.raw.get("transcript_path", "")
+
+    def __getattr__(self, name: str) -> Any:
+        """Fallback for any attribute not explicitly defined."""
+        if name.startswith('_'):
+            raise AttributeError(name)
+        return self.raw.get(name)
 
     def get(self, key: str, default: Any = None) -> Any:
         return self.raw.get(key, default)
@@ -353,7 +345,14 @@ class Response:
 # =============================================================================
 
 class Patterns:
-    """Common pattern matching utilities."""
+    """Centralized pattern matching utilities for all hooks.
+
+    Provides unified methods for:
+    - Glob pattern matching (fnmatch-based, with caching)
+    - Command pattern matching (prefix and regex)
+    - Pre-compiled regex pattern matching
+    - Path pattern matching (with brace expansion support)
+    """
 
     @staticmethod
     def matches_glob(path: str, patterns: list[str]) -> str | None:
@@ -393,6 +392,88 @@ class Patterns:
             elif command.startswith(pattern) or pattern in command:
                 return pattern
         return None
+
+    @staticmethod
+    def matches_compiled(value: str, compiled_patterns: list) -> bool:
+        """
+        Check if value matches any pre-compiled regex pattern.
+
+        Args:
+            value: String to match
+            compiled_patterns: List of compiled regex patterns (re.Pattern objects)
+
+        Returns:
+            True if value matches any pattern, False otherwise
+
+        Example:
+            patterns = SmartPermissions.get_read()  # Pre-compiled patterns
+            if Patterns.matches_compiled(file_path, patterns):
+                approve()
+        """
+        value_lower = value.lower()
+        return any(p.search(value_lower) for p in compiled_patterns)
+
+    @staticmethod
+    @lru_cache(maxsize=256)
+    def compile_pattern(pattern: str) -> re.Pattern:
+        """
+        Compile glob pattern to regex with caching.
+
+        Converts patterns like "**/*.ts" to compiled regex patterns.
+        Supports:
+        - ** : matches multiple directory levels
+        - * : matches within single directory
+        - {a,b} : brace expansion
+
+        Args:
+            pattern: Glob pattern string
+
+        Returns:
+            Compiled regex pattern
+
+        Example:
+            pat = Patterns.compile_pattern("src/**/*.ts")
+            if pat.match("src/api/users.ts"):
+                apply_rule()
+        """
+        regex = pattern.replace(".", r"\.")
+        regex = regex.replace("**", "<<<DOUBLE>>>")
+        regex = regex.replace("*", "[^/]*")
+        regex = regex.replace("<<<DOUBLE>>>", ".*")
+        regex = "^" + regex + "$"
+        return re.compile(regex)
+
+    @staticmethod
+    def matches_path_pattern(path: str, pattern: str) -> bool:
+        """
+        Check if file path matches a glob-like pattern with brace expansion.
+
+        Supports:
+        - **/*.ts - matches any .ts file in any subdirectory
+        - src/**/* - matches anything under src/
+        - {src,lib}/**/*.ts - matches .ts in src/ or lib/
+
+        Args:
+            path: File path to check
+            pattern: Glob pattern
+
+        Returns:
+            True if path matches pattern, False otherwise
+        """
+        # Handle brace expansion {a,b}
+        if "{" in pattern and "}" in pattern:
+            match = re.match(r"(.*)\{([^}]+)\}(.*)", pattern)
+            if match:
+                prefix, options, suffix = match.groups()
+                for option in options.split(","):
+                    expanded = prefix + option.strip() + suffix
+                    if Patterns.matches_path_pattern(path, expanded):
+                        return True
+                return False
+
+        # Use cached compiled pattern
+        compiled = Patterns.compile_pattern(pattern)
+        return bool(compiled.match(path))
 
     @staticmethod
     def extract_command_name(command: str) -> str:

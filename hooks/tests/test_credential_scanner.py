@@ -4,21 +4,24 @@ from pathlib import Path
 
 import pytest
 
-from credential_scanner import (
-    SENSITIVE_PATTERNS,
-    ALLOWLIST_PATTERNS,
+from hooks.handlers.credential_scanner import (
     is_allowlisted,
     scan_for_sensitive,
     get_compiled_patterns,
 )
+from hooks.config import Credentials
+
+# Use config-based pattern access
+SENSITIVE_PATTERNS = Credentials.sensitive_patterns
+ALLOWLIST_PATTERNS = Credentials.allowlist_patterns
 
 
 class TestSensitivePatterns:
     """Tests for sensitive pattern definitions."""
 
-    def test_patterns_is_list(self):
-        """Patterns should be a list."""
-        assert isinstance(SENSITIVE_PATTERNS, list)
+    def test_patterns_is_sequence(self):
+        """Patterns should be a sequence (list or tuple)."""
+        assert isinstance(SENSITIVE_PATTERNS, (list, tuple))
 
     def test_patterns_have_names(self):
         """Each pattern should have a name."""

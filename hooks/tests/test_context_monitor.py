@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from context_monitor import (
+from hooks.handlers.context_monitor import (
     TOKEN_WARNING_THRESHOLD,
     TOKEN_CRITICAL_THRESHOLD,
     count_tokens,

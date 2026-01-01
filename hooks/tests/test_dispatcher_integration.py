@@ -11,12 +11,10 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-# Add hooks directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from dispatcher_base import BaseDispatcher
-from pre_tool_dispatcher import PreToolDispatcher
-from post_tool_dispatcher import PostToolDispatcher
+from hooks.dispatchers.base import BaseDispatcher, PreToolStrategy, PostToolStrategy, RoutingRule, HandlerRegistry
+from hooks.dispatchers.pre_tool import PreToolDispatcher
+from hooks.dispatchers.post_tool import PostToolDispatcher
+from hooks.dispatchers.user_prompt import dispatch, get_handler, HANDLERS
 
 
 class TestBaseDispatcher:
@@ -52,7 +50,7 @@ class TestBaseDispatcher:
         config_file = tmp_path / "hook-config.json"
         config_file.write_text(json.dumps({"disabled": ["file_protection"]}))
 
-        import hook_utils.hooks as hooks_module
+        import hooks.hook_utils.hooks as hooks_module
 
         # Patch DATA_DIR in hooks module and clear cache
         original_data_dir = hooks_module.DATA_DIR
@@ -146,6 +144,8 @@ class TestPreToolDispatcher:
     def test_credential_scanner_only_on_git_commit(self):
         """Credential scanner should only run on git commit commands."""
         dispatcher = PreToolDispatcher()
+        # Initialize handler registry with custom executors
+        dispatcher.setup_handler_registry()
 
         # Mock the credential scanner handler tuple
         mock_scan = MagicMock(return_value=[])
@@ -351,3 +351,417 @@ class TestToolHandlerMapping:
             for tool, handlers in dispatcher.TOOL_HANDLERS.items():
                 assert len(handlers) == len(set(handlers)), \
                     f"{tool} has duplicate handlers: {handlers}"
+
+
+class TestResultStrategies:
+    """Tests for ResultStrategy implementations."""
+
+    def test_pre_tool_creates_pre_tool_strategy(self):
+        """PreToolDispatcher._create_result_strategy() returns PreToolStrategy."""
+        dispatcher = PreToolDispatcher()
+        strategy = dispatcher._create_result_strategy()
+        assert isinstance(strategy, PreToolStrategy)
+
+    def test_post_tool_creates_post_tool_strategy(self):
+        """PostToolDispatcher._create_result_strategy() returns PostToolStrategy."""
+        dispatcher = PostToolDispatcher()
+        strategy = dispatcher._create_result_strategy()
+        assert isinstance(strategy, PostToolStrategy)
+
+    def test_pre_tool_strategy_terminates_on_deny(self):
+        """PreToolStrategy.should_terminate() returns True for deny decisions."""
+        strategy = PreToolStrategy()
+        result = {
+            "hookSpecificOutput": {
+                "permissionDecision": "deny",
+                "permissionDecisionReason": "Test deny"
+            }
+        }
+        assert strategy.should_terminate(result, "test_handler") == True
+
+    def test_pre_tool_strategy_no_terminate_on_allow(self):
+        """PreToolStrategy.should_terminate() returns False for allow decisions."""
+        strategy = PreToolStrategy()
+        result = {
+            "hookSpecificOutput": {
+                "permissionDecision": "allow",
+                "permissionDecisionReason": "Test allow"
+            }
+        }
+        assert strategy.should_terminate(result, "test_handler") == False
+
+    def test_post_tool_strategy_never_terminates(self):
+        """PostToolStrategy.should_terminate() always returns False."""
+        strategy = PostToolStrategy()
+        result = {
+            "hookSpecificOutput": {
+                "message": "Test message"
+            }
+        }
+        assert strategy.should_terminate(result, "test_handler") == False
+
+    def test_pre_tool_strategy_extracts_permission_reason(self):
+        """PreToolStrategy.extract_message() extracts permissionDecisionReason."""
+        strategy = PreToolStrategy()
+        hook_output = {
+            "permissionDecision": "allow",
+            "permissionDecisionReason": "Test reason"
+        }
+        assert strategy.extract_message(hook_output) == "Test reason"
+
+    def test_post_tool_strategy_extracts_message(self):
+        """PostToolStrategy.extract_message() extracts message field."""
+        strategy = PostToolStrategy()
+        hook_output = {
+            "message": "Test message"
+        }
+        assert strategy.extract_message(hook_output) == "Test message"
+
+    def test_pre_tool_strategy_builds_allow_result(self):
+        """PreToolStrategy.build_result() creates allow result."""
+        strategy = PreToolStrategy()
+        result = strategy.build_result(["msg1", "msg2"])
+        assert result["hookSpecificOutput"]["permissionDecision"] == "allow"
+        assert "msg1" in result["hookSpecificOutput"]["permissionDecisionReason"]
+
+    def test_post_tool_strategy_builds_message_result(self):
+        """PostToolStrategy.build_result() creates message result."""
+        strategy = PostToolStrategy()
+        result = strategy.build_result(["msg1", "msg2"])
+        assert result["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
+        assert "msg1" in result["hookSpecificOutput"]["message"]
+
+
+class TestHandlerRegistry:
+    """Tests for HandlerRegistry functionality."""
+
+    def test_register_single_handler(self):
+        """HandlerRegistry can register single handler."""
+        registry = HandlerRegistry()
+        handler = lambda ctx: {"result": "test"}
+        registry.register("test_handler", handler)
+
+        assert "test_handler" in registry.handlers
+        assert registry.handlers["test_handler"] == handler
+
+    def test_register_with_routing_rule(self):
+        """HandlerRegistry can register with routing rule."""
+        registry = HandlerRegistry()
+        handler = (lambda ctx: {"a": 1}, lambda ctx: {"b": 2})
+        rule = RoutingRule(tool_patterns={"Task": 0, "WebFetch": 1}, default=0)
+        registry.register("dual_handler", handler, routing=rule)
+
+        assert "dual_handler" in registry.routing_rules
+        assert registry.routing_rules["dual_handler"] == rule
+
+    def test_register_with_custom_executor(self):
+        """HandlerRegistry can register with custom executor."""
+        registry = HandlerRegistry()
+        handler = lambda ctx: {}
+        executor = lambda name, handler, ctx: {"custom": True}
+        registry.register("custom_handler", handler, executor=executor)
+
+        assert registry.has_custom_executor("custom_handler")
+        assert registry.get_custom_executor("custom_handler") == executor
+
+    def test_get_handler_for_tool_single(self):
+        """HandlerRegistry returns single handler directly."""
+        registry = HandlerRegistry()
+        handler = lambda ctx: {"result": "test"}
+        registry.register("test_handler", handler)
+
+        result = registry.get_handler_for_tool("test_handler", "AnyTool")
+        assert result == handler
+
+    def test_get_handler_for_tool_dual_routed(self):
+        """HandlerRegistry routes dual handler based on tool name."""
+        registry = HandlerRegistry()
+        handler0 = lambda ctx: {"handler": 0}
+        handler1 = lambda ctx: {"handler": 1}
+        handler = (handler0, handler1)
+        rule = RoutingRule(tool_patterns={"Task": 0, "WebFetch": 1}, default=0)
+        registry.register("dual_handler", handler, routing=rule)
+
+        # Task should route to handler0
+        result = registry.get_handler_for_tool("dual_handler", "Task")
+        assert result == handler0
+
+        # WebFetch should route to handler1
+        result = registry.get_handler_for_tool("dual_handler", "WebFetch")
+        assert result == handler1
+
+    def test_get_handler_for_tool_dual_default(self):
+        """HandlerRegistry uses default for unmatched tool."""
+        registry = HandlerRegistry()
+        handler = (lambda ctx: {"default": True}, lambda ctx: {"other": True})
+        rule = RoutingRule(tool_patterns={"Task": 0}, default=0)
+        registry.register("dual_handler", handler, routing=rule)
+
+        # Unknown tool should use default (0)
+        result = registry.get_handler_for_tool("dual_handler", "UnknownTool")
+        assert result == handler[0]
+
+
+class TestHandlerImports:
+    """Tests for HANDLER_IMPORTS dictionaries."""
+
+    def test_pre_tool_handler_imports_complete(self):
+        """PreToolDispatcher.HANDLER_IMPORTS has all handlers."""
+        dispatcher = PreToolDispatcher()
+
+        for handler_name in dispatcher.ALL_HANDLERS:
+            assert handler_name in dispatcher.HANDLER_IMPORTS, \
+                f"{handler_name} missing from HANDLER_IMPORTS"
+
+    def test_post_tool_handler_imports_complete(self):
+        """PostToolDispatcher.HANDLER_IMPORTS has all handlers."""
+        dispatcher = PostToolDispatcher()
+
+        for handler_name in dispatcher.ALL_HANDLERS:
+            assert handler_name in dispatcher.HANDLER_IMPORTS, \
+                f"{handler_name} missing from HANDLER_IMPORTS"
+
+    def test_handler_imports_format_valid(self):
+        """HANDLER_IMPORTS entries have valid format."""
+        for DispatcherClass in [PreToolDispatcher, PostToolDispatcher]:
+            dispatcher = DispatcherClass()
+
+            for name, spec in dispatcher.HANDLER_IMPORTS.items():
+                assert isinstance(spec, tuple), f"{name}: spec not a tuple"
+                assert len(spec) == 2, f"{name}: spec should be (module, func)"
+                module_name, func_spec = spec
+                assert isinstance(module_name, str), f"{name}: module_name not string"
+                assert isinstance(func_spec, (str, tuple)), \
+                    f"{name}: func_spec should be string or tuple"
+
+
+class TestSetupHandlerRegistry:
+    """Tests for setup_handler_registry() method."""
+
+    def test_pre_tool_setup_registers_credential_scanner(self):
+        """PreToolDispatcher.setup_handler_registry() registers credential_scanner."""
+        dispatcher = PreToolDispatcher()
+        dispatcher.setup_handler_registry()
+
+        assert dispatcher._handler_registry.has_custom_executor("credential_scanner")
+
+    def test_pre_tool_setup_registers_suggestion_engine(self):
+        """PreToolDispatcher.setup_handler_registry() registers suggestion_engine."""
+        dispatcher = PreToolDispatcher()
+        dispatcher.setup_handler_registry()
+
+        assert dispatcher._handler_registry.has_custom_executor("suggestion_engine")
+
+    def test_pre_tool_setup_registers_unified_cache_routing(self):
+        """PreToolDispatcher.setup_handler_registry() registers unified_cache routing."""
+        dispatcher = PreToolDispatcher()
+        dispatcher.setup_handler_registry()
+
+        assert "unified_cache" in dispatcher._handler_registry.routing_rules
+        rule = dispatcher._handler_registry.routing_rules["unified_cache"]
+        assert rule.tool_patterns == {"Task": 0, "WebFetch": 1}
+
+    def test_post_tool_setup_default_behavior(self):
+        """PostToolDispatcher.setup_handler_registry() runs without errors."""
+        dispatcher = PostToolDispatcher()
+        # PostToolDispatcher doesn't override setup_handler_registry,
+        # so this should just complete without error
+        dispatcher.setup_handler_registry()
+
+        # Should not crash
+        assert True
+
+
+class TestCustomExecutors:
+    """Tests for custom executor implementations."""
+
+    def test_credential_scanner_executor_skips_non_commit(self):
+        """Credential scanner executor skips non-git-commit commands."""
+        dispatcher = PreToolDispatcher()
+        dispatcher.setup_handler_registry()
+
+        # Mock the handler tuple
+        mock_scan = MagicMock(return_value=[])
+        mock_get_diff = MagicMock(return_value=("", []))
+        mock_is_allowed = MagicMock(return_value=False)
+        handler = (mock_scan, mock_get_diff, mock_is_allowed)
+
+        ctx = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "echo hello"}
+        }
+
+        result = dispatcher._credential_scanner_executor("credential_scanner", handler, ctx)
+
+        assert result is None
+        mock_get_diff.assert_not_called()
+        mock_scan.assert_not_called()
+
+    def test_credential_scanner_executor_runs_on_commit(self):
+        """Credential scanner executor runs on git commit commands."""
+        dispatcher = PreToolDispatcher()
+
+        # Mock the handler tuple
+        mock_scan = MagicMock(return_value=[("api_key", "line")])
+        mock_get_diff = MagicMock(return_value=("diff content", ["file.py"]))
+        mock_is_allowed = MagicMock(return_value=False)
+        handler = (mock_scan, mock_get_diff, mock_is_allowed)
+
+        ctx = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "git commit -m 'test'"}
+        }
+
+        result = dispatcher._credential_scanner_executor("credential_scanner", handler, ctx)
+
+        assert result is not None
+        assert result["hookSpecificOutput"]["permissionDecision"] == "deny"
+        mock_get_diff.assert_called_once()
+        mock_scan.assert_called_once()
+
+    def test_credential_scanner_executor_allows_clean_commit(self):
+        """Credential scanner executor allows commits with no findings."""
+        dispatcher = PreToolDispatcher()
+
+        # Mock the handler tuple with no findings
+        mock_scan = MagicMock(return_value=[])
+        mock_get_diff = MagicMock(return_value=("diff content", ["file.py"]))
+        mock_is_allowed = MagicMock(return_value=False)
+        handler = (mock_scan, mock_get_diff, mock_is_allowed)
+
+        ctx = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "git commit -m 'test'"}
+        }
+
+        result = dispatcher._credential_scanner_executor("credential_scanner", handler, ctx)
+
+        assert result is None  # No findings = no result
+
+    def test_suggestion_engine_executor_routes_write_to_skill(self):
+        """Suggestion engine executor routes Write/Edit to suggest_skill."""
+        dispatcher = PreToolDispatcher()
+
+        mock_skill = MagicMock(return_value={"suggestion": "skill"})
+        mock_subagent = MagicMock(return_value=None)
+        mock_optimization = MagicMock(return_value=None)
+        handler = (mock_skill, mock_subagent, mock_optimization)
+
+        ctx = {"tool_name": "Write", "tool_input": {}}
+
+        result = dispatcher._suggestion_engine_executor("suggestion_engine", handler, ctx)
+
+        mock_skill.assert_called_once_with(ctx)
+        mock_subagent.assert_not_called()
+
+    def test_suggestion_engine_executor_routes_grep_to_subagent_or_optimization(self):
+        """Suggestion engine executor routes Grep to suggest_subagent or suggest_optimization."""
+        dispatcher = PreToolDispatcher()
+
+        mock_skill = MagicMock(return_value=None)
+        mock_subagent = MagicMock(return_value={"suggestion": "subagent"})
+        mock_optimization = MagicMock(return_value=None)
+        handler = (mock_skill, mock_subagent, mock_optimization)
+
+        ctx = {"tool_name": "Grep", "tool_input": {}}
+
+        result = dispatcher._suggestion_engine_executor("suggestion_engine", handler, ctx)
+
+        assert result == {"suggestion": "subagent"}
+        mock_subagent.assert_called_once_with(ctx)
+
+    def test_suggestion_engine_executor_routes_bash_to_optimization(self):
+        """Suggestion engine executor routes Bash to suggest_optimization."""
+        dispatcher = PreToolDispatcher()
+
+        mock_skill = MagicMock(return_value=None)
+        mock_subagent = MagicMock(return_value=None)
+        mock_optimization = MagicMock(return_value={"suggestion": "optimization"})
+        handler = (mock_skill, mock_subagent, mock_optimization)
+
+        ctx = {"tool_name": "Bash", "tool_input": {}}
+
+        result = dispatcher._suggestion_engine_executor("suggestion_engine", handler, ctx)
+
+        assert result == {"suggestion": "optimization"}
+        mock_optimization.assert_called_once_with(ctx)
+
+
+class TestUnifiedCacheRouting:
+    """Tests for unified_cache routing rules."""
+
+    def test_unified_cache_registered_in_pre_tool(self):
+        """unified_cache has routing rule registered in PreToolDispatcher."""
+        dispatcher = PreToolDispatcher()
+        dispatcher.setup_handler_registry()
+
+        assert "unified_cache" in dispatcher._handler_registry.routing_rules
+        rule = dispatcher._handler_registry.routing_rules["unified_cache"]
+        assert isinstance(rule, RoutingRule)
+
+    def test_unified_cache_routing_rule_task_to_exploration(self):
+        """unified_cache routes Task tool to exploration handler (index 0)."""
+        dispatcher = PreToolDispatcher()
+        dispatcher.setup_handler_registry()
+
+        rule = dispatcher._handler_registry.routing_rules["unified_cache"]
+        assert rule.tool_patterns["Task"] == 0
+
+    def test_unified_cache_routing_rule_webfetch_to_research(self):
+        """unified_cache routes WebFetch tool to research handler (index 1)."""
+        dispatcher = PreToolDispatcher()
+        dispatcher.setup_handler_registry()
+
+        rule = dispatcher._handler_registry.routing_rules["unified_cache"]
+        assert rule.tool_patterns["WebFetch"] == 1
+
+    def test_post_tool_unified_cache_routing(self):
+        """PostToolDispatcher routes unified_cache for Task and WebFetch."""
+        dispatcher = PostToolDispatcher()
+
+        # Get the handler (should be a tuple)
+        handler = dispatcher.get_handler("unified_cache")
+        assert handler is not None
+        assert isinstance(handler, tuple)
+        assert len(handler) == 2
+
+
+class TestUserPromptDispatcher:
+    """Tests for UserPromptSubmit dispatcher."""
+
+    def test_handler_list_defined(self):
+        """HANDLERS list is defined."""
+        assert HANDLERS is not None
+        assert isinstance(HANDLERS, list)
+        assert "context_monitor" in HANDLERS
+        assert "usage_tracker" in HANDLERS
+
+    def test_get_handler_lazy_loads(self):
+        """get_handler() lazy-loads handlers."""
+        # Clear any cached handlers
+        from hooks.dispatchers import user_prompt
+        user_prompt._handlers.clear()
+
+        handler = get_handler("context_monitor")
+        assert callable(handler) or handler is None
+
+    def test_dispatch_returns_none_for_empty_messages(self):
+        """dispatch() returns None when no handlers produce messages."""
+        with patch('hooks.dispatchers.user_prompt.run_handler') as mock_run:
+            mock_run.return_value = None
+
+            result = dispatch({})
+            assert result is None
+
+    def test_dispatch_joins_multiple_messages(self):
+        """dispatch() joins multiple handler messages."""
+        with patch('hooks.dispatchers.user_prompt.run_handler') as mock_run:
+            mock_run.side_effect = [
+                {"message": "msg1"},
+                {"message": "msg2"}
+            ]
+
+            result = dispatch({})
+            assert result is not None
+            assert "msg1" in result["message"]
+            assert "msg2" in result["message"]

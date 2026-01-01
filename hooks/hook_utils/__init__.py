@@ -5,10 +5,10 @@ This package provides backwards-compatible imports from the original hook_utils.
 All original exports are available from this module.
 
 Usage:
-    from hook_utils import log_event, graceful_main, read_state
+    from hooks.hook_utils import log_event, graceful_main, read_state
     # or
-    from hook_utils.logging import log_event
-    from hook_utils.state import read_state
+    from hooks.hook_utils.logging import log_event
+    from hooks.hook_utils.state import read_state
 """
 
 # Re-export everything for backwards compatibility
@@ -84,6 +84,7 @@ from .metrics import (
     estimate_tokens,
     get_content_size,
     count_tokens_accurate,
+    get_timestamp,
 )
 
 from .paths import (
@@ -91,6 +92,17 @@ from .paths import (
     expand_path,
     relative_to,
     matches_pattern,
+)
+
+from .caching import (
+    TTLCachedLoader,
+)
+
+from .base import (
+    BlockingHook,
+    MonitoringHook,
+    SuggestionHook,
+    StateTrackingHook,
 )
 
 # Note: DAILY_TTL and SESSION_TTL removed - use config.py Timeouts instead
@@ -198,11 +210,19 @@ __all__ = [
     "estimate_tokens",
     "get_content_size",
     "count_tokens_accurate",
+    "get_timestamp",
     # Paths
     "normalize_path",
     "expand_path",
     "relative_to",
     "matches_pattern",
+    # Caching
+    "TTLCachedLoader",
+    # Base Hook Classes
+    "BlockingHook",
+    "MonitoringHook",
+    "SuggestionHook",
+    "StateTrackingHook",
     # Event detection & utilities
     "detect_event",
     "is_post_tool_use",

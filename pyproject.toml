@@ -18,9 +18,9 @@ dev = [
     "pytest-cov>=4.0.0",
 ]
 
-[tool.setuptools]
-py-modules = []
-packages = []
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["hooks*", "config*"]
 
 [tool.pytest.ini_options]
 testpaths = ["hooks/tests"]

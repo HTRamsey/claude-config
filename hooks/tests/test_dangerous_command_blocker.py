@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from dangerous_command_blocker import check_command
+from hooks.handlers.dangerous_command_blocker import check_command
 
 
 class TestCheckCommand:

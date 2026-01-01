@@ -15,7 +15,7 @@ from pathlib import Path
 from unittest import TestCase, main
 
 # Add parent directory to path for imports
-from file_monitor import (
+from hooks.handlers.file_monitor import (
     normalize_path,
     normalize_pattern,
     check_similar_patterns,
@@ -28,7 +28,7 @@ from file_monitor import (
     handle_search_post,
     handle_read_post,
 )
-from hook_sdk import PreToolUseContext, PostToolUseContext
+from hooks.hook_sdk import PreToolUseContext, PostToolUseContext
 
 
 class TestNormalizePath(TestCase):
