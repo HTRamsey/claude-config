@@ -14,8 +14,6 @@ import sys
 from pathlib import Path
 
 # Add hooks dir to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
-
 from hook_utils import graceful_main, output_message
 
 # Build command patterns - pre-compiled for performance

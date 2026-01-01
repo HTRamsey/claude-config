@@ -2,22 +2,23 @@
 """
 Session Start Hook - Auto-loads context at the start of a new session.
 
-Runs on UserPromptSubmit. Detects first message of a session and outputs:
+Runs on SessionStart. Outputs:
 - Git branch and recent commits
 - Uncommitted changes summary
 - TODO.md if present
 - Recent errors from logs
 
 This gives Claude immediate context without manual prompting.
+Uses ThreadPoolExecutor to run git commands in parallel for faster startup.
 """
 import json
 import os
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 # Import shared utilities
-sys.path.insert(0, str(Path(__file__).parent))
 from hook_utils import graceful_main, log_event, is_new_session, read_stdin_context
 
 
@@ -36,27 +37,43 @@ def run_cmd(cmd: list, cwd: str = None) -> str:
         return ""
 
 def get_git_context(cwd: str) -> list:
-    """Get git branch, recent commits, and status."""
+    """Get git branch, recent commits, and status using parallel execution."""
+    # Check if in git repo first (fast check)
+    if not run_cmd(["git", "rev-parse", "--git-dir"], cwd):
+        return []
+
+    # Run git commands in parallel
+    git_commands = {
+        "branch": ["git", "branch", "--show-current"],
+        "commits": ["git", "log", "--oneline", "-3", "--no-decorate"],
+        "status": ["git", "status", "--short"],
+    }
+
+    results = {}
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {
+            executor.submit(run_cmd, cmd, cwd): name
+            for name, cmd in git_commands.items()
+        }
+        for future in as_completed(futures, timeout=5):
+            name = futures[future]
+            try:
+                results[name] = future.result()
+            except Exception:
+                results[name] = ""
+
+    # Build context from results
     context = []
 
-    # Check if in git repo
-    if not run_cmd(["git", "rev-parse", "--git-dir"], cwd):
-        return context
-
-    # Current branch
-    branch = run_cmd(["git", "branch", "--show-current"], cwd)
+    branch = results.get("branch", "")
     if branch:
         context.append(f"Branch: {branch}")
 
-    # Recent commits (last 3)
-    commits = run_cmd([
-        "git", "log", "--oneline", "-3", "--no-decorate"
-    ], cwd)
+    commits = results.get("commits", "")
     if commits:
         context.append(f"Recent commits:\n{commits}")
 
-    # Uncommitted changes summary
-    status = run_cmd(["git", "status", "--short"], cwd)
+    status = results.get("status", "")
     if status:
         lines = status.split('\n')
         if len(lines) > 5:
@@ -286,16 +303,10 @@ def main():
     # Gather context
     output_parts = ["[Session Start]"]
 
-    # Git context
+    # Git context (runs branch/commits/status in parallel)
     git_ctx = get_git_context(cwd)
     if git_ctx:
         output_parts.extend(git_ctx)
-
-    # Uncommitted changes count (short form if git_ctx already has details)
-    status = run_cmd(["git", "status", "--short"], cwd)
-    if status and "Uncommitted" not in '\n'.join(output_parts):
-        lines = status.split('\n')
-        output_parts.append(f"Uncommitted: {len(lines)} files changed")
 
     # Usage summary (sessions, agents, skills today)
     usage = get_usage_summary()

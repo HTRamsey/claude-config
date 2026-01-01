@@ -27,15 +27,14 @@ import json
 import os
 import re
 import sys
+import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
 from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, Literal
 
 # Import base utilities
-sys.path.insert(0, str(Path(__file__).parent))
 from hook_utils import (
     graceful_main,
     log_event,
@@ -69,6 +68,75 @@ ToolType = Literal[
     "Task", "WebFetch", "WebSearch", "LSP", "Skill",
     "TodoWrite", "NotebookEdit", "AskUserQuestion",
 ]
+
+
+# =============================================================================
+# Event Detection (standardized across all hooks)
+# =============================================================================
+
+def detect_event(ctx: dict) -> EventType:
+    """
+    Detect event type from context dictionary.
+
+    Standardizes event detection across all hooks - use this instead of
+    checking individual keys manually.
+
+    Returns:
+        EventType string
+    """
+    # PostToolUse has tool_response or tool_result
+    if "tool_response" in ctx or "tool_result" in ctx:
+        return "PostToolUse"
+
+    # PreCompact has transcript_path but no tool_name
+    if "transcript_path" in ctx and not ctx.get("tool_name"):
+        return "PreCompact"
+
+    # SessionStart/SessionEnd
+    if ctx.get("event") == "SessionStart":
+        return "SessionStart"
+    if ctx.get("event") == "SessionEnd":
+        return "SessionEnd"
+
+    # UserPromptSubmit has user_prompt
+    if "user_prompt" in ctx:
+        return "UserPromptSubmit"
+
+    # Stop event
+    if ctx.get("event") == "Stop":
+        return "Stop"
+
+    # PermissionRequest
+    if ctx.get("event") == "PermissionRequest":
+        return "PermissionRequest"
+
+    # Subagent events
+    if ctx.get("event") == "SubagentStart":
+        return "SubagentStart"
+    if ctx.get("event") == "SubagentStop":
+        return "SubagentStop"
+
+    # PreToolUse has tool_name without tool_response
+    if ctx.get("tool_name"):
+        return "PreToolUse"
+
+    # Default to PreToolUse for backwards compatibility
+    return "PreToolUse"
+
+
+def is_post_tool_use(ctx: dict) -> bool:
+    """Check if context is from a PostToolUse event."""
+    return detect_event(ctx) == "PostToolUse"
+
+
+def is_pre_tool_use(ctx: dict) -> bool:
+    """Check if context is from a PreToolUse event."""
+    return detect_event(ctx) == "PreToolUse"
+
+
+def get_tool_response(ctx: dict, default=None) -> Any:
+    """Get tool response from PostToolUse context."""
+    return ctx.get("tool_response") or ctx.get("tool_result") or default
 
 
 # =============================================================================
@@ -399,11 +467,14 @@ class Patterns:
 
 
 # =============================================================================
-# Rate Limiting
+# Rate Limiting (Thread-Safe)
 # =============================================================================
 
 class RateLimiter:
-    """Rate limiter for hook actions."""
+    """Thread-safe rate limiter for hook actions."""
+
+    # Class-level lock for all rate limiters
+    _lock = threading.Lock()
 
     def __init__(self, name: str, max_count: int, window_secs: int):
         """
@@ -419,34 +490,41 @@ class RateLimiter:
 
     def check(self) -> bool:
         """Check if action is allowed (doesn't consume)."""
-        state = read_state(self.state_key, {"timestamps": []})
-        now = time.time()
-        cutoff = now - self.window_secs
-
-        # Clean old entries
-        timestamps = [t for t in state.get("timestamps", []) if t > cutoff]
-
-        return len(timestamps) < self.max_count
+        with self._lock:
+            state = read_state(self.state_key, {"timestamps": []})
+            now = time.time()
+            cutoff = now - self.window_secs
+            timestamps = [t for t in state.get("timestamps", []) if t > cutoff]
+            return len(timestamps) < self.max_count
 
     def consume(self) -> bool:
         """Try to consume one action. Returns True if allowed."""
-        state = read_state(self.state_key, {"timestamps": []})
-        now = time.time()
-        cutoff = now - self.window_secs
+        with self._lock:
+            state = read_state(self.state_key, {"timestamps": []})
+            now = time.time()
+            cutoff = now - self.window_secs
+            timestamps = [t for t in state.get("timestamps", []) if t > cutoff]
 
-        # Clean old entries
-        timestamps = [t for t in state.get("timestamps", []) if t > cutoff]
+            if len(timestamps) >= self.max_count:
+                return False
 
-        if len(timestamps) >= self.max_count:
-            return False
-
-        timestamps.append(now)
-        write_state(self.state_key, {"timestamps": timestamps})
-        return True
+            timestamps.append(now)
+            write_state(self.state_key, {"timestamps": timestamps})
+            return True
 
     def reset(self):
         """Reset the rate limiter."""
-        write_state(self.state_key, {"timestamps": []})
+        with self._lock:
+            write_state(self.state_key, {"timestamps": []})
+
+    def remaining(self) -> int:
+        """Get remaining actions in current window."""
+        with self._lock:
+            state = read_state(self.state_key, {"timestamps": []})
+            now = time.time()
+            cutoff = now - self.window_secs
+            timestamps = [t for t in state.get("timestamps", []) if t > cutoff]
+            return max(0, self.max_count - len(timestamps))
 
 
 # =============================================================================
@@ -544,12 +622,6 @@ def dispatch_handler(name: str, event: EventType = "PreToolUse"):
 # =============================================================================
 # Convenience Functions
 # =============================================================================
-
-def hash_key(*args) -> str:
-    """Create a short hash key from arguments."""
-    combined = ":".join(str(a) for a in args)
-    return hashlib.md5(combined.encode()).hexdigest()[:12]
-
 
 def expand_path(path: str) -> str:
     """Expand ~ and normalize path."""

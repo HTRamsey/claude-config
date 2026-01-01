@@ -13,7 +13,6 @@ import time
 from pathlib import Path
 
 # Import shared utilities
-sys.path.insert(0, str(Path(__file__).parent))
 from hook_utils import (
     graceful_main,
     log_event,

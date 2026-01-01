@@ -9,9 +9,11 @@ Categories:
 - Timeouts: TTLs, intervals, and durations
 - Thresholds: Limits and warning levels
 - Patterns: File extensions, regex patterns
+- Limits: Size constraints for state management
 """
 import os
 import re
+from functools import lru_cache
 from pathlib import Path
 
 # =============================================================================
@@ -45,7 +47,7 @@ class Timeouts:
 
     # Cache TTLs
     CACHE_TTL = 5  # In-memory cache TTL
-    HIERARCHY_CACHE_TTL = 5.0  # Hierarchical rules cache
+    HIERARCHY_CACHE_TTL = 30.0  # Hierarchical rules cache (CLAUDE.md files rarely change)
     EXPLORATION_CACHE_TTL = 3600  # 1 hour for exploration results
     RESEARCH_CACHE_TTL = 86400  # 24 hours for web research
 
@@ -62,6 +64,9 @@ class Timeouts:
 
     # Stale context
     STALE_TIME_THRESHOLD = 300  # 5 minutes
+
+    # Tool success tracker
+    TOOL_TRACKER_MAX_AGE = 3600  # Clear tool tracker state after 1 hour
 
 
 # =============================================================================
@@ -108,6 +113,12 @@ class Thresholds:
 
     # Stats flushing
     STATS_FLUSH_INTERVAL = 10  # Flush to disk every N tool calls
+
+    # Smart permissions
+    PERMISSION_APPROVAL_THRESHOLD = 3  # Auto-approve after N approvals
+
+    # Tool success tracker
+    TOOL_FAILURE_THRESHOLD = 2  # Suggest alternative after N failures
 
 
 # =============================================================================
@@ -271,3 +282,83 @@ class AutoContinue:
         r"no\s+(more|remaining)\s+(tasks?|items?|work)",
         r"that'?s\s+(all|it|everything)",
     ]
+
+
+# =============================================================================
+# State Limits (centralized magic numbers)
+# =============================================================================
+
+class Limits:
+    """Size limits for state management."""
+    MAX_SUGGESTED_SKILLS = 100
+    MAX_RECENT_PATTERNS = 10
+    MAX_FUZZY_SEARCH_ENTRIES = 30
+    MAX_CHECKPOINTS = 20
+    MAX_SEEN_SESSIONS = 100
+    MAX_BACKUPS = 20
+    MAX_CHAIN_RECOMMENDATIONS = 2
+    MAX_MESSAGES_JOINED = 3
+    CONTENT_TRUNCATE_SUMMARY = 500
+    CONTENT_TRUNCATE_CACHE = 2000
+    CONTENT_TRUNCATE_FULL = 10000
+    PROMPT_TRUNCATE = 100
+    COMMAND_TRUNCATE = 500
+    URL_TRUNCATE = 80
+
+
+# =============================================================================
+# JSON Serialization (msgspec when available)
+# =============================================================================
+
+try:
+    import msgspec
+    _decoder = msgspec.json.Decoder()
+    _encoder = msgspec.json.Encoder()
+
+    def fast_json_loads(data: bytes | str) -> dict:
+        """Fast JSON decode using msgspec."""
+        if isinstance(data, str):
+            data = data.encode()
+        return _decoder.decode(data)
+
+    def fast_json_dumps(obj: dict) -> bytes:
+        """Fast JSON encode using msgspec."""
+        return _encoder.encode(obj)
+
+    HAS_MSGSPEC = True
+except ImportError:
+    import json
+
+    def fast_json_loads(data: bytes | str) -> dict:
+        """Fallback JSON decode."""
+        if isinstance(data, bytes):
+            data = data.decode()
+        return json.loads(data)
+
+    def fast_json_dumps(obj: dict) -> bytes:
+        """Fallback JSON encode."""
+        return json.dumps(obj).encode()
+
+    HAS_MSGSPEC = False
+
+
+# =============================================================================
+# Compiled Pattern Cache (using lru_cache for thread safety)
+# =============================================================================
+
+@lru_cache(maxsize=1)
+def get_protected_patterns_compiled():
+    """Get compiled protected file patterns."""
+    return [re.compile(p) for p in ProtectedFiles.PROTECTED_PATTERNS]
+
+
+@lru_cache(maxsize=1)
+def get_write_only_patterns_compiled():
+    """Get compiled write-only patterns."""
+    return [re.compile(p) for p in ProtectedFiles.WRITE_ONLY_PATTERNS]
+
+
+@lru_cache(maxsize=1)
+def get_allowed_patterns_compiled():
+    """Get compiled allowed override patterns."""
+    return [re.compile(p) for p in ProtectedFiles.ALLOWED_PATHS]

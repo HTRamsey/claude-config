@@ -7,24 +7,26 @@ PermissionRequest hook that auto-approves safe operations based on:
 
 Learning: PostToolUse tracks successful executions. After N approvals
 for a pattern (tool + directory), it's added to auto-approve list.
+
+Uses cachetools TTLCache for automatic cache expiration.
 """
 import json
 import re
 import sys
-import time
 from datetime import datetime
 from pathlib import Path
 
+from cachetools import TTLCache
+
 # Import shared utilities
-sys.path.insert(0, str(Path(__file__).parent))
 from hook_utils import graceful_main, log_event
-from config import DATA_DIR
+from config import DATA_DIR, Thresholds
 
 # Learned patterns file
 PATTERNS_FILE = DATA_DIR / "permission-patterns.json"
 
-# Approval threshold before auto-approving a pattern
-APPROVAL_THRESHOLD = 3
+# Approval threshold before auto-approving a pattern (from centralized config)
+APPROVAL_THRESHOLD = Thresholds.PERMISSION_APPROVAL_THRESHOLD
 
 # Auto-approve patterns for Read operations (static) - pre-compiled
 _READ_PATTERNS_RAW = [
@@ -59,17 +61,16 @@ def matches_any(path: str, patterns: list) -> bool:
     return any(p.search(path_lower) for p in patterns)
 
 
-# In-memory cache for learned patterns (5-second TTL)
-_patterns_cache = {"data": None, "time": 0}
+# TTL cache for learned patterns (5-second TTL, single entry)
 _PATTERNS_CACHE_TTL = 5.0
+_patterns_cache: TTLCache = TTLCache(maxsize=1, ttl=_PATTERNS_CACHE_TTL)
+_PATTERNS_CACHE_KEY = "patterns"
 
 
 def load_patterns() -> dict:
     """Load learned patterns from file with caching."""
-    now = time.time()
-
-    if _patterns_cache["data"] is not None and now - _patterns_cache["time"] < _PATTERNS_CACHE_TTL:
-        return _patterns_cache["data"]
+    if _PATTERNS_CACHE_KEY in _patterns_cache:
+        return _patterns_cache[_PATTERNS_CACHE_KEY]
 
     if not PATTERNS_FILE.exists():
         data = {"patterns": {}, "updated": None}
@@ -80,21 +81,19 @@ def load_patterns() -> dict:
         except (json.JSONDecodeError, IOError):
             data = {"patterns": {}, "updated": None}
 
-    _patterns_cache["data"] = data
-    _patterns_cache["time"] = now
+    _patterns_cache[_PATTERNS_CACHE_KEY] = data
     return data
 
 
 def save_patterns(data: dict):
-    """Save learned patterns to file and invalidate cache."""
+    """Save learned patterns to file and update cache."""
     data["updated"] = datetime.now().isoformat()
     PATTERNS_FILE.parent.mkdir(parents=True, exist_ok=True)
     try:
         with open(PATTERNS_FILE, 'w') as f:
             json.dump(data, f, indent=2)
-        # Invalidate cache
-        _patterns_cache["data"] = data
-        _patterns_cache["time"] = 0  # Force reload on next access
+        # Update cache
+        _patterns_cache[_PATTERNS_CACHE_KEY] = data
     except IOError:
         pass
 

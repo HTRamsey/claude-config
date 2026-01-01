@@ -15,7 +15,6 @@ from pathlib import Path
 from unittest import TestCase, main
 
 # Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
 from file_monitor import (
     normalize_path,
     normalize_pattern,

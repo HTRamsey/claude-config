@@ -19,21 +19,26 @@ paths: src/api/**/*.ts
 - All endpoints must validate input
 - Use `backend-architect` agent for new endpoints
 ```
+
+Uses cachetools TTLCache for automatic expiration and LRU eviction.
 """
 import fnmatch
 import json
 import os
 import re
 import sys
-import time
+import threading
+from functools import lru_cache
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+from cachetools import TTLCache
+
 from hook_utils import graceful_main, log_event, read_state, write_state
 from config import Timeouts
 
-# In-memory cache for directory hierarchy lookups (5-second TTL)
-_hierarchy_cache = {}
+# TTL cache for directory hierarchy lookups (automatic expiration and LRU eviction)
+_hierarchy_cache: TTLCache = TTLCache(maxsize=256, ttl=Timeouts.HIERARCHY_CACHE_TTL)
+_hierarchy_cache_lock = threading.Lock()
 
 
 def parse_frontmatter(content: str) -> tuple[dict, str]:
@@ -70,6 +75,17 @@ def parse_frontmatter(content: str) -> tuple[dict, str]:
     return frontmatter, remaining
 
 
+@lru_cache(maxsize=256)
+def _compile_glob_pattern(pattern: str) -> re.Pattern:
+    """Convert glob pattern to compiled regex (cached)."""
+    regex = pattern.replace(".", r"\.")
+    regex = regex.replace("**", "<<<DOUBLE>>>")
+    regex = regex.replace("*", "[^/]*")
+    regex = regex.replace("<<<DOUBLE>>>", ".*")
+    regex = "^" + regex + "$"
+    return re.compile(regex)
+
+
 def matches_path_pattern(file_path: str, pattern: str) -> bool:
     """
     Check if file_path matches a glob-like pattern.
@@ -90,14 +106,9 @@ def matches_path_pattern(file_path: str, pattern: str) -> bool:
                     return True
             return False
 
-    # Convert glob to regex
-    regex = pattern.replace(".", r"\.")
-    regex = regex.replace("**", "<<<DOUBLE>>>")
-    regex = regex.replace("*", "[^/]*")
-    regex = regex.replace("<<<DOUBLE>>>", ".*")
-    regex = "^" + regex + "$"
-
-    return bool(re.match(regex, file_path))
+    # Use cached compiled pattern
+    compiled = _compile_glob_pattern(pattern)
+    return bool(compiled.match(file_path))
 
 
 def find_claude_files(start_dir: str, stop_at: str = None) -> list[tuple[str, str]]:
@@ -107,19 +118,17 @@ def find_claude_files(start_dir: str, stop_at: str = None) -> list[tuple[str, st
     Returns:
         List of (directory, content) tuples, closest first
 
-    Uses an in-memory cache with 5-second TTL to avoid repeated filesystem walks.
+    Uses TTLCache for automatic expiration (no manual pruning needed).
+    Thread-safe via _hierarchy_cache_lock.
     """
-    global _hierarchy_cache
-
     cache_key = f"{start_dir}:{stop_at or '/'}"
-    now = time.time()
 
-    # Check cache
-    if cache_key in _hierarchy_cache:
-        cached_time, cached_results = _hierarchy_cache[cache_key]
-        if now - cached_time < Timeouts.HIERARCHY_CACHE_TTL:
-            return cached_results
+    # Check cache (with lock)
+    with _hierarchy_cache_lock:
+        if cache_key in _hierarchy_cache:
+            return _hierarchy_cache[cache_key]
 
+    # Filesystem walk (outside lock to avoid blocking other threads)
     results = []
     current = Path(start_dir).resolve()
     stop = Path(stop_at).resolve() if stop_at else Path("/")
@@ -130,7 +139,7 @@ def find_claude_files(start_dir: str, stop_at: str = None) -> list[tuple[str, st
             try:
                 content = claude_file.read_text()
                 results.append((str(current), content))
-            except Exception:
+            except (OSError, PermissionError):
                 pass
 
         # Also check .claude/rules/ directory
@@ -140,30 +149,16 @@ def find_claude_files(start_dir: str, stop_at: str = None) -> list[tuple[str, st
                 try:
                     content = rule_file.read_text()
                     results.append((str(current), content))
-                except Exception:
+                except (OSError, PermissionError):
                     pass
 
         if current == current.parent:
             break
         current = current.parent
 
-    # Update cache
-    _hierarchy_cache[cache_key] = (now, results)
-
-    # Prune cache: remove entries older than 30s AND keep at most 20
-    if len(_hierarchy_cache) > 10:
-        to_delete = []
-        for k, (ts, _) in _hierarchy_cache.items():
-            if now - ts > 30:  # Timestamp-based expiry
-                to_delete.append(k)
-        for k in to_delete:
-            del _hierarchy_cache[k]
-        # If still too many, remove oldest
-        if len(_hierarchy_cache) > 20:
-            oldest_keys = sorted(_hierarchy_cache.keys(),
-                               key=lambda k: _hierarchy_cache[k][0])[:10]
-            for k in oldest_keys:
-                del _hierarchy_cache[k]
+    # Update cache (TTLCache handles expiration and LRU eviction automatically)
+    with _hierarchy_cache_lock:
+        _hierarchy_cache[cache_key] = results
 
     return results
 
@@ -285,7 +280,7 @@ def check_hierarchical_rules(ctx: dict) -> dict | None:
 def main():
     try:
         ctx = json.load(sys.stdin)
-    except (json.JSONDecodeError, Exception):
+    except json.JSONDecodeError:
         sys.exit(0)
 
     result = check_hierarchical_rules(ctx)

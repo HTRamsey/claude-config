@@ -1,164 +1,142 @@
-#!/usr/bin/env python3
-"""Unit tests for hook_utils.py core functions."""
-
+"""Tests for hook_utils package."""
 import json
 import os
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
-from unittest import TestCase, main
 from unittest.mock import patch, MagicMock
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+import pytest
+
 from hook_utils import (
-    get_session_id,
-    log_event,
-    is_hook_disabled,
-    atomic_write_json,
-    read_state,
-    write_state,
-    file_lock,
-    safe_load_json,
-    safe_save_json,
+    file_lock, safe_load_json, atomic_write_json,
+    log_event, graceful_main, DATA_DIR,
+    read_state, write_state,
+    get_session_id, read_session_state, write_session_state,
+    is_hook_disabled, record_usage,
 )
+import hook_utils.hooks as hooks_module
 
 
-class TestGetSessionId(TestCase):
-    """Tests for get_session_id function."""
+class TestIO:
+    """Tests for hook_utils.io module."""
 
-    def test_returns_string(self):
-        """Should always return a string."""
-        result = get_session_id()
-        self.assertIsInstance(result, str)
-        self.assertTrue(len(result) > 0)
+    def test_file_lock_context_manager(self, tmp_path):
+        """file_lock should work as context manager with file handle."""
+        test_file = tmp_path / "test.lock"
+        with open(test_file, "w") as f:
+            with file_lock(f):
+                f.write("test")
+        assert test_file.exists()
+        assert test_file.read_text() == "test"
 
-    def test_env_var_override(self):
-        """CLAUDE_SESSION_ID env var should be used if set."""
+    def test_safe_load_json_valid(self, tmp_path):
+        """safe_load_json should load valid JSON."""
+        test_file = tmp_path / "test.json"
+        test_file.write_text('{"key": "value"}')
+        result = safe_load_json(test_file)  # Takes Path, not string
+        assert result == {"key": "value"}
+
+    def test_safe_load_json_missing(self, tmp_path):
+        """safe_load_json should return default for missing file."""
+        result = safe_load_json(tmp_path / "missing.json", {"default": True})
+        assert result == {"default": True}
+
+    def test_safe_load_json_invalid(self, tmp_path):
+        """safe_load_json should return default for invalid JSON."""
+        test_file = tmp_path / "invalid.json"
+        test_file.write_text("not json")
+        result = safe_load_json(test_file, {"fallback": True})
+        assert result == {"fallback": True}
+
+    def test_atomic_write_json(self, tmp_path):
+        """atomic_write_json should write atomically."""
+        test_file = tmp_path / "test.json"
+        atomic_write_json(test_file, {"hello": "world"})  # Takes Path
+        assert test_file.exists()
+        content = json.loads(test_file.read_text())
+        assert content == {"hello": "world"}
+
+
+class TestState:
+    """Tests for hook_utils.state module."""
+
+    def test_read_write_state_roundtrip(self, tmp_path):
+        """State should roundtrip through read/write."""
+        with patch('hook_utils.state.DATA_DIR', tmp_path):
+            write_state("test_key", {"data": 123})
+            result = read_state("test_key")
+            assert result == {"data": 123}
+
+    def test_read_state_default(self, tmp_path):
+        """read_state should return default for missing key."""
+        with patch('hook_utils.state.DATA_DIR', tmp_path):
+            result = read_state("missing_key", {"default": True})
+            assert result == {"default": True}
+
+
+class TestSession:
+    """Tests for hook_utils.session module."""
+
+    def test_get_session_id_from_env(self):
+        """get_session_id should read from environment."""
         with patch.dict(os.environ, {"CLAUDE_SESSION_ID": "test-session-123"}):
-            result = get_session_id()
-            self.assertEqual(result, "test-session-123")
+            session_id = get_session_id()
+            assert session_id == "test-session-123"
+
+    def test_get_session_id_fallback(self):
+        """get_session_id should return 'default' when not set."""
+        env = os.environ.copy()
+        env.pop("CLAUDE_SESSION_ID", None)
+        with patch.dict(os.environ, env, clear=True):
+            session_id = get_session_id()
+            assert session_id == "default"
 
 
-class TestLogEvent(TestCase):
-    """Tests for log_event function."""
+class TestHooks:
+    """Tests for hook_utils.hooks module."""
 
-    def test_log_event_no_crash(self):
-        """Log event should not crash on any input."""
-        # Should not raise
-        log_event("test_hook", "test_event", {"key": "value"})
-        log_event("test_hook", "test_event", None)
-        log_event("test_hook", "test_event", {"nested": {"data": [1, 2, 3]}})
+    def test_is_hook_disabled_when_not_disabled(self, tmp_path):
+        """is_hook_disabled returns False when hook not in disabled list."""
+        config_file = tmp_path / "hook-config.json"
+        config_file.write_text('{"disabled": ["other_hook"]}')
+        # Clear cache and patch DATA_DIR
+        hooks_module._hook_disabled_cache.clear()
+        with patch.object(hooks_module, 'DATA_DIR', tmp_path):
+            result = hooks_module.is_hook_disabled("unique_hook_1")
+            assert result is False
 
-    def test_log_event_with_level(self):
-        """Log event should accept level parameter."""
-        log_event("test_hook", "test_event", {"key": "value"}, level="error")
-        log_event("test_hook", "test_event", {"key": "value"}, level="warn")
-
-
-class TestIsHookDisabled(TestCase):
-    """Tests for is_hook_disabled function."""
-
-    def test_returns_boolean(self):
-        """Should return boolean."""
-        result = is_hook_disabled("some_hook")
-        self.assertIsInstance(result, bool)
-
-    def test_nonexistent_hook_not_disabled(self):
-        """Hooks not in config should not be disabled."""
-        result = is_hook_disabled("definitely_not_configured_hook_xyz")
-        self.assertFalse(result)
+    def test_is_hook_disabled_when_disabled(self, tmp_path):
+        """is_hook_disabled returns True when hook in disabled list."""
+        config_file = tmp_path / "hook-config.json"
+        config_file.write_text('{"disabled": ["unique_hook_2"]}')
+        # Clear cache and patch DATA_DIR
+        hooks_module._hook_disabled_cache.clear()
+        with patch.object(hooks_module, 'DATA_DIR', tmp_path):
+            result = hooks_module.is_hook_disabled("unique_hook_2")
+            assert result is True
 
 
-class TestAtomicWriteJson(TestCase):
-    """Tests for atomic_write_json function."""
-
-    def test_writes_valid_json(self):
-        """Should write valid JSON that can be read back."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            path = Path(tmpdir) / "test.json"
-
-            data = {"key": "value", "number": 42, "list": [1, 2, 3]}
-            result = atomic_write_json(path, data)
-
-            self.assertTrue(result)
-
-            with open(path) as f:
-                loaded = json.load(f)
-
-            self.assertEqual(loaded, data)
-
-    def test_returns_false_on_error(self):
-        """Should return False on write error."""
-        # Try to write to invalid path
-        result = atomic_write_json(Path("/nonexistent/path/file.json"), {"data": "test"})
-        self.assertFalse(result)
-
-
-class TestReadWriteState(TestCase):
-    """Tests for read_state and write_state functions."""
-
-    def test_read_nonexistent_returns_default(self):
-        """Reading nonexistent state should return default."""
-        result = read_state("definitely_nonexistent_state_xyz", default={"default": "value"})
-        self.assertEqual(result, {"default": "value"})
-
-    def test_read_state_returns_dict(self):
-        """Read state should always return a dict."""
-        result = read_state("some_state", default={})
-        self.assertIsInstance(result, dict)
-
-
-class TestFileLock(TestCase):
-    """Tests for file_lock context manager."""
-
-    def test_lock_and_unlock(self):
-        """Lock should be acquired and released."""
-        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
-            path = f.name
-
-        try:
-            with open(path, 'r+') as f:
-                with file_lock(f):
-                    # Should be able to write while locked
-                    f.write("test")
-                # Lock released after context
-
-            # File should be readable after
-            with open(path) as f:
-                content = f.read()
-                self.assertIn("test", content)
-        finally:
-            os.unlink(path)
-
-
-class TestGracefulMain(TestCase):
+class TestGracefulMain:
     """Tests for graceful_main decorator."""
 
-    def test_decorator_catches_exceptions(self):
-        """Decorated function should exit(0) on error, not raise."""
-        from hook_utils import graceful_main
-
+    def test_graceful_main_success(self):
+        """graceful_main should allow normal execution."""
         @graceful_main("test_hook")
-        def failing_function():
-            raise ValueError("Test error")
-
-        # Should call sys.exit(0), which we catch as SystemExit
-        with self.assertRaises(SystemExit) as cm:
-            failing_function()
-        self.assertEqual(cm.exception.code, 0)
-
-    def test_decorator_preserves_return(self):
-        """Decorated function should return normally on success."""
-        from hook_utils import graceful_main
-
-        @graceful_main("test_hook")
-        def successful_function():
+        def test_func():
             return "success"
 
-        result = successful_function()
-        self.assertEqual(result, "success")
+        result = test_func()
+        assert result == "success"
 
+    def test_graceful_main_catches_exceptions(self):
+        """graceful_main should catch exceptions and exit gracefully."""
+        @graceful_main("test_hook")
+        def failing_func():
+            raise ValueError("test error")
 
-if __name__ == "__main__":
-    main()
+        with pytest.raises(SystemExit) as exc_info:
+            failing_func()
+        assert exc_info.value.code == 0

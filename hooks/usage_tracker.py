@@ -9,7 +9,6 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
 from hook_utils import graceful_main, record_usage
 
 BUILTIN_COMMANDS = {

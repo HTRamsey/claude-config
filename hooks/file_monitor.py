@@ -15,13 +15,13 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
 from hook_utils import (
     graceful_main,
     log_event,
     get_session_id,
     read_session_state,
     write_session_state,
+    is_post_tool_use,
 )
 from config import Thresholds, Timeouts, FilePatterns
 
@@ -98,7 +98,7 @@ def normalize_path(path: str) -> str:
     """Normalize file path for comparison."""
     try:
         return str(Path(path).resolve())
-    except Exception:
+    except (OSError, ValueError):
         return path
 
 def check_file_modified(file_path: str, read_time: float) -> bool:
@@ -144,7 +144,7 @@ def count_lines_fast(file_path: Path) -> int:
     try:
         with open(file_path, 'rb') as f:
             return sum(1 for _ in f)
-    except Exception:
+    except (OSError, PermissionError):
         return 0
 
 def check_large_file(file_path: str, limit: int | None) -> tuple[bool, str]:
@@ -163,7 +163,7 @@ def check_large_file(file_path: str, limit: int | None) -> tuple[bool, str]:
 
     try:
         size = path.stat().st_size
-    except Exception:
+    except (OSError, PermissionError):
         return False, ""
 
     if size < LARGE_FILE_BYTES:
@@ -384,8 +384,7 @@ def main():
     except json.JSONDecodeError:
         sys.exit(0)
 
-    # Claude Code uses "tool_response" for PostToolUse hooks
-    if "tool_response" in ctx or "tool_result" in ctx:
+    if is_post_tool_use(ctx):
         result = track_file_post(ctx)
         if result:
             msg = result.get("hookSpecificOutput", {}).get("message", "")

@@ -10,7 +10,6 @@ from typing import Any
 from unittest import TestCase, main
 from unittest.mock import patch, MagicMock
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 from dispatcher_base import BaseDispatcher
 
 

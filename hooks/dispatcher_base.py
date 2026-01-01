@@ -8,6 +8,8 @@ Provides common functionality for PreToolUse and PostToolUse dispatchers:
 - Profiling support (HOOK_PROFILE=1)
 - Handler validation
 - Logging integration
+- Batch session state loading (optimization)
+- Fast JSON parsing via msgspec
 
 Subclasses override:
 - DISPATCHER_NAME: Name for logging
@@ -18,6 +20,7 @@ Subclasses override:
 - _execute_handler(): Handler execution logic with special cases
 - _build_result(): Build the final result from messages
 """
+import atexit
 import json
 import os
 import sys
@@ -36,10 +39,12 @@ _HANDLER_TIMEOUT = float(os.environ.get("HANDLER_TIMEOUT", "1000")) / 1000.0
 # Thread pool for timeout-protected handler execution (shared across dispatchers)
 _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="hook")
 
+# Register cleanup on exit to prevent resource leaks
+atexit.register(_executor.shutdown, wait=False)
+
 # Import shared utilities
-sys.path.insert(0, str(Path(__file__).parent))
 try:
-    from hook_utils import graceful_main, log_event, is_hook_disabled
+    from hook_utils import graceful_main, log_event, is_hook_disabled, flush_pending_writes
     HAS_UTILS = True
 except ImportError:
     HAS_UTILS = False
@@ -51,6 +56,16 @@ except ImportError:
         pass
     def is_hook_disabled(name):
         return False
+    def flush_pending_writes():
+        return 0
+
+# Fast JSON parsing via msgspec (10x faster)
+try:
+    from config import fast_json_loads, HAS_MSGSPEC
+except ImportError:
+    HAS_MSGSPEC = False
+    def fast_json_loads(data):
+        return json.loads(data if isinstance(data, str) else data.decode())
 
 
 class BaseDispatcher(ABC):
@@ -81,6 +96,28 @@ class BaseDispatcher(ABC):
         Default implementation just calls handler(ctx).
         """
         return handler(ctx)
+
+    def _route_dual_handler(
+        self,
+        handler: tuple,
+        ctx: dict,
+        tool_mapping: dict[str, int]
+    ) -> dict | None:
+        """Route to one of two handlers based on tool_name.
+
+        Args:
+            handler: Tuple of (handler0, handler1)
+            ctx: Hook context
+            tool_mapping: Maps tool_name to handler index (0 or 1)
+
+        Returns:
+            Handler result or None if tool not in mapping
+        """
+        tool_name = ctx.get("tool_name", "")
+        handler_idx = tool_mapping.get(tool_name)
+        if handler_idx is not None:
+            return handler[handler_idx](ctx)
+        return None
 
     def _build_result(self, messages: list[str]) -> dict | None:
         """Build the final result from collected messages.
@@ -193,9 +230,12 @@ class BaseDispatcher(ABC):
                 if message:
                     messages.append(message)
 
+        # Flush any batched state writes
+        write_count = flush_pending_writes()
+
         if _PROFILE_MODE:
             total_ms = (time.perf_counter() - dispatch_start) * 1000
-            print(f"[{self.DISPATCHER_NAME}] TOTAL for {tool_name}: {total_ms:.1f}ms ({len(handlers)} handlers)",
+            print(f"[{self.DISPATCHER_NAME}] TOTAL for {tool_name}: {total_ms:.1f}ms ({len(handlers)} handlers, {write_count} writes)",
                   file=sys.stderr)
 
         return self._build_result(messages)
@@ -215,8 +255,13 @@ class BaseDispatcher(ABC):
             self._validated = True
 
         try:
-            ctx = json.load(sys.stdin)
-        except json.JSONDecodeError:
+            # Use fast JSON parsing when available
+            stdin_data = sys.stdin.read()
+            if HAS_MSGSPEC and stdin_data:
+                ctx = fast_json_loads(stdin_data)
+            else:
+                ctx = json.loads(stdin_data) if stdin_data else {}
+        except (json.JSONDecodeError, Exception):
             sys.exit(0)
 
         result = self.dispatch(ctx)

@@ -14,7 +14,6 @@ import time
 from pathlib import Path
 
 # Import SDK for typed context and response builders
-sys.path.insert(0, str(Path(__file__).parent))
 from hook_sdk import (
     PreToolUseContext,
     Response,

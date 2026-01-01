@@ -15,7 +15,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).parent))
 from dispatcher_base import BaseDispatcher, graceful_main, log_event
 
 
@@ -61,7 +60,7 @@ class PreToolDispatcher(BaseDispatcher):
             from credential_scanner import scan_for_sensitive, get_staged_diff, is_allowlisted
             return (scan_for_sensitive, get_staged_diff, is_allowlisted)
         elif name == "suggestion_engine":
-            from suggestion_engine import suggest_skill, suggest_subagent, suggest_optimization
+            from suggestions import suggest_skill, suggest_subagent, suggest_optimization
             return (suggest_skill, suggest_subagent, suggest_optimization)
         elif name == "file_monitor":
             from file_monitor import track_file_pre
@@ -123,15 +122,9 @@ class PreToolDispatcher(BaseDispatcher):
                 return suggest_optimization(ctx)
             return None
 
-        # Special handling for unified_cache
+        # Special handling for unified_cache (exploration=0, research=1)
         if name == "unified_cache":
-            exploration_handler, research_handler = handler
-            tool_name = ctx.get("tool_name", "")
-            if tool_name == "Task":
-                return exploration_handler(ctx)
-            elif tool_name == "WebFetch":
-                return research_handler(ctx)
-            return None
+            return self._route_dual_handler(handler, ctx, {"Task": 0, "WebFetch": 1})
 
         return handler(ctx)
 

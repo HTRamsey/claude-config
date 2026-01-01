@@ -16,7 +16,6 @@ import sys
 from pathlib import Path
 
 # Import shared utilities
-sys.path.insert(0, str(Path(__file__).parent))
 try:
     from hook_utils import graceful_main, log_event, is_hook_disabled
     HAS_UTILS = True

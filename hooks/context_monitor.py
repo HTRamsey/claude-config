@@ -8,27 +8,32 @@ Uses tiktoken for accurate Claude token counting (cl100k_base encoding).
 At critical thresholds:
 - Automatically backs up transcript (pre-compact safety)
 - Shows a summary of session activity
+
+Uses cachetools TTLCache for in-memory caching between calls.
 """
-import json
 import os
 import sys
 from pathlib import Path
 from collections import defaultdict
 
-# Import shared utilities for backup
-sys.path.insert(0, str(Path(__file__).parent))
-from hook_utils import backup_transcript, log_event, graceful_main, safe_load_json, safe_save_json
+from cachetools import TTLCache
 
-# Configuration
-TOKEN_WARNING_THRESHOLD = 40000  # Warn at 40K tokens
-TOKEN_CRITICAL_THRESHOLD = 80000  # Strong warning at 80K
-CACHE_DIR = Path.home() / ".claude/data/cache"
+# Import shared utilities for backup
+from hook_utils import backup_transcript, log_event, graceful_main, safe_load_json, safe_save_json
+from config import Thresholds, CACHE_DIR
+
+# Configuration (from centralized config)
+TOKEN_WARNING_THRESHOLD = Thresholds.TOKEN_WARNING
+TOKEN_CRITICAL_THRESHOLD = Thresholds.TOKEN_CRITICAL
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 CACHE_FILE = CACHE_DIR / "context-cache.json"
 
 # Claude uses cl100k_base encoding (same as GPT-4)
 _encoder = None
-_token_cache = None
+
+# TTL cache for file-based token cache (60 second in-memory TTL)
+_token_cache: TTLCache = TTLCache(maxsize=10, ttl=60)
+_TOKEN_CACHE_KEY = "file_cache"
 
 def get_encoder():
     """Lazy-load encoder to avoid startup cost when not needed."""
@@ -45,17 +50,16 @@ def count_tokens(text: str) -> int:
     return len(get_encoder().encode(text))
 
 def load_cache():
-    """Load token count cache from disk."""
-    global _token_cache
-    if _token_cache is not None:
-        return _token_cache
-    _token_cache = safe_load_json(CACHE_FILE, {})
-    return _token_cache
+    """Load token count cache from disk with in-memory caching."""
+    if _TOKEN_CACHE_KEY in _token_cache:
+        return _token_cache[_TOKEN_CACHE_KEY]
+    data = safe_load_json(CACHE_FILE, {})
+    _token_cache[_TOKEN_CACHE_KEY] = data
+    return data
 
 def save_cache(cache):
-    """Save token count cache to disk."""
-    global _token_cache
-    _token_cache = cache
+    """Save token count cache to disk and update in-memory cache."""
+    _token_cache[_TOKEN_CACHE_KEY] = cache
     safe_save_json(CACHE_FILE, cache)
 
 def get_cached_count(transcript_path):
@@ -130,7 +134,7 @@ def get_transcript_size(transcript_path):
                     message_count += 1
                 except json.JSONDecodeError:
                     continue
-    except Exception:
+    except (OSError, PermissionError):
         return 0, 0
 
     # Cache the result for next time
@@ -168,7 +172,7 @@ def get_session_summary(transcript_path):
                         error_count += 1
                 except json.JSONDecodeError:
                     continue
-    except Exception:
+    except (OSError, PermissionError):
         return ""
 
     # Build compact summary

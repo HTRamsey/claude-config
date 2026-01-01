@@ -14,42 +14,32 @@ import time
 from pathlib import Path
 from datetime import datetime
 
-sys.path.insert(0, str(Path(__file__).parent))
-from config import Timeouts, Thresholds, StateSaver, DATA_DIR, STATE_FILES
+from config import Timeouts, Thresholds, StateSaver, DATA_DIR
 from hook_utils import (
     graceful_main,
     log_event,
     backup_transcript,
     update_session_state,
     get_session_id,
+    read_state,
+    write_state,
 )
 
 # Configuration
-STATE_FILE = STATE_FILES["checkpoint"]
+STATE_KEY = "checkpoint"
 ERROR_BACKUP_DIR = DATA_DIR / "error-backups"
 CHECKPOINT_INTERVAL = Timeouts.CHECKPOINT_INTERVAL
 MAX_ERROR_BACKUPS = Thresholds.MAX_ERROR_BACKUPS
 
 
 def load_state() -> dict:
-    """Load checkpoint state."""
-    if STATE_FILE.exists():
-        try:
-            with open(STATE_FILE) as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {"last_checkpoint": 0, "checkpoints": []}
+    """Load checkpoint state using unified state API."""
+    return read_state(STATE_KEY, {"last_checkpoint": 0, "checkpoints": []})
 
 
 def save_state(state: dict):
-    """Save checkpoint state."""
-    try:
-        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(STATE_FILE, "w") as f:
-            json.dump(state, f)
-    except Exception:
-        pass
+    """Save checkpoint state using unified state API."""
+    write_state(STATE_KEY, state)
 
 
 def is_risky_operation(file_path: str, content: str = "") -> tuple[bool, str]:

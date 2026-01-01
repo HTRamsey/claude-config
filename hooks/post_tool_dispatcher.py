@@ -3,7 +3,7 @@
 PostToolUse Dispatcher - Consolidates all PostToolUse hooks into single process.
 
 Benefits:
-- Consolidates 10 handlers into single process, avoiding 9 Python interpreter startups
+- Consolidates 9 handlers into single process, avoiding 8 Python interpreter startups
 - Shared state and caching
 - Typical handler latency: 20-70ms per handler
 
@@ -15,7 +15,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).parent))
 from dispatcher_base import BaseDispatcher, graceful_main
 
 
@@ -26,49 +25,43 @@ class PostToolDispatcher(BaseDispatcher):
     HOOK_EVENT_NAME = "PostToolUse"
 
     ALL_HANDLERS = [
-        "notify_complete", "file_monitor", "batch_operation_detector",
-        "tool_success_tracker", "unified_cache", "suggestion_engine",
-        "output_metrics", "build_analyzer", "smart_permissions", "state_saver",
-        "subagent_lifecycle"
+        "file_monitor", "batch_operation_detector", "tool_analytics",
+        "unified_cache", "suggestion_engine", "build_analyzer",
+        "smart_permissions", "state_saver", "subagent_lifecycle"
     ]
 
     # Tool-to-handler mapping
     # Note: notify_complete moved to async shell script (notify_complete_async.sh)
+    # Note: tool_analytics consolidates tool_success_tracker + output_metrics
     TOOL_HANDLERS = {
-        "Bash": ["tool_success_tracker", "output_metrics", "build_analyzer", "state_saver"],
-        "Grep": ["file_monitor", "tool_success_tracker", "output_metrics"],
-        "Glob": ["file_monitor", "tool_success_tracker", "output_metrics"],
-        "Read": ["file_monitor", "tool_success_tracker", "output_metrics", "smart_permissions"],
-        "Edit": ["batch_operation_detector", "tool_success_tracker", "output_metrics", "smart_permissions"],
-        "Write": ["batch_operation_detector", "tool_success_tracker", "output_metrics", "smart_permissions"],
-        "Task": ["subagent_lifecycle", "unified_cache", "suggestion_engine", "output_metrics"],
+        "Bash": ["tool_analytics", "build_analyzer", "state_saver"],
+        "Grep": ["file_monitor", "tool_analytics"],
+        "Glob": ["file_monitor", "tool_analytics"],
+        "Read": ["file_monitor", "tool_analytics", "smart_permissions"],
+        "Edit": ["batch_operation_detector", "tool_analytics", "smart_permissions"],
+        "Write": ["batch_operation_detector", "tool_analytics", "smart_permissions"],
+        "Task": ["subagent_lifecycle", "unified_cache", "suggestion_engine", "tool_analytics"],
         "WebFetch": ["unified_cache"],
-        "LSP": ["tool_success_tracker", "output_metrics"],
+        "LSP": ["tool_analytics"],
     }
 
     def _import_handler(self, name: str) -> Any:
         """Import handler by name."""
-        if name == "notify_complete":
-            from notify_complete import check_notify
-            return check_notify
-        elif name == "file_monitor":
+        if name == "file_monitor":
             from file_monitor import track_file_post
             return track_file_post
         elif name == "batch_operation_detector":
             from batch_operation_detector import detect_batch
             return detect_batch
-        elif name == "tool_success_tracker":
-            from tool_success_tracker import track_success
-            return track_success
+        elif name == "tool_analytics":
+            from tool_analytics import track_tool_analytics
+            return track_tool_analytics
         elif name == "unified_cache":
             from unified_cache import handle_exploration_post, handle_research_post
             return (handle_exploration_post, handle_research_post)
         elif name == "suggestion_engine":
-            from suggestion_engine import suggest_chain
+            from suggestions import suggest_chain
             return suggest_chain
-        elif name == "output_metrics":
-            from output_metrics import track_output_metrics
-            return track_output_metrics
         elif name == "build_analyzer":
             from build_analyzer import analyze_build_post
             return analyze_build_post
@@ -85,15 +78,9 @@ class PostToolDispatcher(BaseDispatcher):
 
     def _execute_handler(self, name: str, handler: Any, ctx: dict) -> dict | None:
         """Execute handler with special-case handling."""
-        # Special handling for unified_cache
+        # Special handling for unified_cache (exploration=0, research=1)
         if name == "unified_cache":
-            exploration_handler, research_handler = handler
-            tool_name = ctx.get("tool_name", "")
-            if tool_name == "Task":
-                return exploration_handler(ctx)
-            elif tool_name == "WebFetch":
-                return research_handler(ctx)
-            return None
+            return self._route_dual_handler(handler, ctx, {"Task": 0, "WebFetch": 1})
 
         return handler(ctx)
 

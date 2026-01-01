@@ -135,11 +135,9 @@ Use async for hooks that:
 | `notify_complete_async.sh` | Bash | Desktop notification for long commands (async) |
 | `file_monitor` | Grep, Glob, Read | Detect duplicate searches/reads |
 | `batch_operation_detector` | Edit, Write | Suggest batching similar edits |
-| `tool_success_tracker` | all | Track failures, suggest alternatives |
+| `tool_analytics` | all | Track failures, tokens, output size (consolidated) |
 | `unified_cache` | Task, WebFetch | Cache exploration and research results |
 | `suggestion_engine` | Task | Suggest specialist follow-ups (agent chaining) |
-| `usage_tracker` | Task, Skill | Track agent/skill/command usage |
-| `output_metrics` | all | Track tokens and warn about large outputs |
 | `build_analyzer` | Bash | Parse build failures, summarize errors, suggest fixes |
 | `smart_permissions` | Read, Edit, Write | Learn permission patterns for auto-approval |
 
@@ -148,15 +146,21 @@ Use async for hooks that:
 |------|-------|---------|
 | `session_start` | SessionStart | Auto-load git context, codebase map, project type |
 | `context_monitor` | UserPromptSubmit | Warn at 40K/80K tokens, auto-backup |
-| `session_persistence` | SessionEnd | Auto-save session insights |
-| `uncommitted_reminder` | Stop | Remind about uncommitted changes |
-| `auto_continue` | Stop | Evaluate if work should continue (rate-limited) |
+| `session_end_handler` | SessionEnd | Auto-save session insights + transcript conversion (consolidated) |
+| `stop_handler` | Stop | Uncommitted changes + auto-continue (consolidated) |
 | `start_viewer` | SessionStart | Start claude-code-viewer |
 | `smart_permissions` | PermissionRequest | Context-aware auto-approval with learning |
 | `state_saver` | PreCompact | Backup transcript, preserve CLAUDE.md/todos, learning reminder |
 | `subagent_lifecycle` | PreToolUse/PostToolUse (Task) | Track subagent spawn/completion via dispatchers |
 
 **Note**: Some hooks handle multiple events (`suggestion_engine`, `file_monitor`, `state_saver`, `unified_cache`, `smart_permissions`) and appear in multiple tables above.
+
+### Consolidated Hooks
+| New Hook | Replaces | Benefits |
+|----------|----------|----------|
+| `tool_analytics` | `tool_success_tracker`, `output_metrics` | ~150 LOC saved, shared token estimation |
+| `stop_handler` | `uncommitted_reminder`, `auto_continue` | ~100 LOC saved, unified Stop handling |
+| `session_end_handler` | `session_persistence`, `transcript_converter` | ~200 LOC saved, unified SessionEnd handling |
 
 ## Scripts
 

@@ -1,6 +1,7 @@
 {
   "cleanupPeriodDays": 30,
   "env": {
+    "PYTHONPATH": "$HOME/.claude/hooks:$HOME/.claude/data/venv/lib/python3.12/site-packages",
     "DISABLE_PROMPT_CACHING": "0",
     "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
@@ -347,13 +348,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/uncommitted_reminder.py",
+            "command": "$HOME/.claude/hooks/stop_handler.py",
             "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/auto_continue.py",
-            "timeout": 3
           }
         ]
       }
@@ -363,12 +359,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/session_persistence.py",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/transcript_converter.py",
+            "command": "$HOME/.claude/hooks/session_end_handler.py",
             "timeout": 10
           }
         ]
