@@ -15,13 +15,18 @@ from typing import Callable
 from cachetools import TTLCache, LRUCache
 
 from .io import safe_load_json, atomic_write_json, file_lock
-from .logging import DATA_DIR
+from .logging import DATA_DIR, ensure_data_dir
 
-# Session constants
-SESSION_STATE_DIR = DATA_DIR / "sessions"
-SESSION_STATE_FILE = DATA_DIR / "session-state.json"
-SESSION_STATE_MAX_AGE = 3600 * 24  # 24 hours
-CACHE_TTL = 5.0
+# Import centralized config
+try:
+    from config import Timeouts, SESSION_STATE_DIR, SESSION_STATE_FILE
+    CACHE_TTL = Timeouts.CACHE_TTL
+    SESSION_STATE_MAX_AGE = Timeouts.STATE_MAX_AGE  # 24 hours
+except ImportError:
+    SESSION_STATE_DIR = DATA_DIR / "sessions"
+    SESSION_STATE_FILE = DATA_DIR / "session-state.json"
+    SESSION_STATE_MAX_AGE = 3600 * 24
+    CACHE_TTL = 5.0
 
 # TTL cache for session state (expires after CACHE_TTL seconds)
 _session_cache: TTLCache = TTLCache(maxsize=50, ttl=CACHE_TTL)
@@ -30,11 +35,6 @@ _session_cache_lock = threading.Lock()
 # LRU cache for computed session IDs (no TTL needed - pure function memoization)
 _session_id_cache: LRUCache = LRUCache(maxsize=100)
 _session_id_lock = threading.Lock()
-
-
-def ensure_data_dir():
-    """Ensure data directory exists."""
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def get_session_id(ctx: dict = None, transcript_path: str = None) -> str:
@@ -198,3 +198,54 @@ def cleanup_old_sessions(max_age_secs: int = SESSION_STATE_MAX_AGE):
                 state_file.unlink()
         except (IOError, OSError):
             pass
+
+
+def load_state_with_expiry(
+    namespace: str,
+    session_id: str,
+    default: dict,
+    max_age_secs: int,
+    time_key: str = "last_update"
+) -> dict:
+    """
+    Load session state with automatic expiry check.
+
+    Common pattern used by file_monitor, batch_operation_detector, etc.
+    Returns default if state is older than max_age_secs.
+
+    Args:
+        namespace: State namespace
+        session_id: Session identifier
+        default: Default state to return if missing or expired
+        max_age_secs: Maximum age in seconds before state expires
+        time_key: Key in state dict containing last update timestamp
+
+    Returns:
+        State dict (either loaded or default copy)
+    """
+    state = read_session_state(namespace, session_id, default)
+    if time.time() - state.get(time_key, 0) > max_age_secs:
+        return default.copy()
+    return state
+
+
+def save_state_with_timestamp(
+    namespace: str,
+    state: dict,
+    session_id: str,
+    time_key: str = "last_update"
+) -> bool:
+    """
+    Save session state with automatic timestamp update.
+
+    Args:
+        namespace: State namespace
+        state: State dict to save
+        session_id: Session identifier
+        time_key: Key to use for timestamp
+
+    Returns:
+        True if save succeeded
+    """
+    state[time_key] = time.time()
+    return write_session_state(namespace, state, session_id)

@@ -8,6 +8,7 @@ import re
 import sys
 from pathlib import Path
 from config import Limits
+from hook_sdk import PostToolUseContext, Response
 
 
 # Pre-compiled chain rules for performance
@@ -73,16 +74,15 @@ CHAIN_RULES = [
 CHAINABLE_AGENTS = {"code-reviewer", "Explore", "error-explainer", "quick-lookup"}
 
 
-def suggest_chain(ctx: dict) -> dict | None:
+def suggest_chain(raw: dict) -> dict | None:
     """Suggest follow-up specialists based on Task output."""
-    tool_name = ctx.get("tool_name", "")
-    tool_input = ctx.get("tool_input", {})
-    tool_output = ctx.get("tool_response") or ctx.get("tool_result", {})
+    ctx = PostToolUseContext(raw)
+    tool_output = ctx.tool_result.raw
 
-    if tool_name != "Task":
+    if ctx.tool_name != "Task":
         return None
 
-    source_agent = tool_input.get("subagent_type", "")
+    source_agent = ctx.tool_input.subagent_type or ""
     if source_agent not in CHAINABLE_AGENTS:
         return None
 
@@ -113,11 +113,6 @@ def suggest_chain(ctx: dict) -> dict | None:
             msg_lines.append(f"  → Task(subagent_type='{rec['agent']}') - {rec['reason']}")
         msg_lines.append("  Use orchestrator for comprehensive multi-agent review.")
 
-        return {
-            "hookSpecificOutput": {
-                "hookEventName": "PostToolUse",
-                "message": "\n".join(msg_lines)
-            }
-        }
+        return Response.message("\n".join(msg_lines), event="PostToolUse")
 
     return None

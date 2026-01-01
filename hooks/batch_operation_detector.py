@@ -17,10 +17,11 @@ from hook_utils import (
     graceful_main,
     log_event,
     get_session_id,
-    read_session_state,
-    write_session_state,
+    load_state_with_expiry,
+    save_state_with_timestamp,
     cleanup_old_sessions,
 )
+from hook_sdk import PostToolUseContext, Response
 from config import Thresholds, Timeouts
 
 # Configuration (imported from config.py)
@@ -39,16 +40,12 @@ _last_cleanup_time = 0
 def load_state(session_id: str) -> dict:
     """Load edit history state for session using centralized session state."""
     default = {"edits": [], "writes": [], "last_update": time.time()}
-    state = read_session_state(STATE_NAMESPACE, session_id, default)
-    if time.time() - state.get("last_update", 0) > MAX_AGE_SECONDS:
-        return default
-    return state
+    return load_state_with_expiry(STATE_NAMESPACE, session_id, default, MAX_AGE_SECONDS)
 
 
 def save_state(session_id: str, state: dict):
     """Save edit history state using centralized session state."""
-    state["last_update"] = time.time()
-    write_session_state(STATE_NAMESPACE, state, session_id)
+    save_state_with_timestamp(STATE_NAMESPACE, state, session_id)
 
 
 def maybe_cleanup_old_sessions():
@@ -130,13 +127,12 @@ def suggest_batch_command(edits: list, current_edit: dict) -> str:
         return f"sd '{old_str}' '{new_str}' '{glob_pattern}'"
     return f"code-mode batch edit across {glob_pattern}"
 
-def detect_batch(ctx: dict) -> dict | None:
+def detect_batch(raw: dict) -> dict | None:
     """Handler function for dispatcher. Returns result dict or None."""
-    tool_name = ctx.get("tool_name", "")
-    tool_input = ctx.get("tool_input", {})
-    session_id = get_session_id(ctx)
+    ctx = PostToolUseContext(raw)
+    session_id = get_session_id(raw)
 
-    if tool_name not in ("Edit", "Write"):
+    if ctx.tool_name not in ("Edit", "Write"):
         return None
 
     # Periodically clean up old session files
@@ -145,10 +141,10 @@ def detect_batch(ctx: dict) -> dict | None:
     state = load_state(session_id)
     message = None
 
-    if tool_name == "Edit":
-        file_path = tool_input.get("file_path", "")
-        old_string = tool_input.get("old_string", "")
-        new_string = tool_input.get("new_string", "")
+    if ctx.tool_name == "Edit":
+        file_path = ctx.tool_input.file_path
+        old_string = ctx.tool_input.old_string
+        new_string = ctx.tool_input.new_string
 
         if file_path and old_string and new_string:
             current_edit = {
@@ -181,9 +177,9 @@ def detect_batch(ctx: dict) -> dict | None:
             state["edits"].append(current_edit)
             state["edits"] = state["edits"][-50:]
 
-    elif tool_name == "Write":
-        file_path = tool_input.get("file_path", "")
-        content = tool_input.get("content", "")
+    elif ctx.tool_name == "Write":
+        file_path = ctx.tool_input.file_path
+        content = ctx.tool_input.content
 
         if file_path and content:
             current_write = {
@@ -216,12 +212,7 @@ def detect_batch(ctx: dict) -> dict | None:
     save_state(session_id, state)
 
     if message:
-        return {
-            "hookSpecificOutput": {
-                "hookEventName": "PostToolUse",
-                "message": message
-            }
-        }
+        return Response.message(message)
 
     return None
 

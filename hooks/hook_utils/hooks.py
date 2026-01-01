@@ -14,8 +14,12 @@ from .state import read_state, update_state
 from .session import get_session_id
 from .logging import DATA_DIR
 
-# Hook disabled cache TTL
-HOOK_DISABLED_TTL = 10.0
+# Import centralized config
+try:
+    from config import Timeouts
+    HOOK_DISABLED_TTL = Timeouts.HOOK_DISABLED_TTL
+except ImportError:
+    HOOK_DISABLED_TTL = 10.0  # Fallback
 
 # TTL cache for hook disabled status (no lock needed - single-threaded access pattern)
 _hook_disabled_cache: TTLCache = TTLCache(maxsize=50, ttl=HOOK_DISABLED_TTL)

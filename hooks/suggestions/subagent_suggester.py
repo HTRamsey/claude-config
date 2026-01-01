@@ -4,6 +4,7 @@ Subagent Suggester - Suggests agent delegation for exploration patterns.
 PreToolUse: Grep, Glob, Read
 """
 from .shared import get_state, update_state, save_state
+from hook_sdk import PreToolUseContext, Response
 
 
 AGENT_RECOMMENDATIONS = {
@@ -12,20 +13,19 @@ AGENT_RECOMMENDATIONS = {
 }
 
 
-def suggest_subagent(ctx: dict) -> dict | None:
+def suggest_subagent(raw: dict) -> dict | None:
     """Suggest agent delegation for exploration patterns."""
-    tool_name = ctx.get("tool_name", "")
-    tool_input = ctx.get("tool_input", {})
+    ctx = PreToolUseContext(raw)
 
-    if tool_name not in ("Grep", "Glob", "Read"):
+    if ctx.tool_name not in ("Grep", "Glob", "Read"):
         return None
 
     state = get_state()
-    pattern = tool_input.get("pattern", "")
-    path = tool_input.get("path", tool_input.get("file_path", ""))
+    pattern = ctx.tool_input.pattern or ""
+    path = ctx.tool_input.path or ctx.tool_input.file_path or ""
 
     # Track consecutive searches
-    if tool_name in ("Grep", "Glob"):
+    if ctx.tool_name in ("Grep", "Glob"):
         consecutive = state.get("consecutive_searches", 0) + 1
         recent = state.get("recent_patterns", [])
         recent.append(pattern)
@@ -49,7 +49,7 @@ def suggest_subagent(ctx: dict) -> dict | None:
         )
 
     # Rule 2: Broad glob patterns
-    if tool_name == "Glob" and pattern:
+    if ctx.tool_name == "Glob" and pattern:
         if "**" in pattern or pattern.count("*") >= 2:
             if not path or path in (".", "./", "/"):
                 return _subagent_suggestion(
@@ -58,7 +58,7 @@ def suggest_subagent(ctx: dict) -> dict | None:
                 )
 
     # Rule 3: Generic grep without specific path
-    if tool_name == "Grep":
+    if ctx.tool_name == "Grep":
         if not path or path in (".", "./"):
             if len(pattern) < 15 and not pattern.startswith("^"):
                 return _subagent_suggestion(
@@ -67,7 +67,7 @@ def suggest_subagent(ctx: dict) -> dict | None:
                 )
 
     # Rule 4: Reading many files
-    if tool_name == "Read":
+    if ctx.tool_name == "Read":
         reads = state.get("recent_reads", 0) + 1
         update_state({"recent_reads": reads})
         save_state()
@@ -82,13 +82,8 @@ def suggest_subagent(ctx: dict) -> dict | None:
 
 def _subagent_suggestion(agent_type: str, reason: str) -> dict:
     agent_name, agent_desc = AGENT_RECOMMENDATIONS.get(agent_type, ("Explore", ""))
-    return {
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "allow",
-            "permissionDecisionReason": (
-                f"[Subagent Suggestion] {reason}\n"
-                f"  Recommended: Task(subagent_type='{agent_name}') - {agent_desc}"
-            )
-        }
-    }
+    decision_reason = (
+        f"[Subagent Suggestion] {reason}\n"
+        f"  Recommended: Task(subagent_type='{agent_name}') - {agent_desc}"
+    )
+    return Response.allow(decision_reason)

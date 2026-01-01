@@ -41,6 +41,8 @@ from .state import (
     flush_pending_writes,
     has_pending_writes,
     update_state_batched,
+    # Pruning utilities
+    prune_by_time,
 )
 
 from .session import (
@@ -54,6 +56,8 @@ from .session import (
     write_session_state,
     update_session_state,
     cleanup_old_sessions,
+    load_state_with_expiry,
+    save_state_with_timestamp,
 )
 
 from .hooks import (
@@ -65,6 +69,28 @@ from .hooks import (
 
 from .backup import (
     backup_transcript,
+)
+
+from .file_ops import (
+    safe_read_file,
+    safe_read_bytes,
+    safe_stat,
+    safe_mtime,
+    safe_size,
+    safe_exists,
+)
+
+from .metrics import (
+    estimate_tokens,
+    get_content_size,
+    count_tokens_accurate,
+)
+
+from .paths import (
+    normalize_path,
+    expand_path,
+    relative_to,
+    matches_pattern,
 )
 
 # Note: DAILY_TTL and SESSION_TTL removed - use config.py Timeouts instead
@@ -140,6 +166,7 @@ __all__ = [
     "flush_pending_writes",
     "has_pending_writes",
     "update_state_batched",
+    "prune_by_time",
     # Session
     "SESSION_STATE_DIR",
     "SESSION_STATE_FILE",
@@ -151,6 +178,8 @@ __all__ = [
     "write_session_state",
     "update_session_state",
     "cleanup_old_sessions",
+    "load_state_with_expiry",
+    "save_state_with_timestamp",
     # Hooks
     "HOOK_DISABLED_TTL",
     "is_hook_disabled",
@@ -158,6 +187,22 @@ __all__ = [
     "get_usage_stats",
     # Backup
     "backup_transcript",
+    # File Operations
+    "safe_read_file",
+    "safe_read_bytes",
+    "safe_stat",
+    "safe_mtime",
+    "safe_size",
+    "safe_exists",
+    # Metrics
+    "estimate_tokens",
+    "get_content_size",
+    "count_tokens_accurate",
+    # Paths
+    "normalize_path",
+    "expand_path",
+    "relative_to",
+    "matches_pattern",
     # Event detection & utilities
     "detect_event",
     "is_post_tool_use",

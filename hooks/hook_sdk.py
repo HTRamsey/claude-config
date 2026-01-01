@@ -46,6 +46,11 @@ from hook_utils import (
     cleanup_old_sessions,
     get_session_id,
     DATA_DIR,
+    # Event detection - canonical implementations in hook_utils
+    detect_event,
+    is_post_tool_use,
+    is_pre_tool_use,
+    get_tool_response,
 )
 
 # Event types
@@ -61,82 +66,6 @@ EventType = Literal[
     "SubagentStop",
     "PermissionRequest",
 ]
-
-# Tool types
-ToolType = Literal[
-    "Bash", "Read", "Write", "Edit", "Glob", "Grep",
-    "Task", "WebFetch", "WebSearch", "LSP", "Skill",
-    "TodoWrite", "NotebookEdit", "AskUserQuestion",
-]
-
-
-# =============================================================================
-# Event Detection (standardized across all hooks)
-# =============================================================================
-
-def detect_event(ctx: dict) -> EventType:
-    """
-    Detect event type from context dictionary.
-
-    Standardizes event detection across all hooks - use this instead of
-    checking individual keys manually.
-
-    Returns:
-        EventType string
-    """
-    # PostToolUse has tool_response or tool_result
-    if "tool_response" in ctx or "tool_result" in ctx:
-        return "PostToolUse"
-
-    # PreCompact has transcript_path but no tool_name
-    if "transcript_path" in ctx and not ctx.get("tool_name"):
-        return "PreCompact"
-
-    # SessionStart/SessionEnd
-    if ctx.get("event") == "SessionStart":
-        return "SessionStart"
-    if ctx.get("event") == "SessionEnd":
-        return "SessionEnd"
-
-    # UserPromptSubmit has user_prompt
-    if "user_prompt" in ctx:
-        return "UserPromptSubmit"
-
-    # Stop event
-    if ctx.get("event") == "Stop":
-        return "Stop"
-
-    # PermissionRequest
-    if ctx.get("event") == "PermissionRequest":
-        return "PermissionRequest"
-
-    # Subagent events
-    if ctx.get("event") == "SubagentStart":
-        return "SubagentStart"
-    if ctx.get("event") == "SubagentStop":
-        return "SubagentStop"
-
-    # PreToolUse has tool_name without tool_response
-    if ctx.get("tool_name"):
-        return "PreToolUse"
-
-    # Default to PreToolUse for backwards compatibility
-    return "PreToolUse"
-
-
-def is_post_tool_use(ctx: dict) -> bool:
-    """Check if context is from a PostToolUse event."""
-    return detect_event(ctx) == "PostToolUse"
-
-
-def is_pre_tool_use(ctx: dict) -> bool:
-    """Check if context is from a PreToolUse event."""
-    return detect_event(ctx) == "PreToolUse"
-
-
-def get_tool_response(ctx: dict, default=None) -> Any:
-    """Get tool response from PostToolUse context."""
-    return ctx.get("tool_response") or ctx.get("tool_result") or default
 
 
 # =============================================================================
@@ -160,6 +89,18 @@ class ToolInput:
     @property
     def pattern(self) -> str:
         return self.raw.get("pattern", "")
+
+    @property
+    def path(self) -> str:
+        return self.raw.get("path", "")
+
+    @property
+    def output_mode(self) -> str:
+        return self.raw.get("output_mode", "")
+
+    @property
+    def head_limit(self) -> int | None:
+        return self.raw.get("head_limit")
 
     @property
     def content(self) -> str:
@@ -628,15 +569,6 @@ def expand_path(path: str) -> str:
     if path.startswith("~"):
         path = os.path.expanduser(path)
     return os.path.normpath(path)
-
-
-def relative_to_cwd(path: str, cwd: str = None) -> str:
-    """Make path relative to cwd if possible."""
-    cwd = cwd or os.getcwd()
-    try:
-        return os.path.relpath(path, cwd)
-    except ValueError:
-        return path
 
 
 # =============================================================================

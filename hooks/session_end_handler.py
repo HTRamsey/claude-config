@@ -8,6 +8,7 @@ Consolidates:
 
 Runs on SessionEnd event to capture learnings before conversation ends.
 """
+import heapq
 import json
 import os
 import re
@@ -152,7 +153,7 @@ def generate_memory_suggestions(info: dict) -> dict:
     if info["files_created"]:
         observations.append(f"Files created this session: {', '.join(Path(f).name for f in list(info['files_created'])[:5])}")
 
-    top_tools = sorted(info["tools_used"].items(), key=lambda x: -x[1])[:3]
+    top_tools = heapq.nlargest(3, info["tools_used"].items(), key=lambda x: x[1])
     if top_tools:
         tool_summary = ", ".join(f"{t}:{c}" for t, c in top_tools)
         observations.append(f"Common operations: {tool_summary}")

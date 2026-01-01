@@ -13,6 +13,7 @@ Categories:
 """
 import os
 import re
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
@@ -24,6 +25,10 @@ DATA_DIR = Path(os.environ.get("CLAUDE_DATA_DIR", Path.home() / ".claude/data"))
 CACHE_DIR = DATA_DIR / "cache"
 TRACKER_DIR = Path(os.environ.get("CLAUDE_TRACKER_DIR", DATA_DIR / "tracking"))
 
+# Session state directories
+SESSION_STATE_DIR = DATA_DIR / "sessions"
+SESSION_STATE_FILE = DATA_DIR / "session-state.json"
+
 # State files
 STATE_FILES = {
     "checkpoint": DATA_DIR / "checkpoint-state.json",
@@ -33,118 +38,313 @@ STATE_FILES = {
     "usage_stats": DATA_DIR / "usage-stats.json",
     "hook_config": DATA_DIR / "hook-config.json",
     "hook_events": DATA_DIR / "hook-events.jsonl",
+    "session_state": SESSION_STATE_FILE,
 }
 
 # =============================================================================
 # Timeouts and Intervals (seconds)
 # =============================================================================
 
-class Timeouts:
+@dataclass(frozen=True)
+class TimeoutConfig:
     """Timeout and interval settings."""
     # Handler execution
-    HANDLER_TIMEOUT_MS = int(os.environ.get("HANDLER_TIMEOUT", "1000"))
-    HANDLER_TIMEOUT_S = HANDLER_TIMEOUT_MS / 1000.0
+    handler_timeout_ms: int = int(os.environ.get("HANDLER_TIMEOUT", "1000"))
+    handler_timeout_s: float = None  # Set in __post_init__
 
     # Cache TTLs
-    CACHE_TTL = 5  # In-memory cache TTL
-    HIERARCHY_CACHE_TTL = 30.0  # Hierarchical rules cache (CLAUDE.md files rarely change)
-    EXPLORATION_CACHE_TTL = 3600  # 1 hour for exploration results
-    RESEARCH_CACHE_TTL = 86400  # 24 hours for web research
+    cache_ttl: float = 5.0  # In-memory cache TTL (seconds)
+    hook_disabled_ttl: float = 10.0  # Hook disabled check cache TTL
+    hierarchy_cache_ttl: float = 30.0  # Hierarchical rules cache (CLAUDE.md files rarely change)
+    exploration_cache_ttl: int = 3600  # 1 hour for exploration results
+    research_cache_ttl: int = 86400  # 24 hours for web research
 
     # State management
-    STATE_MAX_AGE = 86400  # Clear state after 24 hours
-    CHECKPOINT_INTERVAL = 300  # Min seconds between checkpoints
-    CLEANUP_INTERVAL = 300  # Rate-limit cleanup operations
+    state_max_age: int = 86400  # Clear state after 24 hours
+    checkpoint_interval: int = 300  # Min seconds between checkpoints
+    cleanup_interval: int = 300  # Rate-limit cleanup operations
 
     # TDD guard
-    WARNING_WINDOW = 3600  # 1 hour window for counting TDD warnings
+    warning_window: int = 3600  # 1 hour window for counting TDD warnings
 
     # Auto-continue
-    CONTINUE_WINDOW = 300  # 5 minutes
+    continue_window: int = 300  # 5 minutes
 
     # Stale context
-    STALE_TIME_THRESHOLD = 300  # 5 minutes
+    stale_time_threshold: int = 300  # 5 minutes
 
     # Tool success tracker
-    TOOL_TRACKER_MAX_AGE = 3600  # Clear tool tracker state after 1 hour
+    tool_tracker_max_age: int = 3600  # Clear tool tracker state after 1 hour
+
+    def __post_init__(self):
+        object.__setattr__(self, 'handler_timeout_s', self.handler_timeout_ms / 1000.0)
+
+    # Backwards compatibility: UPPER_CASE aliases
+    @property
+    def HANDLER_TIMEOUT_MS(self) -> int:
+        return self.handler_timeout_ms
+
+    @property
+    def HANDLER_TIMEOUT_S(self) -> float:
+        return self.handler_timeout_s
+
+    @property
+    def CACHE_TTL(self) -> float:
+        return self.cache_ttl
+
+    @property
+    def HOOK_DISABLED_TTL(self) -> float:
+        return self.hook_disabled_ttl
+
+    @property
+    def HIERARCHY_CACHE_TTL(self) -> float:
+        return self.hierarchy_cache_ttl
+
+    @property
+    def EXPLORATION_CACHE_TTL(self) -> int:
+        return self.exploration_cache_ttl
+
+    @property
+    def RESEARCH_CACHE_TTL(self) -> int:
+        return self.research_cache_ttl
+
+    @property
+    def STATE_MAX_AGE(self) -> int:
+        return self.state_max_age
+
+    @property
+    def CHECKPOINT_INTERVAL(self) -> int:
+        return self.checkpoint_interval
+
+    @property
+    def CLEANUP_INTERVAL(self) -> int:
+        return self.cleanup_interval
+
+    @property
+    def WARNING_WINDOW(self) -> int:
+        return self.warning_window
+
+    @property
+    def CONTINUE_WINDOW(self) -> int:
+        return self.continue_window
+
+    @property
+    def STALE_TIME_THRESHOLD(self) -> int:
+        return self.stale_time_threshold
+
+    @property
+    def TOOL_TRACKER_MAX_AGE(self) -> int:
+        return self.tool_tracker_max_age
+
+
+# Create singleton instance with same name for backwards compatibility
+Timeouts = TimeoutConfig()
 
 
 # =============================================================================
 # Thresholds and Limits
 # =============================================================================
 
-class Thresholds:
+@dataclass(frozen=True)
+class ThresholdConfig:
     """Warning thresholds and limits."""
     # Token/output warnings
-    OUTPUT_WARNING = 10000  # Warn if output > 10K chars
-    OUTPUT_CRITICAL = 50000  # Strong warning if > 50K chars
-    TOKEN_WARNING = 40000  # Warn at 40K tokens
-    TOKEN_CRITICAL = 80000  # Strong warning at 80K
-    DAILY_TOKEN_WARNING = 500000  # Warn at 500K tokens/day
-    CHARS_PER_TOKEN = 4  # Rough estimate
+    output_warning: int = 10000  # Warn if output > 10K chars
+    output_critical: int = 50000  # Strong warning if > 50K chars
+    token_warning: int = 40000  # Warn at 40K tokens
+    token_critical: int = 80000  # Strong warning at 80K
+    daily_token_warning: int = 500000  # Warn at 500K tokens/day
+    chars_per_token: int = 4  # Rough estimate
 
     # File monitoring
-    MAX_READS_TRACKED = 100
-    MAX_SEARCHES_TRACKED = 50
-    STALE_MESSAGE_THRESHOLD = 15  # Warn if read >15 messages ago
-    SIMILARITY_THRESHOLD = 0.8  # Fuzzy pattern matching
+    max_reads_tracked: int = 100
+    max_searches_tracked: int = 50
+    stale_message_threshold: int = 15  # Warn if read >15 messages ago
+    similarity_threshold: float = 0.8  # Fuzzy pattern matching
 
     # Large file detection
-    LARGE_FILE_LINES = 200
-    LARGE_FILE_BYTES = 15000
+    large_file_lines: int = 200
+    large_file_bytes: int = 15000
 
     # Batch detection
-    BATCH_SIMILARITY_THRESHOLD = 3  # Suggest after 3 similar ops
+    batch_similarity_threshold: int = 3  # Suggest after 3 similar ops
 
     # TDD guard
-    TDD_WARNING_THRESHOLD = 3  # Block after this many warnings
-    MIN_LINES_FOR_TDD = 30
+    tdd_warning_threshold: int = 3  # Block after this many warnings
+    min_lines_for_tdd: int = 30
 
     # State limits
-    MAX_REFLEXION_ENTRIES = 100
-    MAX_ERROR_BACKUPS = 20
-    MAX_CACHE_ENTRIES = 30
+    max_reflexion_entries: int = 100
+    max_error_backups: int = 20
+    max_cache_entries: int = 30
 
     # Auto-continue
-    MAX_CONTINUATIONS = 3
+    max_continuations: int = 3
 
     # Notifications
-    MIN_NOTIFY_DURATION = 30  # Seconds
+    min_notify_duration: int = 30  # Seconds
 
     # Stats flushing
-    STATS_FLUSH_INTERVAL = 10  # Flush to disk every N tool calls
+    stats_flush_interval: int = 10  # Flush to disk every N tool calls
 
     # Smart permissions
-    PERMISSION_APPROVAL_THRESHOLD = 3  # Auto-approve after N approvals
+    permission_approval_threshold: int = 3  # Auto-approve after N approvals
 
     # Tool success tracker
-    TOOL_FAILURE_THRESHOLD = 2  # Suggest alternative after N failures
+    tool_failure_threshold: int = 2  # Suggest alternative after N failures
+
+    # Backwards compatibility: UPPER_CASE aliases
+    @property
+    def OUTPUT_WARNING(self) -> int:
+        return self.output_warning
+
+    @property
+    def OUTPUT_CRITICAL(self) -> int:
+        return self.output_critical
+
+    @property
+    def TOKEN_WARNING(self) -> int:
+        return self.token_warning
+
+    @property
+    def TOKEN_CRITICAL(self) -> int:
+        return self.token_critical
+
+    @property
+    def DAILY_TOKEN_WARNING(self) -> int:
+        return self.daily_token_warning
+
+    @property
+    def CHARS_PER_TOKEN(self) -> int:
+        return self.chars_per_token
+
+    @property
+    def MAX_READS_TRACKED(self) -> int:
+        return self.max_reads_tracked
+
+    @property
+    def MAX_SEARCHES_TRACKED(self) -> int:
+        return self.max_searches_tracked
+
+    @property
+    def STALE_MESSAGE_THRESHOLD(self) -> int:
+        return self.stale_message_threshold
+
+    @property
+    def SIMILARITY_THRESHOLD(self) -> float:
+        return self.similarity_threshold
+
+    @property
+    def LARGE_FILE_LINES(self) -> int:
+        return self.large_file_lines
+
+    @property
+    def LARGE_FILE_BYTES(self) -> int:
+        return self.large_file_bytes
+
+    @property
+    def BATCH_SIMILARITY_THRESHOLD(self) -> int:
+        return self.batch_similarity_threshold
+
+    @property
+    def TDD_WARNING_THRESHOLD(self) -> int:
+        return self.tdd_warning_threshold
+
+    @property
+    def MIN_LINES_FOR_TDD(self) -> int:
+        return self.min_lines_for_tdd
+
+    @property
+    def MAX_REFLEXION_ENTRIES(self) -> int:
+        return self.max_reflexion_entries
+
+    @property
+    def MAX_ERROR_BACKUPS(self) -> int:
+        return self.max_error_backups
+
+    @property
+    def MAX_CACHE_ENTRIES(self) -> int:
+        return self.max_cache_entries
+
+    @property
+    def MAX_CONTINUATIONS(self) -> int:
+        return self.max_continuations
+
+    @property
+    def MIN_NOTIFY_DURATION(self) -> int:
+        return self.min_notify_duration
+
+    @property
+    def STATS_FLUSH_INTERVAL(self) -> int:
+        return self.stats_flush_interval
+
+    @property
+    def PERMISSION_APPROVAL_THRESHOLD(self) -> int:
+        return self.permission_approval_threshold
+
+    @property
+    def TOOL_FAILURE_THRESHOLD(self) -> int:
+        return self.tool_failure_threshold
+
+
+# Create singleton instance with same name for backwards compatibility
+Thresholds = ThresholdConfig()
 
 
 # =============================================================================
 # File Patterns
 # =============================================================================
 
-class FilePatterns:
+@dataclass(frozen=True)
+class FilePatternConfig:
     """File extension and path patterns."""
     # Code file extensions (for TDD guard)
-    CODE_EXTENSIONS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rs', '.java', '.rb'}
+    code_extensions: frozenset = frozenset({'.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rs', '.java', '.rb'})
 
     # Test file patterns
-    TEST_PATTERNS = ['test_', '_test', '.test.', '.spec.', 'tests/', 'test/', '__tests__/']
+    test_patterns: tuple = ('test_', '_test', '.test.', '.spec.', 'tests/', 'test/', '__tests__/')
 
     # Files to skip for TDD
-    TDD_SKIP_PATTERNS = [
+    tdd_skip_patterns: tuple = (
         '__init__.py', 'conftest.py', 'setup.py', 'pyproject.toml',
         'package.json', 'tsconfig.json', 'Makefile', '.gitignore'
-    ]
+    )
 
     # Large file handling
-    ALWAYS_SUMMARIZE = {'.log', '.csv', '.json', '.xml', '.yaml', '.yml'}
-    SKIP_SUMMARIZE = {'.md', '.txt', '.ini', '.cfg', '.env'}
+    always_summarize: frozenset = frozenset({'.log', '.csv', '.json', '.xml', '.yaml', '.yml'})
+    skip_summarize: frozenset = frozenset({'.md', '.txt', '.ini', '.cfg', '.env'})
 
     # Large output tools (expect big responses)
-    LARGE_OUTPUT_TOOLS = ["Task", "WebFetch", "WebSearch"]
+    large_output_tools: tuple = ("Task", "WebFetch", "WebSearch")
+
+    # Backwards compatibility: UPPER_CASE aliases
+    @property
+    def CODE_EXTENSIONS(self) -> frozenset:
+        return self.code_extensions
+
+    @property
+    def TEST_PATTERNS(self) -> tuple:
+        return self.test_patterns
+
+    @property
+    def TDD_SKIP_PATTERNS(self) -> tuple:
+        return self.tdd_skip_patterns
+
+    @property
+    def ALWAYS_SUMMARIZE(self) -> frozenset:
+        return self.always_summarize
+
+    @property
+    def SKIP_SUMMARIZE(self) -> frozenset:
+        return self.skip_summarize
+
+    @property
+    def LARGE_OUTPUT_TOOLS(self) -> tuple:
+        return self.large_output_tools
+
+
+# Create singleton instance with same name for backwards compatibility
+FilePatterns = FilePatternConfig()
 
 
 # =============================================================================
@@ -184,7 +384,7 @@ class ProtectedFiles:
 # =============================================================================
 
 class DangerousCommands:
-    """Dangerous command patterns (compiled on first access)."""
+    """Dangerous command patterns."""
     # (pattern, reason) tuples - will be compiled to regex
     BLOCKED_PATTERNS_RAW = [
         (r"rm\s+-rf?\s+[/~]", "Recursive delete from root or home"),
@@ -207,26 +407,13 @@ class DangerousCommands:
         (r"TRUNCATE\s+TABLE", "SQL TRUNCATE statement"),
     ]
 
-    _blocked_compiled = None
-    _warning_compiled = None
+    @staticmethod
+    def get_blocked():
+        return _compile_blocked_patterns()
 
-    @classmethod
-    def get_blocked(cls):
-        if cls._blocked_compiled is None:
-            cls._blocked_compiled = [
-                (re.compile(p, re.IGNORECASE), r)
-                for p, r in cls.BLOCKED_PATTERNS_RAW
-            ]
-        return cls._blocked_compiled
-
-    @classmethod
-    def get_warnings(cls):
-        if cls._warning_compiled is None:
-            cls._warning_compiled = [
-                (re.compile(p, re.IGNORECASE), r)
-                for p, r in cls.WARNING_PATTERNS_RAW
-            ]
-        return cls._warning_compiled
+    @staticmethod
+    def get_warnings():
+        return _compile_warning_patterns()
 
 
 # =============================================================================
@@ -246,16 +433,9 @@ class StateSaver:
 
     RISKY_KEYWORDS = ['delete', 'remove', 'drop', 'truncate', 'reset', 'destroy']
 
-    _patterns_compiled = None
-
-    @classmethod
-    def get_patterns(cls):
-        if cls._patterns_compiled is None:
-            cls._patterns_compiled = [
-                re.compile(p, re.IGNORECASE)
-                for p in cls.RISKY_PATTERNS_RAW
-            ]
-        return cls._patterns_compiled
+    @staticmethod
+    def get_patterns():
+        return _compile_state_saver_patterns()
 
 
 # =============================================================================
@@ -264,7 +444,7 @@ class StateSaver:
 
 class AutoContinue:
     """Patterns for auto-continue detection."""
-    INCOMPLETE_PATTERNS = [
+    INCOMPLETE_PATTERNS_RAW = [
         r"running out of context",
         r"continue\s+in\s+next\s+(message|response)",
         r"will\s+continue",
@@ -276,34 +456,155 @@ class AutoContinue:
         r"next\s+step[s]?\s*:",
     ]
 
-    COMPLETE_PATTERNS = [
+    COMPLETE_PATTERNS_RAW = [
         r"(all|everything).*(done|complete|finished)",
         r"successfully\s+(completed|finished)",
         r"no\s+(more|remaining)\s+(tasks?|items?|work)",
         r"that'?s\s+(all|it|everything)",
     ]
 
+    # Backwards compatibility - keep original names
+    INCOMPLETE_PATTERNS = INCOMPLETE_PATTERNS_RAW
+    COMPLETE_PATTERNS = COMPLETE_PATTERNS_RAW
+
+    @staticmethod
+    def get_incomplete():
+        """Get compiled incomplete patterns."""
+        return _compile_incomplete_patterns()
+
+    @staticmethod
+    def get_complete():
+        """Get compiled complete patterns."""
+        return _compile_complete_patterns()
+
+
+# =============================================================================
+# Smart Permission Patterns
+# =============================================================================
+
+class SmartPermissions:
+    """Auto-approval patterns for smart permissions."""
+    # Read patterns (safe file types)
+    READ_PATTERNS_RAW = [
+        r'\.md$', r'\.txt$', r'\.rst$',
+        r'README', r'LICENSE', r'CHANGELOG', r'CONTRIBUTING',
+        r'\.json$', r'\.yaml$', r'\.yml$', r'\.toml$', r'\.ini$', r'\.cfg$',
+        r'test[_/]', r'_test\.', r'\.test\.', r'\.spec\.', r'__tests__/', r'tests/',
+        r'\.d\.ts$', r'\.pyi$',
+        r'package-lock\.json$', r'yarn\.lock$', r'pnpm-lock\.yaml$',
+        r'Cargo\.lock$', r'poetry\.lock$', r'Pipfile\.lock$',
+    ]
+
+    # Write patterns (test files only)
+    WRITE_PATTERNS_RAW = [
+        r'test[_/]', r'_test\.', r'\.test\.', r'\.spec\.',
+        r'__tests__/', r'tests/', r'fixtures/', r'mocks/', r'__mocks__/',
+    ]
+
+    # Never auto-approve (sensitive files)
+    NEVER_PATTERNS_RAW = [
+        r'\.env', r'secrets?', r'credentials?', r'password',
+        r'\.pem$', r'\.key$', r'id_rsa', r'\.ssh/', r'\.aws/', r'\.git/',
+    ]
+
+    @staticmethod
+    def get_read():
+        """Get compiled read auto-approve patterns."""
+        return _compile_read_permissions_patterns()
+
+    @staticmethod
+    def get_write():
+        """Get compiled write auto-approve patterns."""
+        return _compile_write_permissions_patterns()
+
+    @staticmethod
+    def get_never():
+        """Get compiled never-approve patterns."""
+        return _compile_never_permissions_patterns()
+
 
 # =============================================================================
 # State Limits (centralized magic numbers)
 # =============================================================================
 
-class Limits:
+@dataclass(frozen=True)
+class LimitConfig:
     """Size limits for state management."""
-    MAX_SUGGESTED_SKILLS = 100
-    MAX_RECENT_PATTERNS = 10
-    MAX_FUZZY_SEARCH_ENTRIES = 30
-    MAX_CHECKPOINTS = 20
-    MAX_SEEN_SESSIONS = 100
-    MAX_BACKUPS = 20
-    MAX_CHAIN_RECOMMENDATIONS = 2
-    MAX_MESSAGES_JOINED = 3
-    CONTENT_TRUNCATE_SUMMARY = 500
-    CONTENT_TRUNCATE_CACHE = 2000
-    CONTENT_TRUNCATE_FULL = 10000
-    PROMPT_TRUNCATE = 100
-    COMMAND_TRUNCATE = 500
-    URL_TRUNCATE = 80
+    max_suggested_skills: int = 100
+    max_recent_patterns: int = 10
+    max_fuzzy_search_entries: int = 30
+    max_checkpoints: int = 20
+    max_seen_sessions: int = 100
+    max_backups: int = 20
+    max_chain_recommendations: int = 2
+    max_messages_joined: int = 3
+    content_truncate_summary: int = 500
+    content_truncate_cache: int = 2000
+    content_truncate_full: int = 10000
+    prompt_truncate: int = 100
+    command_truncate: int = 500
+    url_truncate: int = 80
+
+    # Backwards compatibility: UPPER_CASE aliases
+    @property
+    def MAX_SUGGESTED_SKILLS(self) -> int:
+        return self.max_suggested_skills
+
+    @property
+    def MAX_RECENT_PATTERNS(self) -> int:
+        return self.max_recent_patterns
+
+    @property
+    def MAX_FUZZY_SEARCH_ENTRIES(self) -> int:
+        return self.max_fuzzy_search_entries
+
+    @property
+    def MAX_CHECKPOINTS(self) -> int:
+        return self.max_checkpoints
+
+    @property
+    def MAX_SEEN_SESSIONS(self) -> int:
+        return self.max_seen_sessions
+
+    @property
+    def MAX_BACKUPS(self) -> int:
+        return self.max_backups
+
+    @property
+    def MAX_CHAIN_RECOMMENDATIONS(self) -> int:
+        return self.max_chain_recommendations
+
+    @property
+    def MAX_MESSAGES_JOINED(self) -> int:
+        return self.max_messages_joined
+
+    @property
+    def CONTENT_TRUNCATE_SUMMARY(self) -> int:
+        return self.content_truncate_summary
+
+    @property
+    def CONTENT_TRUNCATE_CACHE(self) -> int:
+        return self.content_truncate_cache
+
+    @property
+    def CONTENT_TRUNCATE_FULL(self) -> int:
+        return self.content_truncate_full
+
+    @property
+    def PROMPT_TRUNCATE(self) -> int:
+        return self.prompt_truncate
+
+    @property
+    def COMMAND_TRUNCATE(self) -> int:
+        return self.command_truncate
+
+    @property
+    def URL_TRUNCATE(self) -> int:
+        return self.url_truncate
+
+
+# Create singleton instance with same name for backwards compatibility
+Limits = LimitConfig()
 
 
 # =============================================================================
@@ -345,6 +646,78 @@ except ImportError:
 # =============================================================================
 # Compiled Pattern Cache (using lru_cache for thread safety)
 # =============================================================================
+
+@lru_cache(maxsize=1)
+def _compile_blocked_patterns():
+    """Compile blocked dangerous command patterns."""
+    return [
+        (re.compile(p, re.IGNORECASE), r)
+        for p, r in DangerousCommands.BLOCKED_PATTERNS_RAW
+    ]
+
+
+@lru_cache(maxsize=1)
+def _compile_warning_patterns():
+    """Compile warning dangerous command patterns."""
+    return [
+        (re.compile(p, re.IGNORECASE), r)
+        for p, r in DangerousCommands.WARNING_PATTERNS_RAW
+    ]
+
+
+@lru_cache(maxsize=1)
+def _compile_state_saver_patterns():
+    """Compile risky state saver patterns."""
+    return [
+        re.compile(p, re.IGNORECASE)
+        for p in StateSaver.RISKY_PATTERNS_RAW
+    ]
+
+
+@lru_cache(maxsize=1)
+def _compile_incomplete_patterns():
+    """Compile incomplete auto-continue patterns."""
+    return [
+        re.compile(p, re.IGNORECASE)
+        for p in AutoContinue.INCOMPLETE_PATTERNS_RAW
+    ]
+
+
+@lru_cache(maxsize=1)
+def _compile_complete_patterns():
+    """Compile complete auto-continue patterns."""
+    return [
+        re.compile(p, re.IGNORECASE)
+        for p in AutoContinue.COMPLETE_PATTERNS_RAW
+    ]
+
+
+@lru_cache(maxsize=1)
+def _compile_read_permissions_patterns():
+    """Compile read auto-approval patterns."""
+    return [
+        re.compile(p, re.IGNORECASE)
+        for p in SmartPermissions.READ_PATTERNS_RAW
+    ]
+
+
+@lru_cache(maxsize=1)
+def _compile_write_permissions_patterns():
+    """Compile write auto-approval patterns."""
+    return [
+        re.compile(p, re.IGNORECASE)
+        for p in SmartPermissions.WRITE_PATTERNS_RAW
+    ]
+
+
+@lru_cache(maxsize=1)
+def _compile_never_permissions_patterns():
+    """Compile never-approve patterns."""
+    return [
+        re.compile(p, re.IGNORECASE)
+        for p in SmartPermissions.NEVER_PATTERNS_RAW
+    ]
+
 
 @lru_cache(maxsize=1)
 def get_protected_patterns_compiled():

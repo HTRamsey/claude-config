@@ -24,6 +24,7 @@ from hook_utils import (
     read_state,
     write_state,
 )
+from hook_sdk import PreToolUseContext, PostToolUseContext, Response
 
 # Configuration
 STATE_KEY = "checkpoint"
@@ -69,7 +70,7 @@ def should_checkpoint(state: dict) -> bool:
     return (time.time() - last) > CHECKPOINT_INTERVAL
 
 
-def save_checkpoint_entry(session_id: str, file_path: str, reason: str, ctx: dict) -> dict:
+def save_checkpoint_entry(session_id: str, file_path: str, reason: str, ctx: PreToolUseContext) -> dict:
     """Save checkpoint info to state file."""
     state = load_state()
     now = datetime.now()
@@ -79,7 +80,7 @@ def save_checkpoint_entry(session_id: str, file_path: str, reason: str, ctx: dic
         "session_id": session_id,
         "file": file_path,
         "reason": reason,
-        "cwd": ctx.get("cwd", ""),
+        "cwd": ctx.cwd,
     }
 
     state["checkpoints"].append(checkpoint)
@@ -90,17 +91,16 @@ def save_checkpoint_entry(session_id: str, file_path: str, reason: str, ctx: dic
     return checkpoint
 
 
-def handle_pre_tool_use(ctx: dict) -> dict | None:
+def handle_pre_tool_use(raw: dict) -> dict | None:
     """Save checkpoint before risky edit operations."""
-    tool_name = ctx.get("tool_name", "")
-    tool_input = ctx.get("tool_input", {})
-    session_id = get_session_id(ctx)
+    ctx = PreToolUseContext(raw)
+    session_id = get_session_id(raw)
 
-    if tool_name not in ("Edit", "Write"):
+    if ctx.tool_name not in ("Edit", "Write"):
         return None
 
-    file_path = tool_input.get("file_path", "")
-    content = tool_input.get("content", "") or tool_input.get("new_string", "")
+    file_path = ctx.tool_input.file_path
+    content = ctx.tool_input.content or ctx.tool_input.new_string
 
     if not file_path:
         return None
@@ -112,13 +112,7 @@ def handle_pre_tool_use(ctx: dict) -> dict | None:
         save_checkpoint_entry(session_id, file_path, reason, ctx)
         filename = Path(file_path).name
         log_event("state_saver", "checkpoint", {"file": filename, "reason": reason})
-        return {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "allow",
-                "permissionDecisionReason": f"[Checkpoint] {filename} ({reason})"
-            }
-        }
+        return Response.allow(f"[Checkpoint] {filename} ({reason})")
 
     return None
 
@@ -170,23 +164,17 @@ def save_error_backup(ctx: dict, command: str, exit_code: int, output: str) -> s
         return None
 
 
-def handle_post_tool_use(ctx: dict) -> dict | None:
+def handle_post_tool_use(raw: dict) -> dict | None:
     """Save error backup when commands fail."""
-    tool_name = ctx.get("tool_name", "")
+    ctx = PostToolUseContext(raw)
 
-    if tool_name != "Bash":
+    if ctx.tool_name != "Bash":
         return None
 
-    tool_input = ctx.get("tool_input", {})
-    # Claude Code uses "tool_response" for PostToolUse hooks
-    tool_result = ctx.get("tool_response") or ctx.get("tool_result", {})
+    command = ctx.tool_input.command
 
-    command = tool_input.get("command", "")
-
-    # Get exit code from various possible locations
-    exit_code = tool_result.get("exit_code")
-    if exit_code is None:
-        exit_code = tool_result.get("exitCode")
+    # Get exit code
+    exit_code = ctx.tool_result.exit_code
     if exit_code is None:
         return None
 
@@ -195,12 +183,10 @@ def handle_post_tool_use(ctx: dict) -> dict | None:
         return None
 
     # Get output
-    stdout = str(tool_result.get("stdout", ""))
-    stderr = str(tool_result.get("stderr", ""))
-    output = stdout + "\n" + stderr if stderr else stdout
+    output = ctx.tool_result.output
 
     # Save backup
-    backup_path = save_error_backup(ctx, command, exit_code, output)
+    backup_path = save_error_backup(raw, command, exit_code, output)
 
     if backup_path:
         log_event("state_saver", "error_backup", {

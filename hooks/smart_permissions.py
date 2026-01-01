@@ -20,7 +20,8 @@ from cachetools import TTLCache
 
 # Import shared utilities
 from hook_utils import graceful_main, log_event
-from config import DATA_DIR, Thresholds
+from hook_sdk import PostToolUseContext, PreToolUseContext, Response
+from config import DATA_DIR, Thresholds, SmartPermissions
 
 # Learned patterns file
 PATTERNS_FILE = DATA_DIR / "permission-patterns.json"
@@ -28,31 +29,15 @@ PATTERNS_FILE = DATA_DIR / "permission-patterns.json"
 # Approval threshold before auto-approving a pattern (from centralized config)
 APPROVAL_THRESHOLD = Thresholds.PERMISSION_APPROVAL_THRESHOLD
 
-# Auto-approve patterns for Read operations (static) - pre-compiled
-_READ_PATTERNS_RAW = [
-    r'\.md$', r'\.txt$', r'\.rst$',
-    r'README', r'LICENSE', r'CHANGELOG', r'CONTRIBUTING',
-    r'\.json$', r'\.yaml$', r'\.yml$', r'\.toml$', r'\.ini$', r'\.cfg$',
-    r'test[_/]', r'_test\.', r'\.test\.', r'\.spec\.', r'__tests__/', r'tests/',
-    r'\.d\.ts$', r'\.pyi$',
-    r'package-lock\.json$', r'yarn\.lock$', r'pnpm-lock\.yaml$',
-    r'Cargo\.lock$', r'poetry\.lock$', r'Pipfile\.lock$',
-]
-READ_AUTO_APPROVE = [re.compile(p, re.IGNORECASE) for p in _READ_PATTERNS_RAW]
+# Use lazy-compiled patterns from config
+def get_read_patterns():
+    return SmartPermissions.get_read()
 
-# Auto-approve patterns for Edit/Write (static) - pre-compiled
-_WRITE_PATTERNS_RAW = [
-    r'test[_/]', r'_test\.', r'\.test\.', r'\.spec\.',
-    r'__tests__/', r'tests/', r'fixtures/', r'mocks/', r'__mocks__/',
-]
-WRITE_AUTO_APPROVE = [re.compile(p, re.IGNORECASE) for p in _WRITE_PATTERNS_RAW]
+def get_write_patterns():
+    return SmartPermissions.get_write()
 
-# Never auto-approve (deny patterns take precedence) - pre-compiled
-_NEVER_PATTERNS_RAW = [
-    r'\.env', r'secrets?', r'credentials?', r'password',
-    r'\.pem$', r'\.key$', r'id_rsa', r'\.ssh/', r'\.aws/', r'\.git/',
-]
-NEVER_AUTO_APPROVE = [re.compile(p, re.IGNORECASE) for p in _NEVER_PATTERNS_RAW]
+def get_never_patterns():
+    return SmartPermissions.get_never()
 
 
 def matches_any(path: str, patterns: list) -> bool:
@@ -119,7 +104,7 @@ def get_pattern_key(tool: str, path: str) -> str:
 
 def record_approval(tool: str, path: str):
     """Record an approved operation (called from PostToolUse)."""
-    if matches_any(path, NEVER_AUTO_APPROVE):
+    if matches_any(path, get_never_patterns()):
         return  # Never learn sensitive file patterns
 
     key = get_pattern_key(tool, path)
@@ -162,72 +147,62 @@ def check_learned_patterns(tool: str, path: str) -> bool:
     return False
 
 
-def smart_permissions_post(ctx: dict) -> dict | None:
+def smart_permissions_post(raw: dict) -> dict | None:
     """PostToolUse handler - record successful operations for learning."""
-    tool_name = ctx.get("tool_name", "")
-    if tool_name not in ("Read", "Edit", "Write"):
+    ctx = PostToolUseContext(raw)
+
+    if ctx.tool_name not in ("Read", "Edit", "Write"):
         return None
 
-    tool_input = ctx.get("tool_input", {})
-    file_path = tool_input.get("file_path", "")
-
+    file_path = ctx.tool_input.file_path
     if not file_path:
         return None
 
     # Record this approval (tool executed = user approved)
-    record_approval(tool_name, file_path)
+    record_approval(ctx.tool_name, file_path)
     return None
 
 
 @graceful_main("smart_permissions")
 def main():
     try:
-        ctx = json.load(sys.stdin)
+        raw = json.load(sys.stdin)
     except json.JSONDecodeError:
         sys.exit(0)
 
-    tool_name = ctx.get("tool_name", "")
-    tool_input = ctx.get("tool_input", {})
-    file_path = tool_input.get("file_path", "")
+    ctx = PreToolUseContext(raw)
+    file_path = ctx.tool_input.file_path
 
     if not file_path:
         sys.exit(0)
 
     # Never auto-approve sensitive files
-    if matches_any(file_path, NEVER_AUTO_APPROVE):
+    if matches_any(file_path, get_never_patterns()):
         sys.exit(0)
 
     should_approve = False
     reason = ""
 
     # Check static patterns
-    if tool_name == "Read":
-        if matches_any(file_path, READ_AUTO_APPROVE):
+    if ctx.tool_name == "Read":
+        if matches_any(file_path, get_read_patterns()):
             should_approve = True
             reason = "Auto-approved: safe file type for reading"
 
-    elif tool_name in ("Edit", "Write"):
-        if matches_any(file_path, WRITE_AUTO_APPROVE):
+    elif ctx.tool_name in ("Edit", "Write"):
+        if matches_any(file_path, get_write_patterns()):
             should_approve = True
             reason = "Auto-approved: test/fixture file"
 
     # Check learned patterns if static didn't match
-    if not should_approve and check_learned_patterns(tool_name, file_path):
+    if not should_approve and check_learned_patterns(ctx.tool_name, file_path):
         should_approve = True
         reason = "Auto-approved: learned pattern (user consistently approves)"
-        log_event("smart_permissions", "learned_auto_approved", {"tool": tool_name, "file": file_path})
+        log_event("smart_permissions", "learned_auto_approved", {"tool": ctx.tool_name, "file": file_path})
 
     if should_approve:
-        log_event("smart_permissions", "auto_approved", {"tool": tool_name, "file": file_path})
-        result = {
-            "hookSpecificOutput": {
-                "hookEventName": "PermissionRequest",
-                "decision": {
-                    "behavior": "allow"
-                },
-                "permissionDecisionReason": reason
-            }
-        }
+        log_event("smart_permissions", "auto_approved", {"tool": ctx.tool_name, "file": file_path})
+        result = Response.allow(reason)
         print(json.dumps(result))
 
     sys.exit(0)

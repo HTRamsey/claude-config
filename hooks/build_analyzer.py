@@ -15,6 +15,7 @@ from pathlib import Path
 
 # Add hooks dir to path for imports
 from hook_utils import graceful_main, output_message
+from hook_sdk import PostToolUseContext, Response
 
 # Build command patterns - pre-compiled for performance
 _BUILD_PATTERNS_RAW = [
@@ -236,23 +237,19 @@ def format_summary(analysis: dict) -> str:
     return '\n'.join(lines)
 
 
-def analyze_build_post(ctx: dict) -> dict | None:
+def analyze_build_post(raw: dict) -> dict | None:
     """Handler function for dispatcher integration."""
+    ctx = PostToolUseContext(raw)
+
     # Only process Bash
-    if ctx.get('tool_name') != 'Bash':
+    if ctx.tool_name != 'Bash':
         return None
 
-    tool_input = ctx.get('tool_input', {})
-    # Claude Code uses "tool_response" for PostToolUse hooks
-    tool_result = ctx.get('tool_response') or ctx.get('tool_result', {})
+    command = ctx.tool_input.command
+    output = ctx.tool_result.output
 
-    command = tool_input.get('command', '')
-    output = str(tool_result.get('stdout', '')) + str(tool_result.get('stderr', ''))
-
-    # Get exit code - check multiple possible locations
-    exit_code = tool_result.get('exit_code')
-    if exit_code is None:
-        exit_code = tool_result.get('exitCode')
+    # Get exit code
+    exit_code = ctx.tool_result.exit_code
     if exit_code is None:
         # Try to detect from output
         if 'error' in output.lower() and ('make: ***' in output or 'FAILED' in output):
@@ -267,12 +264,7 @@ def analyze_build_post(ctx: dict) -> dict | None:
 
     if analysis:
         summary = format_summary(analysis)
-        return {
-            "hookSpecificOutput": {
-                "hookEventName": "PostToolUse",
-                "message": summary
-            }
-        }
+        return Response.message(summary, event="PostToolUse")
 
     return None
 

@@ -34,6 +34,7 @@ from pathlib import Path
 from cachetools import TTLCache
 
 from hook_utils import graceful_main, log_event, read_state, write_state
+from hook_sdk import Response
 from config import Timeouts
 
 # TTL cache for directory hierarchy lookups (automatic expiration and LRU eviction)
@@ -267,13 +268,7 @@ def check_hierarchical_rules(ctx: dict) -> dict | None:
         "sources": [r["source"] for r in rules]
     })
 
-    return {
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "allow",
-            "permissionDecisionReason": f"[Rules] {message}"
-        }
-    }
+    return Response.allow(f"[Rules] {message}")
 
 
 @graceful_main("hierarchical_rules")

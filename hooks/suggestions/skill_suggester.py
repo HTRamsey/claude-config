@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 from .shared import get_state, update_state, save_state
+from hook_sdk import PreToolUseContext, Response
 
 
 SKILL_SUGGESTIONS = [
@@ -17,13 +18,13 @@ SKILL_SUGGESTIONS = [
 ]
 
 
-def suggest_skill(ctx: dict) -> dict | None:
+def suggest_skill(raw: dict) -> dict | None:
     """Suggest creator skills when writing config files."""
-    tool_name = ctx.get("tool_name", "")
-    if tool_name not in ("Write", "Edit"):
+    ctx = PreToolUseContext(raw)
+    if ctx.tool_name not in ("Write", "Edit"):
         return None
 
-    file_path = ctx.get("tool_input", {}).get("file_path", "")
+    file_path = ctx.tool_input.file_path
     if not file_path:
         return None
 
@@ -40,15 +41,10 @@ def suggest_skill(ctx: dict) -> dict | None:
             update_state({"skills_suggested": list(suggested)})
             save_state()
 
-            return {
-                "hookSpecificOutput": {
-                    "hookEventName": "PreToolUse",
-                    "permissionDecision": "allow",
-                    "permissionDecisionReason": (
-                        f"Creating {rule['type']} file. "
-                        f"Consider using the `{rule['skill']}` skill for correct format and patterns. "
-                        f"Load with: Skill(skill=\"{rule['skill']}\")"
-                    )
-                }
-            }
+            reason = (
+                f"Creating {rule['type']} file. "
+                f"Consider using the `{rule['skill']}` skill for correct format and patterns. "
+                f"Load with: Skill(skill=\"{rule['skill']}\")"
+            )
+            return Response.allow(reason)
     return None

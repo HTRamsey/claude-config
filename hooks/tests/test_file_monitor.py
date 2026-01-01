@@ -28,6 +28,7 @@ from file_monitor import (
     handle_search_post,
     handle_read_post,
 )
+from hook_sdk import PreToolUseContext, PostToolUseContext
 
 
 class TestNormalizePath(TestCase):
@@ -137,7 +138,8 @@ class TestHandleReadPre(TestCase):
 
     def test_read_tracks_file(self):
         state = {"reads": {}, "searches": {}, "message_count": 0}
-        ctx = {"tool_name": "Read", "tool_input": {"file_path": "/test/file.txt"}}
+        raw = {"tool_name": "Read", "tool_input": {"file_path": "/test/file.txt"}}
+        ctx = PreToolUseContext(raw)
         messages = handle_read_pre(ctx, state)
         # Read pre returns list of messages, empty means no warnings
         self.assertIsInstance(messages, list)
@@ -148,7 +150,8 @@ class TestHandleEditPre(TestCase):
 
     def test_edit_warns_unread_file(self):
         state = {"reads": {}, "searches": {}, "message_count": 5}
-        ctx = {"tool_name": "Edit", "tool_input": {"file_path": "/test/file.txt"}}
+        raw = {"tool_name": "Edit", "tool_input": {"file_path": "/test/file.txt"}}
+        ctx = PreToolUseContext(raw)
         messages = handle_edit_pre(ctx, state)
         # Should return warning messages about editing unread file
         self.assertIsInstance(messages, list)
@@ -163,7 +166,8 @@ class TestHandleEditPre(TestCase):
             "searches": {},
             "message_count": 6
         }
-        ctx = {"tool_name": "Edit", "tool_input": {"file_path": "/test/file.txt"}}
+        raw = {"tool_name": "Edit", "tool_input": {"file_path": "/test/file.txt"}}
+        ctx = PreToolUseContext(raw)
         messages = handle_edit_pre(ctx, state)
         # No warnings for recently read file
         self.assertEqual(len(messages), 0)
@@ -175,7 +179,8 @@ class TestHandleSearchPost(TestCase):
     def test_duplicate_search_detected(self):
         # First search to establish the hash
         state = {"reads": {}, "searches": {}, "message_count": 5}
-        ctx = {"tool_name": "Grep", "tool_input": {"pattern": "foo", "path": "."}}
+        raw = {"tool_name": "Grep", "tool_input": {"pattern": "foo", "path": "."}}
+        ctx = PostToolUseContext(raw)
         handle_search_post(ctx, state)  # First time - no warning
 
         # Second identical search should trigger warning
@@ -185,7 +190,8 @@ class TestHandleSearchPost(TestCase):
 
     def test_new_search_tracked(self):
         state = {"reads": {}, "searches": {}, "message_count": 5}
-        ctx = {"tool_name": "Grep", "tool_input": {"pattern": "newpattern", "path": "."}}
+        raw = {"tool_name": "Grep", "tool_input": {"pattern": "newpattern", "path": "."}}
+        ctx = PostToolUseContext(raw)
         result = handle_search_post(ctx, state)
         self.assertIsNone(result)  # First search, no warning
         self.assertEqual(len(state["searches"]), 1)
@@ -200,7 +206,8 @@ class TestHandleReadPost(TestCase):
             "searches": {},
             "message_count": 5
         }
-        ctx = {"tool_name": "Read", "tool_input": {"file_path": "/test/file.txt"}}
+        raw = {"tool_name": "Read", "tool_input": {"file_path": "/test/file.txt"}}
+        ctx = PostToolUseContext(raw)
         result = handle_read_post(ctx, state)
         self.assertIsNotNone(result)
         self.assertIn("Duplicate", result)

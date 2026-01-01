@@ -21,6 +21,7 @@ from hook_utils import (
     get_session_state,
     update_session_state
 )
+from hook_sdk import PreToolUseContext, PostToolUseContext
 
 REFLEXION_LOG = Path.home() / ".claude/data/reflexion-log.json"
 MAX_REFLEXION_ENTRIES = 100  # Keep last N entries
@@ -137,11 +138,11 @@ def record_reflexion(ctx: dict, duration_s: float | None):
         })
 
 
-def handle_start(ctx):
+def handle_start(raw: dict):
     """Handle Task tool PreToolUse - track spawn time and counts."""
-    tool_input = ctx.get("tool_input", {})
-    subagent_type = tool_input.get("subagent_type", ctx.get("subagent_type", "unknown"))
-    subagent_id = ctx.get("subagent_id", ctx.get("tool_use_id", ""))
+    ctx = PreToolUseContext(raw)
+    subagent_type = ctx.tool_input.subagent_type or raw.get("subagent_type", "unknown")
+    subagent_id = raw.get("subagent_id", ctx.tool_use_id or "")
 
     state = get_session_state()
 
@@ -168,12 +169,12 @@ def handle_start(ctx):
     })
 
 
-def handle_complete(ctx):
+def handle_complete(raw: dict):
     """Handle Task tool PostToolUse - track completion and calculate duration."""
-    tool_input = ctx.get("tool_input", {})
-    subagent_type = tool_input.get("subagent_type", ctx.get("subagent_type", "unknown"))
-    subagent_id = ctx.get("subagent_id", ctx.get("tool_use_id", ""))
-    stop_reason = ctx.get("stop_reason", "completed" if not ctx.get("tool_error") else "error")
+    ctx = PostToolUseContext(raw)
+    subagent_type = ctx.tool_input.subagent_type or raw.get("subagent_type", "unknown")
+    subagent_id = raw.get("subagent_id", ctx.tool_use_id or "")
+    stop_reason = raw.get("stop_reason", "completed" if not ctx.tool_result.is_error else "error")
 
     state = get_session_state()
     subagent_stats = state.get("subagent_stats", {})
@@ -212,7 +213,7 @@ def handle_complete(ctx):
     })
 
     # Record to Reflexion memory
-    record_reflexion(ctx, duration_s)
+    record_reflexion(raw, duration_s)
 
 
 @graceful_main("subagent_lifecycle")

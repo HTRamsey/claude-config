@@ -24,6 +24,7 @@ except ImportError:
 
 from config import Timeouts, Thresholds, Limits, CACHE_DIR
 from hook_utils import graceful_main, log_event, is_post_tool_use
+from hook_sdk import PreToolUseContext, PostToolUseContext, Response
 
 # Ensure cache directory exists
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -198,15 +199,16 @@ def find_fuzzy_match(prompt: str, cwd: str, cache: dict, cfg: CacheConfig) -> di
     return None
 
 
-def handle_exploration_pre(ctx: dict) -> dict | None:
+def handle_exploration_pre(raw: dict) -> dict | None:
     """Check exploration cache before spawning agent."""
-    tool_input = ctx.get("tool_input", {})
-    cwd = ctx.get("cwd", "")
-    subagent_type = tool_input.get("subagent_type", "")
-    prompt = tool_input.get("prompt", "")
+    ctx = PreToolUseContext(raw)
+    subagent_type = ctx.tool_input.subagent_type
+    prompt = ctx.tool_input.prompt
 
     if subagent_type not in ("Explore", "quick-lookup") or not prompt:
         return None
+
+    cwd = ctx.cwd
 
     cfg = CACHES["exploration"]
     cache = load_cache(cfg)
@@ -221,13 +223,7 @@ def handle_exploration_pre(ctx: dict) -> dict | None:
         summary = entry.get("summary", "")[:200]
         _update_stat(cfg.name, "hits")
         log_event("unified_cache", "exploration_hit", {"age_mins": age_mins})
-        return {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "allow",
-                "permissionDecisionReason": f"[Cache Hit] Similar exploration found ({age_mins}m ago): {summary}"
-            }
-        }
+        return Response.allow(f"[Cache Hit] Similar exploration found ({age_mins}m ago): {summary}")
 
     # Fuzzy match
     if cfg.fuzzy_match:
@@ -237,30 +233,24 @@ def handle_exploration_pre(ctx: dict) -> dict | None:
             summary = matched.get("summary", "")[:200]
             _update_stat(cfg.name, "hits")
             log_event("unified_cache", "exploration_fuzzy_hit", {"age_mins": age_mins})
-            return {
-                "hookSpecificOutput": {
-                    "hookEventName": "PreToolUse",
-                    "permissionDecision": "allow",
-                    "permissionDecisionReason": f"[Cache Hit] Similar exploration found ({age_mins}m ago): {summary}"
-                }
-            }
+            return Response.allow(f"[Cache Hit] Similar exploration found ({age_mins}m ago): {summary}")
 
     # Buffer miss stat - don't save to disk (stats flushed on next cache save)
     _update_stat(cfg.name, "misses")
     return None
 
 
-def handle_exploration_post(ctx: dict) -> dict | None:
+def handle_exploration_post(raw: dict) -> dict | None:
     """Save exploration results to cache."""
-    tool_input = ctx.get("tool_input", {})
-    # Claude Code uses "tool_response" for PostToolUse hooks
-    tool_result = ctx.get("tool_response") or ctx.get("tool_result", {})
-    cwd = ctx.get("cwd", "")
-    subagent_type = tool_input.get("subagent_type", "")
-    prompt = tool_input.get("prompt", "")
+    ctx = PostToolUseContext(raw)
+    subagent_type = ctx.tool_input.subagent_type
+    prompt = ctx.tool_input.prompt
 
     if subagent_type not in ("Explore", "quick-lookup") or not prompt:
         return None
+
+    cwd = ctx.cwd
+    tool_result = ctx.tool_result.raw
 
     result_content = ""
     if isinstance(tool_result, dict):
@@ -288,10 +278,10 @@ def handle_exploration_post(ctx: dict) -> dict | None:
     return None
 
 
-def handle_research_pre(ctx: dict) -> dict | None:
+def handle_research_pre(raw: dict) -> dict | None:
     """Check research cache before WebFetch."""
-    tool_input = ctx.get("tool_input", {})
-    url = tool_input.get("url", "")
+    ctx = PreToolUseContext(raw)
+    url = ctx.tool_input.url
 
     if not url:
         return None
@@ -308,30 +298,23 @@ def handle_research_pre(ctx: dict) -> dict | None:
 
         cached_summary = entry.get("summary", "")[:500]
         ttl_hours = cfg.ttl_seconds // 3600
-        return {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "allow",
-                "permissionDecisionReason": f"[CACHE HIT - {ttl_hours}h fresh] {url}\n\nCached content:\n{cached_summary}\n\n(Consider skipping fetch if this answers your question)"
-            }
-        }
+        return Response.allow(f"[CACHE HIT - {ttl_hours}h fresh] {url}\n\nCached content:\n{cached_summary}\n\n(Consider skipping fetch if this answers your question)")
 
     # Buffer miss stat - don't save to disk (stats flushed on next cache save)
     _update_stat(cfg.name, "misses")
     return None
 
 
-def handle_research_post(ctx: dict) -> dict | None:
+def handle_research_post(raw: dict) -> dict | None:
     """Save WebFetch results to cache."""
-    tool_input = ctx.get("tool_input", {})
-    # Claude Code uses "tool_response" for PostToolUse hooks
-    tool_result = ctx.get("tool_response") or ctx.get("tool_result", "")
-    url = tool_input.get("url", "")
+    ctx = PostToolUseContext(raw)
+    url = ctx.tool_input.url
 
     if not url:
         log_event("unified_cache", "research_skip", {"reason": "no_url"})
         return None
 
+    tool_result = ctx.tool_result.raw
     content = ""
     if isinstance(tool_result, dict):
         content = tool_result.get("content", "") or tool_result.get("text", "") or str(tool_result)

@@ -8,6 +8,7 @@ Consolidates:
 
 Both share token estimation logic and PostToolUse context processing.
 """
+import heapq
 import json
 import re
 import sys
@@ -23,7 +24,10 @@ from hook_utils import (
     get_session_id,
     read_session_state,
     write_session_state,
+    estimate_tokens,
+    get_content_size,
 )
+from hook_sdk import PostToolUseContext, Response
 from config import Thresholds, FilePatterns, Timeouts, TRACKER_DIR
 
 # =============================================================================
@@ -38,32 +42,6 @@ LARGE_OUTPUT_TOOLS = FilePatterns.LARGE_OUTPUT_TOOLS
 FAILURE_THRESHOLD = Thresholds.TOOL_FAILURE_THRESHOLD
 TOOL_TRACKER_MAX_AGE = Timeouts.TOOL_TRACKER_MAX_AGE
 STATE_NAMESPACE = "tool_tracker"
-
-# =============================================================================
-# Shared Utilities
-# =============================================================================
-
-def estimate_tokens(content) -> int:
-    """Estimate tokens from content."""
-    if isinstance(content, str):
-        return len(content) // CHARS_PER_TOKEN
-    elif isinstance(content, dict):
-        return len(json.dumps(content)) // CHARS_PER_TOKEN
-    elif isinstance(content, list):
-        return sum(estimate_tokens(item) for item in content)
-    return 0
-
-
-def get_content_size(content) -> int:
-    """Get size of content in characters."""
-    if isinstance(content, str):
-        return len(content)
-    elif isinstance(content, dict):
-        return len(json.dumps(content))
-    elif isinstance(content, list):
-        return sum(get_content_size(item) for item in content)
-    return 0
-
 
 # =============================================================================
 # Tool Success Tracker
@@ -169,11 +147,11 @@ def match_error_pattern(error_msg: str) -> dict | None:
     return None
 
 
-def track_success(ctx: dict) -> list[str]:
+def track_success(ctx: PostToolUseContext) -> list[str]:
     """Track tool success/failure. Returns list of messages."""
-    tool_name = ctx.get("tool_name", "")
-    tool_result = ctx.get("tool_response") or ctx.get("tool_result", {})
-    session_id = get_session_id(ctx)
+    tool_name = ctx.tool_name
+    tool_result = ctx.tool_result.raw
+    session_id = get_session_id(ctx.raw)
 
     if not tool_name:
         return []
@@ -269,11 +247,11 @@ def save_daily_stats(stats: dict, force: bool = False):
         safe_save_json(log_path, stats)
 
 
-def track_tokens(ctx: dict) -> list[str]:
+def track_tokens(ctx: PostToolUseContext) -> list[str]:
     """Track token usage. Returns list of messages if warning threshold reached."""
-    tool_name = ctx.get("tool_name", "unknown")
-    tool_input = ctx.get("tool_input", {})
-    tool_result = ctx.get("tool_response") or ctx.get("tool_result", {})
+    tool_name = ctx.tool_name or "unknown"
+    tool_input = ctx.tool_input.raw
+    tool_result = ctx.tool_result.raw
 
     input_tokens = estimate_tokens(tool_input)
     output_tokens = estimate_tokens(tool_result)
@@ -289,7 +267,7 @@ def track_tokens(ctx: dict) -> list[str]:
     if stats["total_tokens"] >= DAILY_WARNING_THRESHOLD:
         if stats["tool_calls"] % 50 == 0:
             messages.append(f"[Token Tracker] Daily usage: ~{stats['total_tokens']:,} tokens")
-            top_tools = sorted(stats["by_tool"].items(), key=lambda x: -x[1])[:3]
+            top_tools = heapq.nlargest(3, stats["by_tool"].items(), key=lambda x: x[1])
             if top_tools:
                 tools_str = ", ".join(f"{t}: {c:,}" for t, c in top_tools)
                 messages.append(f"  Top tools: {tools_str}")
@@ -297,10 +275,10 @@ def track_tokens(ctx: dict) -> list[str]:
     return messages
 
 
-def check_output_size(ctx: dict) -> list[str]:
+def check_output_size(ctx: PostToolUseContext) -> list[str]:
     """Check output size. Returns list of messages if too large."""
-    tool_name = ctx.get("tool_name", "")
-    tool_result = ctx.get("tool_response") or ctx.get("tool_result", {})
+    tool_name = ctx.tool_name
+    tool_result = ctx.tool_result.raw
 
     output_size = get_content_size(tool_result)
     if output_size == 0:
@@ -335,8 +313,9 @@ def check_output_size(ctx: dict) -> list[str]:
 # Combined Handler
 # =============================================================================
 
-def track_tool_analytics(ctx: dict) -> dict | None:
+def track_tool_analytics(raw: dict) -> dict | None:
     """Combined handler for tool success tracking, token tracking, and output monitoring."""
+    ctx = PostToolUseContext(raw)
     all_messages = []
 
     # Track tool success/failure
@@ -352,12 +331,7 @@ def track_tool_analytics(ctx: dict) -> dict | None:
     all_messages.extend(size_messages)
 
     if all_messages:
-        return {
-            "hookSpecificOutput": {
-                "hookEventName": "PostToolUse",
-                "message": " | ".join(all_messages[:3])  # Limit to 3 messages
-            }
-        }
+        return Response.message(" | ".join(all_messages[:3]), event="PostToolUse")
 
     return None
 

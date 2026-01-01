@@ -9,6 +9,13 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+# Try to use filelock for cross-platform locking
+try:
+    from filelock import FileLock, Timeout
+    HAS_FILELOCK = True
+except ImportError:
+    HAS_FILELOCK = False
+
 # Try to use msgspec for faster JSON
 try:
     from config import fast_json_loads, fast_json_dumps, HAS_MSGSPEC
@@ -20,23 +27,45 @@ except ImportError:
 
 
 @contextmanager
-def file_lock(file_handle):
+def file_lock(path_or_handle, timeout: float = 10.0):
     """
-    Context manager for exclusive file locking using fcntl.
+    Context manager for exclusive file locking.
+
+    Uses filelock library for cross-platform support, falls back to fcntl on Unix.
 
     Usage:
+        # With file path
+        with file_lock("/path/to/file.json", timeout=10.0):
+            # perform atomic operation
+
+        # Legacy: with file handle (fcntl fallback)
         with open(path, 'w') as f:
             with file_lock(f):
                 json.dump(data, f)
     """
-    try:
-        fcntl.flock(file_handle.fileno(), fcntl.LOCK_EX)
-        yield file_handle
-    finally:
+    if HAS_FILELOCK and isinstance(path_or_handle, (str, Path)):
+        # Use filelock for path-based locking (cross-platform)
+        path = Path(path_or_handle)
+        lock = FileLock(f"{path}.lock", timeout=timeout)
         try:
-            fcntl.flock(file_handle.fileno(), fcntl.LOCK_UN)
-        except Exception:
-            pass
+            lock.acquire()
+            yield
+        finally:
+            try:
+                lock.release()
+            except Exception:
+                pass
+    else:
+        # Fallback to fcntl for file handles (Unix only)
+        file_handle = path_or_handle
+        try:
+            fcntl.flock(file_handle.fileno(), fcntl.LOCK_EX)
+            yield
+        finally:
+            try:
+                fcntl.flock(file_handle.fileno(), fcntl.LOCK_UN)
+            except Exception:
+                pass
 
 
 def safe_load_json(path: Path, default: dict = None) -> dict:
@@ -62,24 +91,39 @@ def safe_load_json(path: Path, default: dict = None) -> dict:
 
 
 def safe_save_json(path: Path, data: dict, indent: int = 2) -> bool:
-    """Save JSON file with graceful error handling and file locking."""
+    """Save JSON file with graceful error handling and file locking.
+
+    Uses msgspec for faster serialization when available.
+    Note: msgspec doesn't support indent, so we use standard json for pretty-printing.
+    """
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, 'w') as f:
+        with open(path, 'wb' if HAS_MSGSPEC and indent == 0 else 'w') as f:
             with file_lock(f):
-                json.dump(data, f, indent=indent)
+                if HAS_MSGSPEC and indent == 0:
+                    f.write(fast_json_dumps(data))
+                else:
+                    json.dump(data, f, indent=indent)
         return True
     except (IOError, OSError, TypeError):
         return False
 
 
 def safe_append_jsonl(path: Path, entry: dict) -> bool:
-    """Append entry to JSONL file with graceful error handling and file locking."""
+    """Append entry to JSONL file with graceful error handling and file locking.
+
+    Uses msgspec for faster serialization when available.
+    """
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, 'a') as f:
-            with file_lock(f):
-                f.write(json.dumps(entry) + "\n")
+        if HAS_MSGSPEC:
+            with open(path, 'ab') as f:
+                with file_lock(f):
+                    f.write(fast_json_dumps(entry) + b"\n")
+        else:
+            with open(path, 'a') as f:
+                with file_lock(f):
+                    f.write(json.dumps(entry) + "\n")
         return True
     except (IOError, OSError, TypeError):
         return False
@@ -89,6 +133,8 @@ def atomic_write_json(path: Path, data: dict) -> bool:
     """
     Write JSON atomically using temp file + rename.
     More robust than flock alone - survives crashes.
+
+    Uses msgspec for faster serialization when available.
     """
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -96,8 +142,12 @@ def atomic_write_json(path: Path, data: dict) -> bool:
             dir=path.parent, prefix=f".{path.stem}_", suffix=".tmp"
         )
         try:
-            with os.fdopen(fd, 'w') as f:
-                json.dump(data, f, indent=2, default=str)
+            if HAS_MSGSPEC:
+                with os.fdopen(fd, 'wb') as f:
+                    f.write(fast_json_dumps(data))
+            else:
+                with os.fdopen(fd, 'w') as f:
+                    json.dump(data, f, indent=2, default=str)
             os.replace(temp_path, path)
             return True
         except Exception:

@@ -6,6 +6,8 @@ PreToolUse: Bash, Grep, Read
 import re
 from pathlib import Path
 
+from hook_sdk import PreToolUseContext, Response
+
 
 # Pre-compiled patterns for performance
 _BASH_ALTERNATIVES_RAW = {
@@ -42,27 +44,26 @@ BASH_ALTERNATIVES = [
 ]
 
 
-def suggest_optimization(ctx: dict) -> dict | None:
+def suggest_optimization(raw: dict) -> dict | None:
     """Suggest better tool alternatives."""
-    tool_name = ctx.get("tool_name", "")
-    tool_input = ctx.get("tool_input", {})
+    ctx = PreToolUseContext(raw)
 
     suggestion = None
 
-    if tool_name == "Bash":
-        command = tool_input.get("command", "").strip()
+    if ctx.tool_name == "Bash":
+        command = (ctx.tool_input.command or "").strip()
         for pattern, alt, reason in BASH_ALTERNATIVES:
             if pattern.search(command):
                 suggestion = f"Consider ~/.claude/scripts/{alt} ({reason})"
                 break
 
-    elif tool_name == "Grep":
-        output_mode = tool_input.get("output_mode", "files_with_matches")
-        if output_mode == "content" and not tool_input.get("head_limit"):
+    elif ctx.tool_name == "Grep":
+        output_mode = ctx.tool_input.output_mode or "files_with_matches"
+        if output_mode == "content" and not ctx.tool_input.head_limit:
             suggestion = "Add head_limit to Grep to reduce token usage"
 
-    elif tool_name == "Read":
-        file_path = tool_input.get("file_path", "")
+    elif ctx.tool_name == "Read":
+        file_path = ctx.tool_input.file_path or ""
         try:
             if file_path and Path(file_path).exists():
                 size = Path(file_path).stat().st_size
@@ -72,12 +73,6 @@ def suggest_optimization(ctx: dict) -> dict | None:
             pass
 
     if suggestion:
-        return {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "allow",
-                "permissionDecisionReason": f"[Optimization] {suggestion}"
-            }
-        }
+        return Response.allow(f"[Optimization] {suggestion}")
 
     return None

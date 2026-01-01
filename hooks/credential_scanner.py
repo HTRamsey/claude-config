@@ -12,6 +12,7 @@ from pathlib import Path
 
 # Import shared utilities
 from hook_utils import graceful_main, log_event
+from hook_sdk import Response
 
 # Patterns that suggest sensitive data
 # Note: Some patterns split to avoid self-triggering
@@ -195,13 +196,7 @@ def main():
             "Use environment variables or a secrets manager instead. "
             "Review with: git diff --cached"
         )
-        result = {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "deny",
-                "permissionDecisionReason": reason
-            }
-        }
+        result = Response.deny(reason)
         print(json.dumps(result))
         sys.exit(0)
 

@@ -11,6 +11,7 @@ At critical thresholds:
 
 Uses cachetools TTLCache for in-memory caching between calls.
 """
+import heapq
 import os
 import sys
 from pathlib import Path
@@ -19,7 +20,14 @@ from collections import defaultdict
 from cachetools import TTLCache
 
 # Import shared utilities for backup
-from hook_utils import backup_transcript, log_event, graceful_main, safe_load_json, safe_save_json
+from hook_utils import (
+    backup_transcript,
+    log_event,
+    graceful_main,
+    safe_load_json,
+    safe_save_json,
+    count_tokens_accurate,
+)
 from config import Thresholds, CACHE_DIR
 
 # Configuration (from centralized config)
@@ -28,26 +36,12 @@ TOKEN_CRITICAL_THRESHOLD = Thresholds.TOKEN_CRITICAL
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 CACHE_FILE = CACHE_DIR / "context-cache.json"
 
-# Claude uses cl100k_base encoding (same as GPT-4)
-_encoder = None
-
 # TTL cache for file-based token cache (60 second in-memory TTL)
 _token_cache: TTLCache = TTLCache(maxsize=10, ttl=60)
 _TOKEN_CACHE_KEY = "file_cache"
 
-def get_encoder():
-    """Lazy-load encoder to avoid startup cost when not needed."""
-    global _encoder
-    if _encoder is None:
-        import tiktoken  # Lazy import - only when needed for large transcripts
-        _encoder = tiktoken.get_encoding("cl100k_base")
-    return _encoder
-
-def count_tokens(text: str) -> int:
-    """Accurate token count using tiktoken."""
-    if not text:
-        return 0
-    return len(get_encoder().encode(text))
+# Alias for backwards compatibility within this module
+count_tokens = count_tokens_accurate
 
 def load_cache():
     """Load token count cache from disk with in-memory caching."""
@@ -185,7 +179,7 @@ def get_session_summary(transcript_path):
         parts.append(f"Errors: {error_count}")
 
     # Top 3 tools
-    top_tools = sorted(tool_counts.items(), key=lambda x: -x[1])[:3]
+    top_tools = heapq.nlargest(3, tool_counts.items(), key=lambda x: x[1])
     if top_tools:
         tools_str = ", ".join(f"{t}:{c}" for t, c in top_tools)
         parts.append(f"Tools: {tools_str}")

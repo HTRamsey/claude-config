@@ -10,19 +10,21 @@ Uses centralized session state via hook_utils.
 """
 import hashlib
 import json
-import os
 import sys
 import time
 from pathlib import Path
 
 from hook_utils import (
     graceful_main,
-    log_event,
     get_session_id,
-    read_session_state,
-    write_session_state,
     is_post_tool_use,
+    normalize_path,
+    safe_mtime,
+    safe_stat,
+    safe_exists,
 )
+from hook_utils.state import StateManager
+from hook_sdk import PreToolUseContext, PostToolUseContext, Response
 from config import Thresholds, Timeouts, FilePatterns
 
 # ============================================================================
@@ -46,68 +48,45 @@ ALWAYS_SUMMARIZE_EXTENSIONS = FilePatterns.ALWAYS_SUMMARIZE
 SKIP_EXTENSIONS = FilePatterns.SKIP_SUMMARIZE
 
 # ============================================================================
-# Shared State Management
+# Shared State Management (via StateManager)
 # ============================================================================
 
+# Initialize StateManager for this hook
+_state_manager = StateManager(namespace=STATE_NAMESPACE, use_session=True)
+
+
 def load_state(session_id: str) -> dict:
-    """Load unified state for session using centralized session state."""
+    """Load unified state for session using StateManager."""
     default = {
         "reads": {},
         "searches": {},
         "message_count": 0,
-        "last_update": time.time()
     }
-    state = read_session_state(STATE_NAMESPACE, session_id, default)
-    if time.time() - state.get("last_update", 0) > MAX_AGE_SECONDS:
-        return default
-    return state
-
-
-def prune_state(state: dict) -> dict:
-    """Prune old entries from state to prevent unbounded growth."""
-    # Prune reads - keep most recent MAX_READS entries
-    reads = state.get("reads", {})
-    if len(reads) > MAX_READS:
-        sorted_reads = sorted(reads.items(),
-                             key=lambda x: x[1].get("time", 0),
-                             reverse=True)
-        state["reads"] = dict(sorted_reads[:MAX_READS])
-
-    # Prune searches - keep most recent MAX_SEARCHES entries
-    searches = state.get("searches", {})
-    if len(searches) > MAX_SEARCHES:
-        sorted_searches = sorted(searches.items(),
-                                key=lambda x: x[1].get("time", 0),
-                                reverse=True)
-        state["searches"] = dict(sorted_searches[:MAX_SEARCHES])
-
-    return state
+    return _state_manager.load_with_ttl(
+        session_id=session_id,
+        default=default,
+        max_age_secs=MAX_AGE_SECONDS
+    )
 
 
 def save_state(session_id: str, state: dict):
-    """Save unified state with automatic pruning."""
-    state = prune_state(state)
-    state["last_update"] = time.time()
-    write_session_state(STATE_NAMESPACE, state, session_id)
+    """Save unified state with automatic pruning via StateManager."""
+    _state_manager.save_with_pruning(
+        state,
+        session_id=session_id,
+        max_entries=MAX_READS,
+        items_key="reads",
+        time_key="time"
+    )
 
 # ============================================================================
 # Shared Utilities
 # ============================================================================
 
-def normalize_path(path: str) -> str:
-    """Normalize file path for comparison."""
-    try:
-        return str(Path(path).resolve())
-    except (OSError, ValueError):
-        return path
-
 def check_file_modified(file_path: str, read_time: float) -> bool:
     """Check if file was modified after it was read."""
-    try:
-        mtime = os.path.getmtime(file_path)
-        return mtime > read_time
-    except OSError:
-        return False
+    mtime = safe_mtime(file_path, default=0.0)
+    return mtime > read_time if mtime > 0 else False
 
 def hash_search(tool_name: str, pattern: str, path: str) -> str:
     """Create hash for search operation."""
@@ -151,7 +130,7 @@ def check_large_file(file_path: str, limit: int | None) -> tuple[bool, str]:
     """Determine if file should be summarized first."""
     path = Path(file_path)
 
-    if not path.exists():
+    if not safe_exists(file_path):
         return False, ""
 
     if limit and limit < LARGE_FILE_LINES:
@@ -161,11 +140,11 @@ def check_large_file(file_path: str, limit: int | None) -> tuple[bool, str]:
     if ext in SKIP_EXTENSIONS:
         return False, ""
 
-    try:
-        size = path.stat().st_size
-    except (OSError, PermissionError):
+    stat = safe_stat(file_path)
+    if not stat:
         return False, ""
 
+    size = stat.st_size
     if size < LARGE_FILE_BYTES:
         return False, ""
 
@@ -185,11 +164,10 @@ def check_large_file(file_path: str, limit: int | None) -> tuple[bool, str]:
 # PreToolUse Handlers
 # ============================================================================
 
-def handle_read_pre(ctx: dict, state: dict) -> list[str]:
+def handle_read_pre(ctx: PreToolUseContext, state: dict) -> list[str]:
     """Handle Read PreToolUse - track read and check for large files."""
-    tool_input = ctx.get("tool_input", {})
-    file_path = tool_input.get("file_path", "")
-    limit = tool_input.get("limit")
+    file_path = ctx.tool_input.file_path
+    limit = ctx.tool_input.get("limit")
     messages = []
 
     if not file_path:
@@ -213,10 +191,9 @@ def handle_read_pre(ctx: dict, state: dict) -> list[str]:
 
     return messages
 
-def handle_edit_pre(ctx: dict, state: dict) -> list[str]:
+def handle_edit_pre(ctx: PreToolUseContext, state: dict) -> list[str]:
     """Handle Edit PreToolUse - check for stale context."""
-    tool_input = ctx.get("tool_input", {})
-    file_path = tool_input.get("file_path", "")
+    file_path = ctx.tool_input.file_path
     messages = []
 
     if not file_path:
@@ -247,51 +224,43 @@ def handle_edit_pre(ctx: dict, state: dict) -> list[str]:
 
     return messages
 
-def track_file_pre(ctx: dict) -> dict | None:
+def track_file_pre(raw: dict) -> dict | None:
     """Combined PreToolUse handler for Read and Edit."""
-    tool_name = ctx.get("tool_name", "")
-    session_id = get_session_id(ctx)
+    ctx = PreToolUseContext(raw)
+    session_id = get_session_id(raw)
     state = load_state(session_id)
     state["message_count"] = state.get("message_count", 0) + 1
 
     messages = []
 
-    if tool_name == "Read":
+    if ctx.tool_name == "Read":
         messages = handle_read_pre(ctx, state)
-    elif tool_name == "Edit":
+    elif ctx.tool_name == "Edit":
         messages = handle_edit_pre(ctx, state)
 
     save_state(session_id, state)
 
     if messages:
-        return {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "allow",
-                "permissionDecisionReason": "\n".join(messages)
-            }
-        }
+        return Response.allow("\n".join(messages))
     return None
 
 # ============================================================================
 # PostToolUse Handlers
 # ============================================================================
 
-def handle_search_post(ctx: dict, state: dict) -> str | None:
+def handle_search_post(ctx: PostToolUseContext, state: dict) -> str | None:
     """Handle Grep/Glob PostToolUse - detect duplicate searches."""
-    tool_name = ctx.get("tool_name", "")
-    tool_input = ctx.get("tool_input", {})
-    pattern = tool_input.get("pattern", "")
-    path = tool_input.get("path", ".")
+    pattern = ctx.tool_input.pattern
+    path = ctx.tool_input.get("path", ".")
 
     if not pattern:
         return None
 
-    search_hash = hash_search(tool_name, pattern, path)
+    search_hash = hash_search(ctx.tool_name, pattern, path)
 
     if search_hash in state["searches"]:
         prev = state["searches"][search_hash]
-        message = f"[Duplicate] Same {tool_name} search performed {prev['count']} time(s) before"
+        message = f"[Duplicate] Same {ctx.tool_name} search performed {prev['count']} time(s) before"
         prev["count"] += 1
         return message
 
@@ -305,17 +274,16 @@ def handle_search_post(ctx: dict, state: dict) -> str | None:
     state["searches"][search_hash] = {
         "pattern": pattern,
         "path": path,
-        "tool": tool_name,
+        "tool": ctx.tool_name,
         "count": 1,
         "time": time.time()
     }
 
     return message
 
-def handle_read_post(ctx: dict, state: dict) -> str | None:
+def handle_read_post(ctx: PostToolUseContext, state: dict) -> str | None:
     """Handle Read PostToolUse - detect duplicate reads."""
-    tool_input = ctx.get("tool_input", {})
-    file_path = tool_input.get("file_path", "")
+    file_path = ctx.tool_input.file_path
 
     if not file_path:
         return None
@@ -339,17 +307,17 @@ def handle_read_post(ctx: dict, state: dict) -> str | None:
 
     return None
 
-def track_file_post(ctx: dict) -> dict | None:
+def track_file_post(raw: dict) -> dict | None:
     """Combined PostToolUse handler for Grep, Glob, Read."""
-    tool_name = ctx.get("tool_name", "")
-    session_id = get_session_id(ctx)
+    ctx = PostToolUseContext(raw)
+    session_id = get_session_id(raw)
     state = load_state(session_id)
 
     message = None
 
-    if tool_name in ("Grep", "Glob"):
+    if ctx.tool_name in ("Grep", "Glob"):
         message = handle_search_post(ctx, state)
-    elif tool_name == "Read":
+    elif ctx.tool_name == "Read":
         message = handle_read_post(ctx, state)
 
     save_state(session_id, state)
@@ -364,12 +332,7 @@ def track_file_post(ctx: dict) -> dict | None:
         if dup_searches or dup_reads:
             stats += f" ({dup_searches} dup searches, {dup_reads} dup reads)"
 
-        return {
-            "hookSpecificOutput": {
-                "hookEventName": "PostToolUse",
-                "message": f"{message}\n  {stats}"
-            }
-        }
+        return Response.message(f"{message}\n  {stats}")
 
     return None
 

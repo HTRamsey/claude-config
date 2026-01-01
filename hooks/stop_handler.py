@@ -134,9 +134,12 @@ STATE_KEY = "auto-continue"
 MAX_CONTINUATIONS = Thresholds.MAX_CONTINUATIONS
 WINDOW_SECONDS = Timeouts.CONTINUE_WINDOW
 
-# Pre-compiled patterns
-INCOMPLETE_PATTERNS = [re.compile(p, re.IGNORECASE) for p in AutoContinue.INCOMPLETE_PATTERNS]
-COMPLETE_PATTERNS = [re.compile(p, re.IGNORECASE) for p in AutoContinue.COMPLETE_PATTERNS]
+# Use lazy-compiled patterns from config
+def get_incomplete_patterns():
+    return AutoContinue.get_incomplete()
+
+def get_complete_patterns():
+    return AutoContinue.get_complete()
 
 
 def load_continue_state() -> dict:
@@ -217,11 +220,11 @@ def heuristic_should_continue(messages: list) -> tuple[bool, str]:
     if not last_assistant:
         return False, "no assistant message"
 
-    for pattern in COMPLETE_PATTERNS:
+    for pattern in get_complete_patterns():
         if pattern.search(last_assistant):
             return False, f"completion pattern: {pattern.pattern}"
 
-    for pattern in INCOMPLETE_PATTERNS:
+    for pattern in get_incomplete_patterns():
         if pattern.search(last_assistant):
             return True, f"incomplete pattern: {pattern.pattern}"
 

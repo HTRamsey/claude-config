@@ -5,12 +5,17 @@ from pathlib import Path
 import pytest
 
 from smart_permissions import (
-    READ_AUTO_APPROVE,
-    WRITE_AUTO_APPROVE,
-    NEVER_AUTO_APPROVE,
+    get_read_patterns,
+    get_write_patterns,
+    get_never_patterns,
     APPROVAL_THRESHOLD,
     matches_any,
 )
+
+# Get compiled patterns for tests
+READ_AUTO_APPROVE = get_read_patterns()
+WRITE_AUTO_APPROVE = get_write_patterns()
+NEVER_AUTO_APPROVE = get_never_patterns()
 
 
 class TestApprovalThreshold:

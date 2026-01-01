@@ -5,7 +5,6 @@ import json
 import threading
 from pathlib import Path
 
-import sys
 from config import DATA_DIR, CACHE_DIR, Limits
 
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
