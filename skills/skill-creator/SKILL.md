@@ -421,3 +421,76 @@ If unable to create a working skill:
 - Check if existing skills already cover the use case
 - Consider if command or agent is more appropriate
 - Start with minimal skill and iterate based on real usage
+
+## Progressive Skill Format
+
+Three-tier loading to minimize token usage (60-80% reduction for skill-heavy workflows).
+
+### Directory Structure
+
+```
+skills/<name>/
+├── metadata.yml      # Tier 1: ~50 tokens (always scannable)
+├── instructions.md   # Tier 2: ~200 tokens (core rules)
+├── SKILL.md          # Tier 3: Full content (on demand)
+└── resources/        # Tier 3: Examples, templates
+    ├── examples/
+    └── templates/
+```
+
+### Tier Content
+
+| Tier | File | Content | Tokens | When Loaded |
+|------|------|---------|--------|-------------|
+| 1 | `metadata.yml` | Name, triggers, one-line summary | ~50 | Always (index scanning) |
+| 2 | `instructions.md` | Core rules, quick reference | ~200 | On activation |
+| 3 | `SKILL.md` + `resources/` | Full docs, examples, templates | Variable | On demand |
+
+### metadata.yml Format
+
+```yaml
+name: skill-name
+version: 1.0.0
+
+triggers:
+  - keyword1
+  - keyword2
+  - "phrase trigger"
+
+description: |
+  One-line description of when to use this skill.
+
+summary: |
+  2-3 bullet points of core behavior.
+
+quick_reference:
+  - "Rule 1"
+  - "Rule 2"
+```
+
+### Usage
+
+```bash
+# Load tier 1 only (quick scan)
+~/.claude/scripts/smart/skill-loader.sh test-driven-development 1
+
+# Load tier 2 (core instructions)
+~/.claude/scripts/smart/skill-loader.sh test-driven-development 2
+
+# Load full skill (default)
+~/.claude/scripts/smart/skill-loader.sh test-driven-development 3
+```
+
+### When to Use Progressive Format
+
+- **High-frequency skills** - Loaded often, benefit from tiering
+- **Large skills** - >500 lines benefit most from tiering
+- **Reference-heavy skills** - Keep examples in tier 3
+
+### Migration Checklist
+
+1. Create `metadata.yml` with triggers and summary
+2. Extract core rules to `instructions.md`
+3. Keep full content in `SKILL.md`
+4. Move examples to `resources/examples/`
+5. Test with `skill-loader.sh` at each tier

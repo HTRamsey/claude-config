@@ -11,21 +11,23 @@ from unittest.mock import patch, MagicMock
 from datetime import datetime
 
 # Add parent directory to path for imports
-from hooks.handlers.state_saver import (
+from hooks.handlers.checkpoint import (
     is_risky_operation,
     should_checkpoint,
     save_checkpoint_entry,
-    handle_pre_tool_use,
-    handle_post_tool_use,
-    handle_pre_compact,
     save_error_backup,
     rotate_error_backups,
-    get_claude_md_content,
-    get_active_todos,
-    get_key_context,
     load_state,
     save_state,
     ERROR_BACKUP_DIR,
+)
+from hooks.handlers.context_manager import (
+    handle_pre_tool_use,
+    handle_post_tool_use,
+    handle_pre_compact,
+    get_claude_md_content,
+    get_active_todos,
+    get_key_context,
 )
 from hooks.hook_sdk import PreToolUseContext, PostToolUseContext
 
@@ -126,8 +128,8 @@ class TestSaveCheckpointEntry(TestCase):
         """Clear checkpoint state before each test."""
         save_state({"last_checkpoint": 0, "checkpoints": []})
 
-    @patch('hooks.handlers.state_saver.save_state')
-    @patch('hooks.handlers.state_saver.load_state')
+    @patch('hooks.handlers.checkpoint.save_state')
+    @patch('hooks.handlers.checkpoint.load_state')
     def test_saves_checkpoint_data(self, mock_load, mock_save):
         """Should save checkpoint with correct fields."""
         mock_load.return_value = {"last_checkpoint": 0, "checkpoints": []}
@@ -152,8 +154,8 @@ class TestSaveCheckpointEntry(TestCase):
         saved_state = mock_save.call_args[0][0]
         self.assertEqual(len(saved_state["checkpoints"]), 1)
 
-    @patch('hooks.handlers.state_saver.save_state')
-    @patch('hooks.handlers.state_saver.load_state')
+    @patch('hooks.handlers.checkpoint.save_state')
+    @patch('hooks.handlers.checkpoint.load_state')
     def test_limits_checkpoint_history(self, mock_load, mock_save):
         """Should keep only last 20 checkpoints."""
         # Create 25 old checkpoints
@@ -175,8 +177,8 @@ class TestSaveCheckpointEntry(TestCase):
         saved_state = mock_save.call_args[0][0]
         self.assertEqual(len(saved_state["checkpoints"]), 20)
 
-    @patch('hooks.handlers.state_saver.save_state')
-    @patch('hooks.handlers.state_saver.load_state')
+    @patch('hooks.handlers.checkpoint.save_state')
+    @patch('hooks.handlers.checkpoint.load_state')
     def test_updates_last_checkpoint_time(self, mock_load, mock_save):
         """Should update last_checkpoint timestamp."""
         mock_load.return_value = {"last_checkpoint": 0, "checkpoints": []}
@@ -227,9 +229,9 @@ class TestHandlePreToolUse(TestCase):
         result = handle_pre_tool_use(raw)
         self.assertIsNone(result)
 
-    @patch('hooks.handlers.state_saver.save_checkpoint_entry')
-    @patch('hooks.handlers.state_saver.should_checkpoint')
-    @patch('hooks.handlers.state_saver.is_risky_operation')
+    @patch('hooks.handlers.context_manager.save_checkpoint_entry')
+    @patch('hooks.handlers.context_manager.should_checkpoint')
+    @patch('hooks.handlers.context_manager.is_risky_operation')
     def test_creates_checkpoint_for_risky_edit(self, mock_risky, mock_should, mock_save):
         """Should create checkpoint for risky edit when due."""
         mock_risky.return_value = (True, "test reason")
@@ -260,8 +262,8 @@ class TestHandlePreToolUse(TestCase):
         self.assertIn("Checkpoint", result["hookSpecificOutput"]["permissionDecisionReason"])
         self.assertIn("config.json", result["hookSpecificOutput"]["permissionDecisionReason"])
 
-    @patch('hooks.handlers.state_saver.should_checkpoint')
-    @patch('hooks.handlers.state_saver.is_risky_operation')
+    @patch('hooks.handlers.context_manager.should_checkpoint')
+    @patch('hooks.handlers.context_manager.is_risky_operation')
     def test_skips_checkpoint_when_too_recent(self, mock_risky, mock_should):
         """Should skip checkpoint if last one was too recent."""
         mock_risky.return_value = (True, "test reason")
@@ -355,7 +357,7 @@ class TestHandlePostToolUse(TestCase):
         result = handle_post_tool_use(raw)
         self.assertIsNone(result)
 
-    @patch('hooks.handlers.state_saver.save_error_backup')
+    @patch('hooks.handlers.context_manager.save_error_backup')
     def test_saves_backup_on_error(self, mock_save):
         """Should save error backup when command fails."""
         mock_save.return_value = "/path/to/backup.json"
@@ -432,7 +434,7 @@ class TestSaveErrorBackup(TestCase):
 
         self.assertEqual(len(data["command"]), 500)
 
-    @patch('hooks.handlers.state_saver.rotate_error_backups')
+    @patch('hooks.handlers.checkpoint.rotate_error_backups')
     def test_rotates_backups(self, mock_rotate):
         """Should call rotate_error_backups after saving."""
         ctx = {"session_id": "test123", "cwd": "/test"}
@@ -645,7 +647,7 @@ class TestGetKeyContext(TestCase):
 
         self.assertIn("[Working directory: /home/user/project]", result)
 
-    @patch('hooks.handlers.state_saver.get_claude_md_content')
+    @patch('hooks.handlers.context_manager.get_claude_md_content')
     def test_includes_claude_md(self, mock_claude_md):
         """Should include CLAUDE.md content if present."""
         mock_claude_md.return_value = "[Project CLAUDE.md preserved]\nContent"
@@ -655,7 +657,7 @@ class TestGetKeyContext(TestCase):
 
         self.assertIn("Project CLAUDE.md preserved", result)
 
-    @patch('hooks.handlers.state_saver.get_active_todos')
+    @patch('hooks.handlers.context_manager.get_active_todos')
     def test_includes_todos(self, mock_todos):
         """Should include active todos if present."""
         mock_todos.return_value = "[Active Todos preserved]\n  ○ Task 1"
@@ -680,8 +682,8 @@ class TestGetKeyContext(TestCase):
 class TestHandlePreCompact(TestCase):
     """Tests for handle_pre_compact function."""
 
-    @patch('hooks.handlers.state_saver.update_session_state')
-    @patch('hooks.handlers.state_saver.backup_transcript')
+    @patch('hooks.handlers.context_manager.update_session_state')
+    @patch('hooks.handlers.context_manager.backup_transcript')
     def test_backs_up_transcript(self, mock_backup, mock_update):
         """Should backup transcript before compaction."""
         mock_backup.return_value = "/path/to/backup.md"
@@ -702,9 +704,9 @@ class TestHandlePreCompact(TestCase):
         result = handle_pre_compact(ctx)
         self.assertIsNone(result)
 
-    @patch('hooks.handlers.state_saver.update_session_state')
-    @patch('hooks.handlers.state_saver.backup_transcript')
-    @patch('hooks.handlers.state_saver.get_key_context')
+    @patch('hooks.handlers.context_manager.update_session_state')
+    @patch('hooks.handlers.context_manager.backup_transcript')
+    @patch('hooks.handlers.context_manager.get_key_context')
     def test_includes_key_context_in_message(self, mock_context, mock_backup, mock_update):
         """Should include key context in preservation message."""
         mock_backup.return_value = "/backup.md"
@@ -722,8 +724,8 @@ class TestHandlePreCompact(TestCase):
         self.assertEqual(result["result"], "continue")
         self.assertIn("Working directory", result["message"])
 
-    @patch('hooks.handlers.state_saver.update_session_state')
-    @patch('hooks.handlers.state_saver.backup_transcript')
+    @patch('hooks.handlers.context_manager.update_session_state')
+    @patch('hooks.handlers.context_manager.backup_transcript')
     def test_includes_learning_reminder(self, mock_backup, mock_update):
         """Should include learning reminder in message."""
         mock_backup.return_value = "/backup.md"

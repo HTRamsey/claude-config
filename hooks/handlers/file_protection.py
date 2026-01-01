@@ -6,17 +6,14 @@ Enforces protection that glob patterns in settings.json can't provide on Linux.
 
 Uses BlockingHook base class for cleaner code.
 """
-import sys
-
 from hooks.hook_sdk import (
     PreToolUseContext,
     Patterns,
     dispatch_handler,
-    run_standalone,
-    expand_path,
     log_event,
+    BlockingHook,
 )
-from hooks.hook_utils import BlockingHook
+from hooks.hook_utils import expand_path
 from hooks.config import ProtectedFiles
 
 
@@ -76,8 +73,3 @@ _hook = FileProtectionHook("file_protection")
 def check_file_protection(ctx: PreToolUseContext) -> dict | None:
     """Handler function for dispatcher."""
     return _hook(ctx)
-
-
-if __name__ == "__main__":
-    # Standalone mode: read from stdin, write to stdout
-    run_standalone(lambda raw: check_file_protection(raw))

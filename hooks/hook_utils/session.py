@@ -1,5 +1,5 @@
 """
-Session-aware state management.
+Session-aware state management and transcript backup.
 
 Uses cachetools for automatic TTL expiration and LRU eviction.
 """
@@ -8,13 +8,14 @@ import json
 import os
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
 from cachetools import TTLCache, LRUCache
 
 from .io import safe_load_json, atomic_write_json, file_lock
-from .logging import DATA_DIR, ensure_data_dir
+from .logging import DATA_DIR, log_event
 from .metrics import get_timestamp
 
 # Import centralized config
@@ -65,33 +66,6 @@ def get_session_id(ctx: dict = None, transcript_path: str = None) -> str:
             return session_id
 
     return "default"
-
-
-def is_new_session(ctx: dict = None, transcript_path: str = None) -> bool:
-    """Check if this is a new session (first message).
-
-    Uses atomic_write_json to avoid race conditions where
-    the file is truncated before acquiring the lock.
-    """
-    try:
-        ensure_data_dir()
-        session_id = get_session_id(ctx, transcript_path)
-
-        state = safe_load_json(SESSION_STATE_FILE, {})
-        seen_sessions = state.get("seen_sessions", [])
-
-        if session_id not in seen_sessions:
-            seen_sessions.append(session_id)
-            state["seen_sessions"] = seen_sessions[-100:]
-            state["last_session"] = session_id
-            state["last_session_start"] = get_timestamp()
-
-            atomic_write_json(SESSION_STATE_FILE, state)
-            return True
-
-        return False
-    except Exception:
-        return False
 
 
 def get_session_state() -> dict:
@@ -249,3 +223,54 @@ def save_state_with_timestamp(
     """
     state[time_key] = time.time()
     return write_session_state(namespace, state, session_id)
+
+
+# =============================================================================
+# Transcript Backup
+# =============================================================================
+
+def backup_transcript(transcript_path: str, reason: str = "manual", ctx: dict = None) -> str:
+    """
+    Backup transcript to data directory.
+
+    Args:
+        transcript_path: Path to transcript file
+        reason: Reason for backup (pre_compact, checkpoint, etc.)
+        ctx: Context dict (optional, for session ID)
+
+    Returns:
+        Path to backup file, or empty string on failure
+    """
+    try:
+        if not transcript_path or not os.path.exists(transcript_path):
+            return ""
+
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        backup_dir = DATA_DIR / "transcript-backups"
+        backup_dir.mkdir(exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        session_id = get_session_id(ctx, transcript_path)
+        backup_name = f"{session_id}-{reason}-{timestamp}.jsonl"
+        backup_path = backup_dir / backup_name
+
+        with open(transcript_path, 'rb') as src:
+            with open(backup_path, 'wb') as dst:
+                with file_lock(dst):
+                    dst.write(src.read())
+
+        log_event("backup", "success", {
+            "reason": reason,
+            "path": str(backup_path),
+            "size": os.path.getsize(backup_path)
+        })
+
+        # Clean old backups (keep last 20)
+        backups = sorted(backup_dir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime)
+        for old_backup in backups[:-20]:
+            old_backup.unlink()
+
+        return str(backup_path)
+    except Exception as e:
+        log_event("backup", "error", {"reason": reason, "error": str(e)}, "error")
+        return ""

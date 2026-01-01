@@ -88,7 +88,3 @@ def read_stdin_context() -> dict:
         return {}
 
 
-def output_message(message: str, to_stderr: bool = False):
-    """Output message to appropriate stream."""
-    stream = sys.stderr if to_stderr else sys.stdout
-    print(message, file=stream)

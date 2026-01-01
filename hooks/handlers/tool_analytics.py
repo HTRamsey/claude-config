@@ -1,23 +1,21 @@
 #!/home/jonglaser/.claude/data/venv/bin/python3
 """
-Tool Analytics - Unified tool tracking, output metrics, and failure detection.
+Tool Analytics - Unified tool tracking, output metrics, failure detection, and build analysis.
 
 Consolidates:
 - tool_success_tracker: Track tool failures and suggest alternatives
 - output_metrics: Token tracking and output size monitoring
+- build_analyzer: Parse build errors and provide fix suggestions
 
-Both share token estimation logic and PostToolUse context processing.
+All share token estimation logic and PostToolUse context processing.
 """
 import heapq
-import json
 import re
-import sys
 import time
 from datetime import datetime
 from pathlib import Path
 
 from hooks.hook_utils import (
-    graceful_main,
     log_event,
     safe_load_json,
     safe_save_json,
@@ -28,7 +26,7 @@ from hooks.hook_utils import (
     get_content_size,
 )
 from hooks.hook_sdk import PostToolUseContext, Response
-from hooks.config import Thresholds, FilePatterns, Timeouts, Limits, TRACKER_DIR
+from hooks.config import Thresholds, FilePatterns, Timeouts, Limits, TRACKER_DIR, ToolAnalytics, Build
 
 # =============================================================================
 # Shared Configuration
@@ -47,52 +45,12 @@ STATE_NAMESPACE = "tool_tracker"
 # Tool Success Tracker
 # =============================================================================
 
-# Error patterns and their suggested fixes - pre-compiled for performance
-_ERROR_PATTERNS_RAW = {
-    r"old_string.*not found|not unique|no match": {
-        "tool": "Edit",
-        "suggestion": "Re-read the file to get current content, or use Read tool first",
-        "action": "read_first"
-    },
-    r"file.*not found|no such file": {
-        "tool": "*",
-        "suggestion": "Check file path with: smart-find.sh <pattern> .",
-        "action": "find_file"
-    },
-    r"permission denied|access denied|not permitted": {
-        "tool": "*",
-        "suggestion": "Check file permissions or try Task(subagent_type=Explore) for read-only exploration",
-        "action": "check_perms"
-    },
-    r"no matches|no results|pattern not found": {
-        "tool": "Grep",
-        "suggestion": "Try broader pattern or use Task(subagent_type=Explore) for fuzzy search",
-        "action": "broaden_search"
-    },
-    r"build failed|compilation error|make.*error": {
-        "tool": "Bash",
-        "suggestion": "Pipe through compress.sh --type build to focus on errors",
-        "action": "compress_output"
-    },
-    r"test.*failed|assertion.*error|pytest.*failed": {
-        "tool": "Bash",
-        "suggestion": "Pipe through compress.sh --type tests to focus on failures",
-        "action": "compress_output"
-    },
-    r"conflict|merge.*failed|rebase.*failed": {
-        "tool": "Bash",
-        "suggestion": "Use smart-diff.sh to understand conflicts",
-        "action": "use_diff"
-    },
-    r"timeout|timed out|killed": {
-        "tool": "*",
-        "suggestion": "Command too slow - try limiting scope or using more specific patterns",
-        "action": "reduce_scope"
-    },
-}
-ERROR_PATTERNS = [(re.compile(p, re.IGNORECASE), info) for p, info in _ERROR_PATTERNS_RAW.items()]
+# Error patterns and tool alternatives from centralized config
+def get_error_patterns():
+    """Get compiled error patterns for matching."""
+    return ToolAnalytics.get_error_patterns()
 
-TOOL_ALTERNATIVES = {
+TOOL_ALTERNATIVES = ToolAnalytics.TOOL_ALTERNATIVES or {
     "Grep": "Consider Task(subagent_type=Explore) for complex searches",
     "Glob": "Try smart-find.sh with fd for faster, .gitignore-aware search",
     "Read": "For large files, use smart-view.sh",
@@ -141,7 +99,7 @@ def extract_error_info(tool_result) -> tuple[bool, str]:
 
 def match_error_pattern(error_msg: str) -> dict | None:
     """Match error message against pre-compiled patterns."""
-    for compiled, info in ERROR_PATTERNS:
+    for compiled, info in get_error_patterns():
         if compiled.search(error_msg):
             return info
     return None
@@ -309,11 +267,154 @@ def check_output_size(ctx: PostToolUseContext) -> list[str]:
 
 
 # =============================================================================
+# Build Analyzer (consolidated from build_analyzer.py)
+# =============================================================================
+
+# Import patterns from centralized config
+BUILD_COMMANDS = Build.get_build_commands()
+BUILD_ERROR_PATTERNS = Build.get_error_patterns()
+BUILD_FIX_SUGGESTIONS = Build.FIX_SUGGESTIONS
+
+
+def is_build_command(command: str) -> bool:
+    """Check if command is a build-related command."""
+    for pattern in BUILD_COMMANDS:
+        if pattern.search(command):
+            return True
+    return False
+
+
+def detect_build_tool(command: str, output: str) -> str:
+    """Detect which build tool was used."""
+    cmd_lower = command.lower()
+
+    if 'cargo' in cmd_lower or 'rustc' in cmd_lower:
+        return 'rust'
+    if 'npm' in cmd_lower or 'yarn' in cmd_lower or 'pnpm' in cmd_lower:
+        return 'npm'
+    if 'tsc' in cmd_lower or 'typescript' in output.lower():
+        return 'typescript'
+    if 'go ' in cmd_lower:
+        return 'go'
+    if 'python' in cmd_lower or 'pip' in cmd_lower:
+        return 'python'
+    if any(x in cmd_lower for x in ['gcc', 'g++', 'clang', 'make', 'cmake', 'ninja']):
+        return 'gcc_clang'
+    if 'gradle' in cmd_lower or 'mvn' in cmd_lower:
+        return 'java'
+
+    # Detect from output
+    if 'error[E' in output:
+        return 'rust'
+    if 'error TS' in output:
+        return 'typescript'
+    if '.go:' in output and 'undefined' in output:
+        return 'go'
+
+    return 'make'  # Default fallback
+
+
+def extract_build_errors(output: str, tool: str) -> list:
+    """Extract error messages from build output."""
+    errors = []
+    patterns = BUILD_ERROR_PATTERNS.get(tool, BUILD_ERROR_PATTERNS.get('make', []))
+
+    for line in output.split('\n'):
+        line = line.strip()
+        if not line:
+            continue
+
+        for pattern, category in patterns:
+            match = pattern.search(line)
+            if match:
+                errors.append({
+                    'line': line[:200],
+                    'match': match.group(0)[:150],
+                })
+                break
+
+        if len(errors) < 20 and 'error' in line.lower() and line not in [e['line'] for e in errors]:
+            if not any(skip in line.lower() for skip in ['warning', 'note:', 'help:']):
+                errors.append({'line': line[:200], 'match': None})
+
+    return errors[:15]
+
+
+def get_build_suggestions(errors: list, output: str) -> list:
+    """Get fix suggestions based on errors."""
+    suggestions = set()
+    combined = output + ' '.join(e.get('match') or e.get('line', '') for e in errors)
+
+    for pattern, suggestion in BUILD_FIX_SUGGESTIONS.items():
+        if pattern.lower() in combined.lower():
+            suggestions.add(suggestion)
+
+    return list(suggestions)[:5]
+
+
+def count_errors_warnings(output: str) -> tuple:
+    """Count errors and warnings in output."""
+    error_count = len(re.findall(r'\berror[:\[]', output, re.IGNORECASE))
+    warning_count = len(re.findall(r'\bwarning[:\[]', output, re.IGNORECASE))
+
+    # Also check for "X errors" pattern
+    match = re.search(r'(\d+)\s+error', output, re.IGNORECASE)
+    if match:
+        error_count = max(error_count, int(match.group(1)))
+
+    return error_count, warning_count
+
+
+def analyze_build(ctx: PostToolUseContext) -> list[str]:
+    """Analyze build output and return summary messages."""
+    if ctx.tool_name != 'Bash':
+        return []
+
+    command = ctx.tool_input.command
+    output = ctx.tool_result.output
+
+    # Get exit code
+    exit_code = ctx.tool_result.exit_code
+    if exit_code is None:
+        # Try to detect from output
+        if 'error' in output.lower() and ('make: ***' in output or 'FAILED' in output):
+            exit_code = 1
+        else:
+            exit_code = 0
+
+    if exit_code == 0:
+        return []
+
+    if not is_build_command(command):
+        return []
+
+    # Analyze errors
+    tool = detect_build_tool(command, output)
+    errors = extract_build_errors(output, tool)
+    suggestions = get_build_suggestions(errors, output)
+    error_count, warning_count = count_errors_warnings(output)
+
+    if not errors and error_count == 0:
+        return []
+
+    # Format summary
+    messages = [f"[Build: {tool}] {max(error_count, len(errors))} errors, {warning_count} warnings"]
+
+    if errors and errors[0].get('line'):
+        messages.append(f"  First: {errors[0]['line'][:80]}")
+
+    if suggestions:
+        messages.append(f"  Fix: {suggestions[0]}")
+
+    return messages
+
+
+# =============================================================================
 # Combined Handler
 # =============================================================================
 
 def track_tool_analytics(raw: dict) -> dict | None:
-    """Combined handler for tool success tracking, token tracking, and output monitoring."""
+    """Combined handler for tool success tracking, token tracking, output monitoring, and build analysis."""
     ctx = PostToolUseContext(raw)
     all_messages = []
 
@@ -329,31 +430,11 @@ def track_tool_analytics(raw: dict) -> dict | None:
     size_messages = check_output_size(ctx)
     all_messages.extend(size_messages)
 
+    # Analyze build failures (for Bash commands)
+    build_messages = analyze_build(ctx)
+    all_messages.extend(build_messages)
+
     if all_messages:
         return Response.message(" | ".join(all_messages[:3]), event="PostToolUse")
 
     return None
-
-
-# =============================================================================
-# Main
-# =============================================================================
-
-@graceful_main("tool_analytics")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
-    result = track_tool_analytics(ctx)
-    if result:
-        msg = result.get("hookSpecificOutput", {}).get("message", "")
-        if msg:
-            print(msg)
-
-    sys.exit(0)
-
-
-if __name__ == "__main__":
-    main()

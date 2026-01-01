@@ -285,3 +285,21 @@ claude mcp remove <server-name>
 ### Current Status
 
 Run `claude mcp list` or `~/.claude/scripts/diagnostics/health-check.sh` to see configured servers.
+
+## File Organization Patterns
+
+| Do | Don't |
+|----|-------|
+| One source of truth per concept | Scatter related info |
+| Update architecture.md when adding components | Add files without documentation |
+| Use creator skills for new config | Create files manually |
+| Delete unused config | Leave dead code "just in case" |
+
+## Maintenance Patterns
+
+| Do | Don't |
+|----|-------|
+| Run health-check.sh after changes | Assume changes work |
+| Check usage-stats.json before deleting | Delete based on gut feeling |
+| Update cross-references after moves | Leave broken references |
+| Validate with validate-config.sh | Skip validation |

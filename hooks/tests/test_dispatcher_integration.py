@@ -14,7 +14,7 @@ import pytest
 from hooks.dispatchers.base import BaseDispatcher, PreToolStrategy, PostToolStrategy, RoutingRule, HandlerRegistry
 from hooks.dispatchers.pre_tool import PreToolDispatcher
 from hooks.dispatchers.post_tool import PostToolDispatcher
-from hooks.dispatchers.user_prompt import dispatch, get_handler, HANDLERS
+from hooks.dispatchers.user_prompt import UserPromptDispatcher, UserPromptStrategy
 
 
 class TestBaseDispatcher:
@@ -178,13 +178,14 @@ class TestPostToolDispatcher:
         assert "batch_operation_detector" in handlers
         assert "tool_analytics" in handlers
 
-    def test_bash_routes_to_build_analyzer(self):
-        """Bash tool should route to build_analyzer."""
+    def test_bash_routes_to_tool_analytics(self):
+        """Bash tool should route to tool_analytics (includes build analysis)."""
         dispatcher = PostToolDispatcher()
         handlers = dispatcher.TOOL_HANDLERS.get("Bash", [])
 
-        assert "build_analyzer" in handlers
+        # build_analyzer was consolidated into tool_analytics
         assert "tool_analytics" in handlers
+        assert "context_manager" in handlers
 
     def test_task_routes_to_suggestion_engine(self):
         """Task tool should route to suggestion_engine for agent chaining."""
@@ -197,11 +198,12 @@ class TestPostToolDispatcher:
 
     def test_post_tool_no_early_termination(self):
         """PostToolUse should not terminate early (no deny decisions)."""
-        dispatcher = PostToolDispatcher()
+        from hooks.dispatchers.base import PostToolStrategy
 
-        # _should_terminate should always return False for PostToolUse
+        strategy = PostToolStrategy()
         result = {"hookSpecificOutput": {"message": "test"}}
-        assert dispatcher._should_terminate(result, "test_handler", "Edit") == False
+        # PostToolStrategy.should_terminate always returns False
+        assert strategy.should_terminate(result, "test_handler") == False
 
     def test_webfetch_routes_to_unified_cache(self):
         """WebFetch should route to unified_cache for research caching."""
@@ -730,38 +732,66 @@ class TestUserPromptDispatcher:
     """Tests for UserPromptSubmit dispatcher."""
 
     def test_handler_list_defined(self):
-        """HANDLERS list is defined."""
-        assert HANDLERS is not None
-        assert isinstance(HANDLERS, list)
-        assert "context_monitor" in HANDLERS
-        assert "usage_tracker" in HANDLERS
+        """ALL_HANDLERS list is defined."""
+        dispatcher = UserPromptDispatcher()
+        assert dispatcher.ALL_HANDLERS is not None
+        assert isinstance(dispatcher.ALL_HANDLERS, list)
+        assert "context_manager" in dispatcher.ALL_HANDLERS
+        assert "usage_tracker" in dispatcher.ALL_HANDLERS
 
     def test_get_handler_lazy_loads(self):
         """get_handler() lazy-loads handlers."""
+        dispatcher = UserPromptDispatcher()
         # Clear any cached handlers
-        from hooks.dispatchers import user_prompt
-        user_prompt._handlers.clear()
+        dispatcher._handlers.clear()
 
-        handler = get_handler("context_monitor")
+        handler = dispatcher.get_handler("context_manager")
         assert callable(handler) or handler is None
 
     def test_dispatch_returns_none_for_empty_messages(self):
         """dispatch() returns None when no handlers produce messages."""
-        with patch('hooks.dispatchers.user_prompt.run_handler') as mock_run:
+        dispatcher = UserPromptDispatcher()
+        with patch.object(dispatcher, 'run_handler') as mock_run:
             mock_run.return_value = None
 
-            result = dispatch({})
+            result = dispatcher.dispatch({})
             assert result is None
 
     def test_dispatch_joins_multiple_messages(self):
         """dispatch() joins multiple handler messages."""
-        with patch('hooks.dispatchers.user_prompt.run_handler') as mock_run:
+        dispatcher = UserPromptDispatcher()
+        with patch.object(dispatcher, 'run_handler') as mock_run:
             mock_run.side_effect = [
                 {"message": "msg1"},
                 {"message": "msg2"}
             ]
 
-            result = dispatch({})
+            result = dispatcher.dispatch({})
             assert result is not None
             assert "msg1" in result["message"]
             assert "msg2" in result["message"]
+
+    def test_user_prompt_strategy_never_terminates(self):
+        """UserPromptStrategy.should_terminate() always returns False."""
+        strategy = UserPromptStrategy()
+        result = {"message": "test"}
+        assert strategy.should_terminate(result, "test_handler") == False
+
+    def test_user_prompt_strategy_extracts_message(self):
+        """UserPromptStrategy.extract_message() extracts message field."""
+        strategy = UserPromptStrategy()
+        hook_output = {"message": "Test message"}
+        assert strategy.extract_message(hook_output) == "Test message"
+
+    def test_user_prompt_strategy_builds_result(self):
+        """UserPromptStrategy.build_result() creates message result."""
+        strategy = UserPromptStrategy()
+        result = strategy.build_result(["msg1", "msg2"])
+        assert "msg1" in result["message"]
+        assert "msg2" in result["message"]
+
+    def test_user_prompt_strategy_returns_none_for_empty(self):
+        """UserPromptStrategy.build_result() returns None for empty messages."""
+        strategy = UserPromptStrategy()
+        result = strategy.build_result([])
+        assert result is None

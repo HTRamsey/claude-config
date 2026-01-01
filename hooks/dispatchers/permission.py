@@ -10,7 +10,6 @@ Also provides PostToolUse handler (smart_permissions_post) for learning.
 Uses cachetools TTLCache for automatic cache expiration.
 """
 import json
-import re
 import sys
 from pathlib import Path
 
@@ -61,8 +60,12 @@ def save_patterns(data: dict):
         _patterns_cache[_PATTERNS_CACHE_KEY] = data
 
 
-def normalize_path(path: str) -> str:
-    """Normalize path to directory pattern for learning."""
+def get_parent_pattern(path: str) -> str:
+    """Get parent directory pattern for permission learning.
+
+    Note: Different from hook_utils.io.normalize_path which resolves to absolute path.
+    This returns a pattern suitable for permission matching.
+    """
     p = Path(path)
     # Get parent directory, normalized
     parent = str(p.parent)
@@ -74,7 +77,7 @@ def normalize_path(path: str) -> str:
 
 def get_pattern_key(tool: str, path: str) -> str:
     """Create a pattern key from tool and path."""
-    directory = normalize_path(path)
+    directory = get_parent_pattern(path)
     # Get file extension or type
     ext = Path(path).suffix or "noext"
     return f"{tool}:{directory}:{ext}"
@@ -114,7 +117,7 @@ def check_learned_patterns(tool: str, path: str) -> bool:
         return True
 
     # Check parent directory pattern (require double threshold)
-    directory = normalize_path(path)
+    directory = get_parent_pattern(path)
     ext = Path(path).suffix or "noext"
     parent_dir = str(Path(directory).parent)
     parent_key = f"{tool}:{parent_dir}:{ext}"

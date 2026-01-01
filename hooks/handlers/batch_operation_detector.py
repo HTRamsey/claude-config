@@ -5,27 +5,21 @@ Runs on PostToolUse for Edit|Write to suggest batching similar operations.
 
 Uses centralized session state via hook_utils.
 """
-import json
 import os
 import re
-import sys
 import time
 from pathlib import Path
 
 # Import shared utilities
 from hooks.hook_utils import (
-    graceful_main,
     log_event,
     get_session_id,
-    load_state_with_expiry,
-    save_state_with_timestamp,
     cleanup_old_sessions,
 )
-from hooks.hook_sdk import PostToolUseContext, Response
+from hooks.hook_sdk import PostToolUseContext, Response, HookState
 from hooks.config import Thresholds, Timeouts
 
 # Configuration (imported from config.py)
-STATE_NAMESPACE = "batch_detector"
 MAX_AGE_SECONDS = Timeouts.STATE_MAX_AGE  # Clear state after 24 hours
 SIMILARITY_THRESHOLD = Thresholds.BATCH_SIMILARITY_THRESHOLD  # Suggest batching after 3 similar ops
 CLEANUP_INTERVAL = Timeouts.CLEANUP_INTERVAL  # Rate-limit cleanup to every 5 minutes
@@ -36,16 +30,18 @@ _WHITESPACE_RE = re.compile(r'\s+')
 # Rate limiting for cleanup
 _last_cleanup_time = 0
 
+# State management using HookState
+_state = HookState("batch_detector", use_session=True, max_age_secs=MAX_AGE_SECONDS)
+
 
 def load_state(session_id: str) -> dict:
-    """Load edit history state for session using centralized session state."""
-    default = {"edits": [], "writes": [], "last_update": time.time()}
-    return load_state_with_expiry(STATE_NAMESPACE, session_id, default, MAX_AGE_SECONDS)
+    """Load edit history state for session using HookState."""
+    return _state.load(session_id, default={"edits": [], "writes": [], "last_update": time.time()})
 
 
 def save_state(session_id: str, state: dict):
-    """Save edit history state using centralized session state."""
-    save_state_with_timestamp(STATE_NAMESPACE, state, session_id)
+    """Save edit history state using HookState."""
+    _state.save(state, session_id)
 
 
 def maybe_cleanup_old_sessions():
@@ -224,22 +220,3 @@ def detect_batch(raw: dict) -> dict | None:
         return Response.message(message)
 
     return None
-
-
-@graceful_main("batch_operation_detector")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
-    result = detect_batch(ctx)
-    if result:
-        msg = result.get("hookSpecificOutput", {}).get("message", "")
-        print(msg)
-
-    sys.exit(0)
-
-
-if __name__ == "__main__":
-    main()

@@ -9,22 +9,17 @@ Consolidates:
 Uses centralized session state via hook_utils.
 """
 import hashlib
-import json
-import sys
 import time
 from pathlib import Path
 
 from hooks.hook_utils import (
-    graceful_main,
     get_session_id,
-    is_post_tool_use,
     normalize_path,
     safe_mtime,
     safe_stat,
     safe_exists,
 )
-from hooks.hook_utils.state import StateManager
-from hooks.hook_sdk import PreToolUseContext, PostToolUseContext, Response
+from hooks.hook_sdk import HookState, PreToolUseContext, PostToolUseContext, Response
 from hooks.config import Thresholds, Timeouts, FilePatterns
 
 # ============================================================================
@@ -48,30 +43,28 @@ ALWAYS_SUMMARIZE_EXTENSIONS = FilePatterns.ALWAYS_SUMMARIZE
 SKIP_EXTENSIONS = FilePatterns.SKIP_SUMMARIZE
 
 # ============================================================================
-# Shared State Management (via StateManager)
+# Shared State Management (via HookState)
 # ============================================================================
 
-# Initialize StateManager for this hook
-_state_manager = StateManager(namespace=STATE_NAMESPACE, use_session=True)
+# Initialize HookState for this hook (replaces StateManager)
+_hook_state = HookState(STATE_NAMESPACE, use_session=True, max_age_secs=MAX_AGE_SECONDS)
+
+# Default state structure
+_DEFAULT_STATE = {
+    "reads": {},
+    "searches": {},
+    "message_count": 0,
+}
 
 
 def load_state(session_id: str) -> dict:
-    """Load unified state for session using StateManager."""
-    default = {
-        "reads": {},
-        "searches": {},
-        "message_count": 0,
-    }
-    return _state_manager.load_with_ttl(
-        session_id=session_id,
-        default=default,
-        max_age_secs=MAX_AGE_SECONDS
-    )
+    """Load unified state for session using HookState."""
+    return _hook_state.load(session_id=session_id, default=_DEFAULT_STATE)
 
 
 def save_state(session_id: str, state: dict):
-    """Save unified state with automatic pruning via StateManager."""
-    _state_manager.save_with_pruning(
+    """Save unified state with automatic pruning via HookState."""
+    _hook_state.save_with_pruning(
         state,
         session_id=session_id,
         max_entries=MAX_READS,
@@ -336,29 +329,3 @@ def track_file_post(raw: dict) -> dict | None:
 
     return None
 
-# ============================================================================
-# Main
-# ============================================================================
-
-@graceful_main("file_monitor")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
-    if is_post_tool_use(ctx):
-        result = track_file_post(ctx)
-        if result:
-            msg = result.get("hookSpecificOutput", {}).get("message", "")
-            print(msg)
-    else:
-        result = track_file_pre(ctx)
-        if result:
-            print(json.dumps(result))
-
-    sys.exit(0)
-
-
-if __name__ == "__main__":
-    main()

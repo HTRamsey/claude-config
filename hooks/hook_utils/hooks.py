@@ -5,7 +5,6 @@ Uses cachetools TTLCache for automatic expiration.
 """
 import os
 from datetime import datetime
-from pathlib import Path
 
 from cachetools import TTLCache
 
@@ -98,11 +97,5 @@ def record_usage(category: str, name: str):
         "agents": {}, "skills": {}, "commands": {}, "daily": {}
     })
 
-
-def get_usage_stats() -> dict:
-    """Get usage statistics."""
-    return read_state("usage-stats", {
-        "agents": {}, "skills": {}, "commands": {}, "daily": {}
-    })
 
 

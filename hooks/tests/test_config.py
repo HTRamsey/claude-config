@@ -129,8 +129,8 @@ class TestThresholdConfig:
         assert config.max_searches_tracked == 50
         assert config.stale_message_threshold == 15
         assert config.similarity_threshold == 0.8
-        assert config.large_file_lines == 200
-        assert config.large_file_bytes == 15000
+        assert config.large_file_lines == 500
+        assert config.large_file_bytes == 50000
         assert config.batch_similarity_threshold == 3
         assert config.tdd_warning_threshold == 3
         assert config.min_lines_for_tdd == 30

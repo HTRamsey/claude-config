@@ -12,14 +12,14 @@ import heapq
 import json
 import os
 import re
-import sys
 import time
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from hooks.hook_utils import graceful_main, log_event, get_session_id
+from hooks.dispatchers.base import SimpleDispatcher
+from hooks.hook_utils import log_event, get_session_id
 
 
 # =============================================================================
@@ -254,43 +254,44 @@ def extract_messages(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for entry in entries:
         msg_type = entry.get("type")
 
-        if msg_type == "user":
-            messages.append({
-                "role": "user",
-                "content": entry.get("content", ""),
-                "timestamp": entry.get("timestamp"),
-            })
-        elif msg_type == "assistant":
-            content = entry.get("content", "")
-            tool_calls = []
+        match msg_type:
+            case "user":
+                messages.append({
+                    "role": "user",
+                    "content": entry.get("content", ""),
+                    "timestamp": entry.get("timestamp"),
+                })
+            case "assistant":
+                content = entry.get("content", "")
+                tool_calls = []
 
-            if "tool_use" in entry:
-                for tool in entry.get("tool_use", []):
-                    tool_calls.append({
-                        "name": tool.get("name"),
-                        "input": tool.get("input"),
-                    })
+                if "tool_use" in entry:
+                    for tool in entry.get("tool_use", []):
+                        tool_calls.append({
+                            "name": tool.get("name"),
+                            "input": tool.get("input"),
+                        })
 
-            msg = {
-                "role": "assistant",
-                "content": content,
-                "timestamp": entry.get("timestamp"),
-            }
-            if tool_calls:
-                msg["tool_calls"] = tool_calls
+                msg = {
+                    "role": "assistant",
+                    "content": content,
+                    "timestamp": entry.get("timestamp"),
+                }
+                if tool_calls:
+                    msg["tool_calls"] = tool_calls
 
-            messages.append(msg)
-        elif msg_type == "tool_result":
-            messages.append({
-                "role": "tool",
-                "tool_name": entry.get("tool_name"),
-                "result": (
-                    entry.get("result", "")[:500]
-                    if isinstance(entry.get("result"), str)
-                    else entry.get("result")
-                ),
-                "timestamp": entry.get("timestamp"),
-            })
+                messages.append(msg)
+            case "tool_result":
+                messages.append({
+                    "role": "tool",
+                    "tool_name": entry.get("tool_name"),
+                    "result": (
+                        entry.get("result", "")[:500]
+                        if isinstance(entry.get("result"), str)
+                        else entry.get("result")
+                    ),
+                    "timestamp": entry.get("timestamp"),
+                })
 
     return messages
 
@@ -409,22 +410,18 @@ def handle_session_end(ctx: dict) -> list[str]:
 
 
 # =============================================================================
-# Main
+# Dispatcher
 # =============================================================================
 
-@graceful_main("session_end_handler")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
+class SessionEndDispatcher(SimpleDispatcher):
+    """SessionEnd event dispatcher."""
 
-    messages = handle_session_end(ctx)
-    for msg in messages:
-        print(msg)
+    DISPATCHER_NAME = "session_end_handler"
+    EVENT_TYPE = None  # SessionEnd doesn't have event_type in context
 
-    sys.exit(0)
+    def handle(self, ctx: dict) -> list[str]:
+        return handle_session_end(ctx)
 
 
 if __name__ == "__main__":
-    main()
+    SessionEndDispatcher().run()

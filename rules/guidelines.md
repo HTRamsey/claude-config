@@ -145,3 +145,23 @@ When discussing design, architecture, or gathering requirements:
 ## Health Check
 
 Run `~/.claude/scripts/diagnostics/health-check.sh` to verify setup.
+
+## Config Anti-Patterns
+
+| Don't | Why | Instead |
+|-------|-----|---------|
+| Keep counts of agents/skills/commands | Goes stale, maintenance burden | Let scripts count dynamically |
+| Duplicate content across files | Drift, inconsistency | Single source of truth, reference it |
+| Hardcode paths in multiple places | Breaks on reorganization | Use variables or reference architecture.md |
+| Create agents for single-use tasks | Bloat, never used again | Just do the task inline |
+| Over-specialize agents | Too many to remember | Merge related capabilities |
+| Generic agents without clear triggers | Never invoked | Specific triggers in description |
+
+## Documentation Patterns
+
+| Do | Don't |
+|----|-------|
+| Tables over prose | Long paragraphs |
+| Examples over explanations | Abstract descriptions |
+| Link to authoritative source | Duplicate content |
+| Keep reference.md as index only | Put details in reference.md |

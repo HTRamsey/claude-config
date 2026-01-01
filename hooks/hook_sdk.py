@@ -38,10 +38,7 @@ from hooks.hook_utils import (
     log_event,
     read_state,
     write_state,
-    update_session_state,
-    cleanup_old_sessions,
     get_session_id,
-    DATA_DIR,
     # Event detection - canonical implementations in hook_utils
     detect_event,
     is_post_tool_use,
@@ -136,6 +133,23 @@ class ToolResult:
     def output(self) -> str:
         """Combined stdout + stderr."""
         return self.stdout + ("\n" + self.stderr if self.stderr else "")
+
+    @property
+    def content(self) -> str:
+        """Extract content from result (handles dict, string, and various key names).
+
+        Tries: content, output, text keys for dicts; returns string directly otherwise.
+        """
+        if isinstance(self.raw, str):
+            return self.raw
+        if isinstance(self.raw, dict):
+            return (
+                self.raw.get("content", "")
+                or self.raw.get("output", "")
+                or self.raw.get("text", "")
+                or ""
+            )
+        return str(self.raw) if self.raw else ""
 
     @property
     def success(self) -> bool:
@@ -242,45 +256,6 @@ class PostToolUseContext(BaseContext):
         return self.duration_ms / 1000.0
 
 
-@dataclass
-class SessionContext(BaseContext):
-    """Context for SessionStart/SessionEnd hooks."""
-
-    @property
-    def is_resume(self) -> bool:
-        return self.raw.get("is_resume", False)
-
-
-@dataclass
-class PromptContext(BaseContext):
-    """Context for UserPromptSubmit hooks."""
-
-    @property
-    def user_prompt(self) -> str:
-        return self.raw.get("user_prompt", "")
-
-    @property
-    def token_count(self) -> int:
-        return self.raw.get("token_count", 0)
-
-
-@dataclass
-class SubagentContext(BaseContext):
-    """Context for SubagentStart/SubagentStop hooks."""
-
-    @property
-    def subagent_type(self) -> str:
-        return self.raw.get("subagent_type", "")
-
-    @property
-    def subagent_id(self) -> str:
-        return self.raw.get("subagent_id", "")
-
-    @property
-    def prompt(self) -> str:
-        return self.raw.get("prompt", "")
-
-
 # =============================================================================
 # Response Builders
 # =============================================================================
@@ -320,24 +295,203 @@ class Response:
             }
         }
 
-    @staticmethod
-    def continue_with(text: str) -> dict:
-        """Continue with a message (PreCompact, Stop)."""
-        return {
-            "result": "continue",
-            "message": text
-        }
 
-    @staticmethod
-    def modify_input(new_input: dict) -> dict:
-        """Modify the tool input before execution (PreToolUse)."""
-        return {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "allow",
-                "modifiedInput": new_input
-            }
-        }
+# =============================================================================
+# HookState - Simplified State Management for Handlers
+# =============================================================================
+
+class HookState:
+    """Unified state management for handlers.
+
+    Provides a clean API for common state management patterns with TTL,
+    pruning, and timestamping. Consolidates StateManager functionality.
+
+    Usage:
+        # Session-scoped state with TTL
+        state = HookState("file_monitor", use_session=True)
+        data = state.load(session_id, default={"reads": {}})
+        state.save_with_pruning(data, session_id, max_entries=100, items_key="reads")
+
+        # Global state
+        state = HookState("warnings", use_session=False)
+        warnings = state.load(default={"items": []})
+    """
+
+    def __init__(self, namespace: str, use_session: bool = True, max_age_secs: int = None):
+        """Initialize hook state.
+
+        Args:
+            namespace: State namespace/key (e.g., "file_monitor", "tdd-warnings")
+            use_session: Use session-based storage (True) or global (False)
+            max_age_secs: Max age in seconds before state expires (None = no expiry)
+        """
+        self.namespace = namespace
+        self.use_session = use_session
+        self.max_age_secs = max_age_secs
+
+    def load(self, session_id: str = None, default: dict = None, max_age_secs: int = None) -> dict:
+        """Load state, returning default if missing or expired.
+
+        Args:
+            session_id: Session ID (required if use_session=True)
+            default: Default value if state doesn't exist or is expired
+            max_age_secs: Override instance max_age_secs for this load
+
+        Returns:
+            State dict (loaded or default copy)
+        """
+        if default is None:
+            default = {}
+
+        if self.use_session:
+            from hooks.hook_utils.session import read_session_state
+            state = read_session_state(self.namespace, session_id, default)
+        else:
+            state = read_state(self.namespace, default)
+
+        # Check TTL expiry
+        max_age = max_age_secs if max_age_secs is not None else self.max_age_secs
+        if max_age is not None:
+            last_update = state.get("_updated", 0)
+            if time.time() - last_update > max_age:
+                return default.copy()
+
+        return state
+
+    def save(self, data: dict, session_id: str = None) -> bool:
+        """Save state with automatic timestamp.
+
+        Args:
+            data: State dict to save
+            session_id: Session ID (required if use_session=True)
+
+        Returns:
+            True on success
+        """
+        data["_updated"] = time.time()
+
+        if self.use_session:
+            from hooks.hook_utils.session import write_session_state
+            return write_session_state(self.namespace, data, session_id)
+        else:
+            return write_state(self.namespace, data)
+
+    def save_with_pruning(
+        self,
+        data: dict,
+        session_id: str = None,
+        max_entries: int = None,
+        items_key: str = None,
+        time_key: str = "_time"
+    ) -> bool:
+        """Save state with optional pruning of old entries.
+
+        Common pattern: Save state and limit size by keeping newest entries.
+
+        Args:
+            data: State dict to save
+            session_id: Session ID (required if use_session=True)
+            max_entries: Max number of entries to keep in items dict (no limit if None)
+            items_key: Key in state containing items to prune (e.g., "reads", "searches")
+                      If None, no pruning is performed
+            time_key: Key in each item containing timestamp (used for pruning order)
+
+        Returns:
+            True on success
+        """
+        # Prune items if needed
+        if max_entries and items_key and items_key in data:
+            items = data.get(items_key, {})
+            if len(items) > max_entries:
+                sorted_items = sorted(
+                    items.items(),
+                    key=lambda x: x[1].get(time_key, 0),
+                    reverse=True
+                )
+                data[items_key] = dict(sorted_items[:max_entries])
+
+        # Add timestamp
+        data["_updated"] = time.time()
+
+        # Save
+        if self.use_session:
+            from hooks.hook_utils.session import write_session_state
+            return write_session_state(self.namespace, data, session_id)
+        else:
+            return write_state(self.namespace, data)
+
+    def update(self, updater, session_id: str = None, default: dict = None) -> bool:
+        """Read-modify-write pattern.
+
+        Args:
+            updater: Function that takes current state and returns updated state
+            session_id: Session ID (required if use_session=True)
+            default: Default state if missing
+
+        Returns:
+            True on success
+        """
+        data = self.load(session_id, default)
+        updated = updater(data)
+        return self.save(updated, session_id)
+
+
+# =============================================================================
+# BlockingHook - Base Class for PreToolUse Denials
+# =============================================================================
+
+class BlockingHook:
+    """Base for PreToolUse hooks that can deny operations.
+
+    Subclasses implement check() which returns deny response or None to allow.
+
+    Example:
+        class FileBlocker(BlockingHook):
+            def check(self, ctx: PreToolUseContext) -> dict | None:
+                if ctx.tool_input.file_path.endswith('.secret'):
+                    return self.deny("Cannot access secret files")
+                return None
+
+        # Usage in dispatcher
+        blocker = FileBlocker("file_blocker")
+        result = blocker(ctx)  # Returns deny response or None
+    """
+
+    def __init__(self, name: str):
+        """Initialize blocking hook.
+
+        Args:
+            name: Hook identifier for logging
+        """
+        self.name = name
+
+    def check(self, ctx) -> dict | None:
+        """Check if operation should be blocked.
+
+        Override this method in subclasses.
+
+        Args:
+            ctx: Context object (typically PreToolUseContext)
+
+        Returns:
+            Deny response dict if blocked, None to allow
+        """
+        raise NotImplementedError("Subclasses must implement check()")
+
+    def deny(self, reason: str) -> dict:
+        """Build deny response.
+
+        Args:
+            reason: Human-readable reason for denial
+
+        Returns:
+            Hook response dict
+        """
+        return Response.deny(reason)
+
+    def __call__(self, ctx) -> dict | None:
+        """Call the hook (allows use as callable)."""
+        return self.check(ctx)
 
 
 # =============================================================================
@@ -372,25 +526,6 @@ class Patterns:
             if not any(c in pattern for c in '*?['):
                 if pattern in path:
                     return pattern
-        return None
-
-    @staticmethod
-    def matches_command(command: str, patterns: list[str]) -> str | None:
-        r"""
-        Check if command matches any pattern.
-        Patterns can be:
-        - Simple prefix: "git push"
-        - Regex: r"rm\s+-rf"
-        """
-        command = command.strip()
-        for pattern in patterns:
-            if pattern.startswith("r\"") or pattern.startswith("r'"):
-                # Regex pattern
-                regex = pattern[2:-1]
-                if re.search(regex, command):
-                    return pattern
-            elif command.startswith(pattern) or pattern in command:
-                return pattern
         return None
 
     @staticmethod
@@ -475,18 +610,6 @@ class Patterns:
         compiled = Patterns.compile_pattern(pattern)
         return bool(compiled.match(path))
 
-    @staticmethod
-    def extract_command_name(command: str) -> str:
-        """Extract the base command name from a command string."""
-        parts = command.strip().split()
-        if not parts:
-            return ""
-        # Skip env vars and sudo
-        for part in parts:
-            if '=' not in part and part != 'sudo':
-                return part
-        return parts[-1] if parts else ""
-
 
 # =============================================================================
 # Rate Limiting (Thread-Safe)
@@ -539,76 +662,10 @@ class RateLimiter:
         with self._lock:
             write_state(self.state_key, {"timestamps": []})
 
-    def remaining(self) -> int:
-        """Get remaining actions in current window."""
-        with self._lock:
-            state = read_state(self.state_key, {"timestamps": []})
-            now = time.time()
-            cutoff = now - self.window_secs
-            timestamps = [t for t in state.get("timestamps", []) if t > cutoff]
-            return max(0, self.max_count - len(timestamps))
-
 
 # =============================================================================
 # Handler Decorators
 # =============================================================================
-
-def hook_handler(
-    name: str,
-    event: EventType = "PreToolUse",
-    tools: list[str] | None = None,
-):
-    """
-    Decorator for hook handler functions.
-
-    Args:
-        name: Hook name for logging
-        event: Event type this handler processes
-        tools: List of tools to handle (None = all)
-
-    Usage:
-        @hook_handler("my_hook", event="PreToolUse", tools=["Bash", "Write"])
-        def handle(ctx: PreToolUseContext) -> Response | None:
-            ...
-    """
-    def decorator(func: Callable):
-        @wraps(func)
-        @graceful_main(name)
-        def wrapper():
-            try:
-                raw = json.load(sys.stdin)
-            except (json.JSONDecodeError, Exception):
-                sys.exit(0)
-
-            # Filter by tool if specified
-            tool_name = raw.get("tool_name", "")
-            if tools and tool_name not in tools:
-                sys.exit(0)
-
-            # Create appropriate context
-            if event == "PreToolUse":
-                ctx = PreToolUseContext(raw)
-            elif event == "PostToolUse":
-                ctx = PostToolUseContext(raw)
-            elif event in ("SessionStart", "SessionEnd"):
-                ctx = SessionContext(raw)
-            elif event == "UserPromptSubmit":
-                ctx = PromptContext(raw)
-            elif event in ("SubagentStart", "SubagentStop"):
-                ctx = SubagentContext(raw)
-            else:
-                ctx = BaseContext(raw)
-
-            result = func(ctx)
-
-            if result:
-                print(json.dumps(result))
-
-            sys.exit(0)
-
-        return wrapper
-    return decorator
-
 
 def dispatch_handler(name: str, event: EventType = "PreToolUse"):
     """
@@ -642,17 +699,6 @@ def dispatch_handler(name: str, event: EventType = "PreToolUse"):
 
 
 # =============================================================================
-# Convenience Functions
-# =============================================================================
-
-def expand_path(path: str) -> str:
-    """Expand ~ and normalize path."""
-    if path.startswith("~"):
-        path = os.path.expanduser(path)
-    return os.path.normpath(path)
-
-
-# =============================================================================
 # Entry Point Helper
 # =============================================================================
 
@@ -675,3 +721,42 @@ def run_standalone(handler: Callable[[dict], dict | None]):
         print(json.dumps(result))
 
     sys.exit(0)
+
+
+# =============================================================================
+# Exports
+# =============================================================================
+
+__all__ = [
+    # Context classes
+    "ToolInput",
+    "ToolResult",
+    "BaseContext",
+    "PreToolUseContext",
+    "PostToolUseContext",
+    # Response builders
+    "Response",
+    # State management
+    "HookState",
+    # Base classes
+    "BlockingHook",
+    # Pattern matching
+    "Patterns",
+    # Rate limiting
+    "RateLimiter",
+    # Decorators and helpers
+    "dispatch_handler",
+    "run_standalone",
+    # Event types
+    "EventType",
+    # Re-exports from hook_utils (commonly used)
+    "log_event",
+    "read_state",
+    "write_state",
+    "get_session_id",
+    "graceful_main",
+    "detect_event",
+    "is_post_tool_use",
+    "is_pre_tool_use",
+    "get_tool_response",
+]

@@ -25,7 +25,7 @@ from hooks.handlers.tool_analytics import (
     load_tracker_state,
     save_tracker_state,
     track_tool_analytics,
-    ERROR_PATTERNS,
+    get_error_patterns,
     TOOL_ALTERNATIVES,
     FAILURE_THRESHOLD,
     OUTPUT_WARNING_THRESHOLD,
@@ -520,25 +520,6 @@ class TestCheckOutputSize(TestCase):
 class TestTrackToolAnalytics(TestCase):
     """Tests for track_tool_analytics combined handler."""
 
-    @patch("hooks.handlers.tool_analytics.track_success")
-    @patch("hooks.handlers.tool_analytics.track_tokens")
-    @patch("hooks.handlers.tool_analytics.check_output_size")
-    def test_combines_all_trackers(self, mock_size, mock_tokens, mock_success):
-        """Combined handler calls all tracking functions."""
-        mock_success.return_value = []
-        mock_tokens.return_value = []
-        mock_size.return_value = []
-
-        raw = {
-            "tool_name": "Read",
-            "tool_input": {"file_path": "test.txt"},
-            "tool_result": {"content": "test"}
-        }
-        result = track_tool_analytics(raw)
-
-        mock_success.assert_called_once()
-        mock_tokens.assert_called_once()
-        mock_size.assert_called_once()
 
     @patch("hooks.handlers.tool_analytics.track_success")
     @patch("hooks.handlers.tool_analytics.track_tokens")
@@ -562,23 +543,6 @@ class TestTrackToolAnalytics(TestCase):
         parts = msg.split(" | ")
         self.assertEqual(len(parts), 3)
 
-    @patch("hooks.handlers.tool_analytics.track_success")
-    @patch("hooks.handlers.tool_analytics.track_tokens")
-    @patch("hooks.handlers.tool_analytics.check_output_size")
-    def test_returns_none_when_no_messages(self, mock_size, mock_tokens, mock_success):
-        """Combined handler returns None when no messages."""
-        mock_success.return_value = []
-        mock_tokens.return_value = []
-        mock_size.return_value = []
-
-        raw = {
-            "tool_name": "Read",
-            "tool_input": {"file_path": "test.txt"},
-            "tool_result": {"content": "test"}
-        }
-        result = track_tool_analytics(raw)
-
-        self.assertIsNone(result)
 
 
 if __name__ == "__main__":

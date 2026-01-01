@@ -322,3 +322,14 @@ If unable to design a good agent:
 - Clarify the intended use cases
 - Suggest splitting into multiple focused agents
 - Recommend extending an existing agent instead
+
+## Design Patterns
+
+| Do | Don't |
+|----|-------|
+| Minimal tool set needed | Give all tools "just in case" |
+| Clear trigger words in description | Vague descriptions |
+| Delegate to specialists | Duplicate expertise |
+| Specify output format | Leave format unspecified |
+| Include "When NOT to Use" section | Assume scope is obvious |
+| Route simple tasks to Haiku | Use Opus for everything |

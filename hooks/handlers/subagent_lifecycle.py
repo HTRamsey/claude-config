@@ -8,15 +8,10 @@ Also maintains Reflexion memory - a log of task outcomes and lessons
 for learning from past subagent executions.
 """
 import hashlib
-import json
-import sys
-import os
 from datetime import datetime
 from pathlib import Path
 
 from hooks.hook_utils import (
-    graceful_main,
-    read_stdin_context,
     log_event,
     get_session_state,
     update_session_state,
@@ -43,12 +38,12 @@ def save_reflexion_log(entries: list):
         log_event("subagent_lifecycle", "reflexion_save_error", {"error": "Failed to save reflexion log"})
 
 
-def extract_task_summary(ctx: dict) -> str:
+def extract_task_summary(raw: dict) -> str:
     """Extract a summary of the task from context."""
-    tool_input = ctx.get("tool_input", {})
+    tool_input = raw.get("tool_input", {})
     # Try to get from prompt or description
-    prompt = tool_input.get("prompt", ctx.get("prompt", ""))
-    description = tool_input.get("description", ctx.get("description", ""))
+    prompt = tool_input.get("prompt", raw.get("prompt", ""))
+    description = tool_input.get("description", raw.get("description", ""))
 
     summary = description or prompt[:100]
     if len(prompt) > 100 and not description:
@@ -56,9 +51,9 @@ def extract_task_summary(ctx: dict) -> str:
     return summary
 
 
-def extract_outcome(ctx: dict) -> str:
+def extract_outcome(raw: dict) -> str:
     """Determine outcome from stop_reason and context."""
-    stop_reason = ctx.get("stop_reason", "")
+    stop_reason = raw.get("stop_reason", "")
 
     if stop_reason == "completed":
         return "success"
@@ -70,10 +65,10 @@ def extract_outcome(ctx: dict) -> str:
         return "unknown"
 
 
-def extract_lessons(ctx: dict, outcome: str) -> list:
+def extract_lessons(raw: dict, outcome: str) -> list:
     """Extract lessons learned from the task output."""
     lessons = []
-    output = ctx.get("tool_output", "") or ctx.get("output", "") or ctx.get("result", "")
+    output = raw.get("tool_output", "") or raw.get("output", "") or raw.get("result", "")
 
     # For failures, try to extract what went wrong
     if outcome == "failure":
@@ -94,24 +89,24 @@ def extract_lessons(ctx: dict, outcome: str) -> list:
     return lessons
 
 
-def record_reflexion(ctx: dict, duration_s: float | None):
+def record_reflexion(raw: dict, duration_s: float | None):
     """Record a reflexion entry for this subagent completion."""
-    tool_input = ctx.get("tool_input", {})
-    subagent_type = tool_input.get("subagent_type", ctx.get("subagent_type", "unknown"))
-    prompt = tool_input.get("prompt", ctx.get("prompt", ""))
+    tool_input = raw.get("tool_input", {})
+    subagent_type = tool_input.get("subagent_type", raw.get("subagent_type", "unknown"))
+    prompt = tool_input.get("prompt", raw.get("prompt", ""))
 
     # Create a hash of the task for deduplication
     task_hash = hashlib.md5(
         f"{subagent_type}:{prompt[:200]}".encode()
     ).hexdigest()[:12]
 
-    outcome = extract_outcome(ctx)
-    lessons = extract_lessons(ctx, outcome)
+    outcome = extract_outcome(raw)
+    lessons = extract_lessons(raw, outcome)
 
     entry = {
         "task_hash": task_hash,
         "subagent_type": subagent_type,
-        "task_summary": extract_task_summary(ctx),
+        "task_summary": extract_task_summary(raw),
         "outcome": outcome,
         "lessons": lessons,
         "duration_s": duration_s,
@@ -167,7 +162,7 @@ def handle_complete(raw: dict):
     ctx = PostToolUseContext(raw)
     subagent_type = ctx.tool_input.subagent_type or raw.get("subagent_type", "unknown")
     subagent_id = raw.get("subagent_id", ctx.tool_use_id or "")
-    stop_reason = raw.get("stop_reason", "completed" if not ctx.tool_result.is_error else "error")
+    stop_reason = raw.get("stop_reason", "completed" if ctx.tool_result.success else "error")
 
     state = get_session_state()
     subagent_stats = state.get("subagent_stats", {})
@@ -207,27 +202,3 @@ def handle_complete(raw: dict):
 
     # Record to Reflexion memory
     record_reflexion(raw, duration_s)
-
-
-@graceful_main("subagent_lifecycle")
-def main():
-    ctx = read_stdin_context()
-
-    # Detect event type from context
-    event_type = ctx.get("event", "")
-
-    if event_type == "SubagentStart":
-        handle_start(ctx)
-    elif event_type == "SubagentStop":
-        handle_complete(ctx)
-    else:
-        # Fallback: check for stop_reason to distinguish events
-        if "stop_reason" in ctx:
-            handle_complete(ctx)
-        else:
-            handle_start(ctx)
-
-
-if __name__ == "__main__":
-    main()
-    sys.exit(0)

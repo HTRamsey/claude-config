@@ -313,3 +313,13 @@ If unable to create a working hook:
 - Check if the use case is better suited for an agent
 - Consider if a command/skill is more appropriate
 - Simplify the logic to meet timeout constraints
+
+## Design Patterns
+
+| Do | Don't |
+|----|-------|
+| Use dispatchers for PreToolUse/PostToolUse | Register hooks individually |
+| Fail gracefully (hook_utils.py patterns) | Let errors crash |
+| Target specific tools only | Watch all tools unnecessarily |
+| Keep under 100ms latency | Block on slow operations |
+| Log to hook-events.jsonl | Print to stdout |

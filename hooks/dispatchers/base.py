@@ -18,9 +18,10 @@ Subclasses override:
 - TOOL_HANDLERS: Tool-to-handler mapping
 - _import_handler(): Import logic for each handler
 - _execute_handler(): Handler execution logic with special cases
-- _build_result(): Build the final result from messages
+- ResultStrategy: Strategy pattern for result building
 """
 import atexit
+import importlib
 import json
 import os
 import sys
@@ -45,6 +46,7 @@ atexit.register(_executor.shutdown, wait=False)
 # Import shared utilities
 from hooks.hook_utils import graceful_main, log_event, is_hook_disabled, flush_pending_writes
 from hooks.config import fast_json_loads
+from hooks.hook_sdk import Response
 
 
 @dataclass
@@ -212,13 +214,7 @@ class PreToolStrategy(ResultStrategy):
         """
         if not messages:
             return None
-        return {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "allow",
-                "permissionDecisionReason": " | ".join(messages[:3])
-            }
-        }
+        return Response.allow(" | ".join(messages[:3]))
 
 
 class PostToolStrategy(ResultStrategy):
@@ -259,12 +255,46 @@ class PostToolStrategy(ResultStrategy):
         """
         if not messages:
             return None
-        return {
-            "hookSpecificOutput": {
-                "hookEventName": "PostToolUse",
-                "message": " | ".join(messages[:3])
-            }
-        }
+        return Response.message(" | ".join(messages[:3]), event="PostToolUse")
+
+
+class NonToolStrategy(ResultStrategy):
+    """Strategy for non-tool events (SessionStart, SessionEnd, Stop).
+
+    Never terminates dispatch. Messages are returned as simple list output
+    via format_output() method instead of hookSpecificOutput.
+    """
+
+    def should_terminate(self, result: dict, handler_name: str) -> bool:
+        """Non-tool events never terminate dispatch.
+
+        Returns:
+            Always False
+        """
+        return False
+
+    def extract_message(self, hook_output: dict) -> str | None:
+        """Extract message from hook output.
+
+        For non-tool events, messages are handled differently (string list).
+        This strategy doesn't use hookSpecificOutput.
+
+        Returns:
+            None (messages handled by format_output)
+        """
+        return None
+
+    def build_result(self, messages: list[str], terminated_by: str = None) -> dict | None:
+        """Non-tool events don't return hookSpecificOutput.
+
+        Args:
+            messages: Unused - handled by format_output()
+            terminated_by: Unused
+
+        Returns:
+            Always None - format_output() is used instead
+        """
+        return None
 
 
 class BaseDispatcher(ABC):
@@ -275,6 +305,8 @@ class BaseDispatcher(ABC):
     HOOK_EVENT_NAME: str = "Unknown"
     ALL_HANDLERS: list[str] = []
     TOOL_HANDLERS: dict[str, list[str]] = {}
+    # Handler import map: "name" -> ("module", "func") or ("module", ("fn1", "fn2", ...))
+    HANDLER_IMPORTS: dict[str, tuple] = {}
 
     def __init__(self):
         self._handlers: dict[str, Any] = {}
@@ -295,13 +327,24 @@ class BaseDispatcher(ABC):
         """
         pass
 
-    @abstractmethod
     def _import_handler(self, name: str) -> Any:
         """Import and return the handler for the given name.
 
+        Uses HANDLER_IMPORTS dict to map handler names to (module, func_spec).
+        func_spec can be a string (single function) or tuple (multiple functions).
+
         Returns the handler callable (or tuple of callables), or None if not found.
         """
-        pass
+        if name not in self.HANDLER_IMPORTS:
+            return None
+
+        module_name, func_spec = self.HANDLER_IMPORTS[name]
+        module = importlib.import_module(module_name)
+
+        # Handle single function or tuple of functions
+        if isinstance(func_spec, tuple):
+            return tuple(getattr(module, fn) for fn in func_spec)
+        return getattr(module, func_spec)
 
     def setup_handler_registry(self) -> None:
         """Initialize handler registry with routing rules.
@@ -336,42 +379,6 @@ class BaseDispatcher(ABC):
             return handler[0](ctx)
 
         return handler(ctx)
-
-    def _route_dual_handler(
-        self,
-        handler: tuple,
-        ctx: dict,
-        tool_mapping: dict[str, int]
-    ) -> dict | None:
-        """Route to one of two handlers based on tool_name.
-
-        Args:
-            handler: Tuple of (handler0, handler1)
-            ctx: Hook context
-            tool_mapping: Maps tool_name to handler index (0 or 1)
-
-        Returns:
-            Handler result or None if tool not in mapping
-        """
-        tool_name = ctx.get("tool_name", "")
-        handler_idx = tool_mapping.get(tool_name)
-        if handler_idx is not None:
-            return handler[handler_idx](ctx)
-        return None
-
-    def _build_result(self, messages: list[str]) -> dict | None:
-        """Build the final result from collected messages.
-
-        Override in subclasses for different result formats.
-        """
-        if messages:
-            return {
-                "hookSpecificOutput": {
-                    "hookEventName": self.HOOK_EVENT_NAME,
-                    "message": " | ".join(messages[:3])
-                }
-            }
-        return None
 
     def get_handler(self, name: str) -> Any:
         """Lazy-load and cache handler module. Syncs with registry."""
@@ -454,7 +461,11 @@ class BaseDispatcher(ABC):
         return result
 
     def dispatch(self, ctx: dict) -> dict | None:
-        """Dispatch to appropriate handlers based on tool name."""
+        """Dispatch to appropriate handlers based on tool name.
+
+        If TOOL_HANDLERS is empty, runs all handlers in ALL_HANDLERS (non-tool mode).
+        Otherwise, routes by tool_name using TOOL_HANDLERS mapping.
+        """
         # Initialize strategy on first use
         if self._result_strategy is None:
             self._result_strategy = self._create_result_strategy()
@@ -462,9 +473,16 @@ class BaseDispatcher(ABC):
         dispatch_start = time.perf_counter()
         tool_name = ctx.get("tool_name", "")
 
-        handlers = self.TOOL_HANDLERS.get(tool_name, [])
-        if not handlers:
-            return None
+        # Non-tool mode: empty TOOL_HANDLERS means run all handlers
+        if not self.TOOL_HANDLERS:
+            handlers = self.ALL_HANDLERS
+            event_name = "non-tool"
+        else:
+            # Tool mode: route by tool_name
+            handlers = self.TOOL_HANDLERS.get(tool_name, [])
+            event_name = tool_name
+            if not handlers:
+                return None
 
         messages = []
         terminated_by = None
@@ -492,19 +510,11 @@ class BaseDispatcher(ABC):
 
         if _PROFILE_MODE:
             total_ms = (time.perf_counter() - dispatch_start) * 1000
-            print(f"[{self.DISPATCHER_NAME}] TOTAL for {tool_name}: {total_ms:.1f}ms ({len(handlers)} handlers, {write_count} writes)",
+            print(f"[{self.DISPATCHER_NAME}] TOTAL for {event_name}: {total_ms:.1f}ms ({len(handlers)} handlers, {write_count} writes)",
                   file=sys.stderr)
 
         # Build final result using strategy
         return self._result_strategy.build_result(messages, terminated_by)
-
-    def _should_terminate(self, result: dict, handler_name: str, tool_name: str) -> bool:
-        """Check if dispatch should terminate early. Override for deny behavior."""
-        return False
-
-    def _extract_message(self, hook_output: dict) -> str:
-        """Extract message from hook output. Override for different formats."""
-        return hook_output.get("message", "")
 
     def run(self) -> None:
         """Main entry point - read stdin, dispatch, output result."""
@@ -521,5 +531,94 @@ class BaseDispatcher(ABC):
         result = self.dispatch(ctx)
         if result:
             print(json.dumps(result))
+
+        sys.exit(0)
+
+
+# =============================================================================
+# SimpleDispatcher - Base for non-tool event dispatchers
+# =============================================================================
+
+class SimpleDispatcher(ABC):
+    """Base class for non-tool event dispatchers (SessionStart, SessionEnd, Stop).
+
+    Unlike BaseDispatcher which routes by tool_name, SimpleDispatcher runs handlers
+    unconditionally for their event type.
+
+    Subclasses override:
+    - DISPATCHER_NAME: Name for logging
+    - EVENT_TYPE: Expected event type (or None to skip validation)
+    - handle(): Process context and return messages
+    - format_output(): (Optional) Custom output formatting
+
+    Example:
+        class MyDispatcher(SimpleDispatcher):
+            DISPATCHER_NAME = "my_dispatcher"
+            EVENT_TYPE = "SessionEnd"
+
+            def handle(self, ctx: dict) -> list[str]:
+                return ["Message 1", "Message 2"]
+
+        if __name__ == "__main__":
+            MyDispatcher().run()
+    """
+
+    DISPATCHER_NAME: str = "simple_dispatcher"
+    EVENT_TYPE: str | None = None  # Set to event type to validate, or None to skip
+
+    @abstractmethod
+    def handle(self, ctx: dict) -> list[str]:
+        """Process the event context and return list of messages to output.
+
+        Args:
+            ctx: Parsed JSON context from stdin
+
+        Returns:
+            List of message strings to output (can be empty)
+        """
+        pass
+
+    def validate_event(self, ctx: dict) -> bool:
+        """Check if this event should be handled. Override for custom validation."""
+        if self.EVENT_TYPE is None:
+            return True
+        return ctx.get("event_type", ctx.get("event", "")) == self.EVENT_TYPE
+
+    def format_output(self, messages: list[str]) -> str | None:
+        """Format messages for output. Override for custom formatting.
+
+        Returns:
+            Formatted string to print, or None to skip output
+        """
+        if not messages:
+            return None
+        return "\n".join(messages)
+
+    def read_context(self) -> dict:
+        """Read and parse context from stdin."""
+        try:
+            stdin_data = sys.stdin.read()
+            return fast_json_loads(stdin_data) if stdin_data else {}
+        except Exception:
+            return {}
+
+    @graceful_main("simple_dispatcher")
+    def run(self) -> None:
+        """Main entry point - read stdin, handle event, output messages."""
+        ctx = self.read_context()
+
+        if not self.validate_event(ctx):
+            sys.exit(0)
+
+        log_event(self.DISPATCHER_NAME, "dispatch", {
+            "event": self.EVENT_TYPE or "unknown",
+            "cwd": ctx.get("cwd", "")[:50]
+        })
+
+        messages = self.handle(ctx)
+        output = self.format_output(messages)
+
+        if output:
+            print(output)
 
         sys.exit(0)

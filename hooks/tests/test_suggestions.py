@@ -1,11 +1,11 @@
-"""Tests for suggestions package."""
+"""Tests for suggestion_engine module."""
 import sys
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from hooks.suggestions import (
+from hooks.handlers.suggestion_engine import (
     suggest_skill,
     suggest_subagent,
     suggest_optimization,
@@ -13,6 +13,7 @@ from hooks.suggestions import (
     get_state,
     update_state,
 )
+from hooks.config import SuggestionPatterns
 
 
 class TestSkillSuggester:
@@ -24,32 +25,24 @@ class TestSkillSuggester:
 
     def test_suggest_skill_detects_hook_pattern(self):
         """Should recognize hook file patterns."""
-        from hooks.suggestions.skill_suggester import SKILL_SUGGESTIONS
-        # Verify the pattern exists in suggestions
-        hook_patterns = [s for s in SKILL_SUGGESTIONS if s["skill"] == "hook-creator"]
+        skill_suggestions = SuggestionPatterns.get_skill_suggestions()
+        hook_patterns = [s for s in skill_suggestions if s["skill"] == "hook-creator"]
         assert len(hook_patterns) > 0
-        # Check pattern matches hook path
-        import re
-        pattern = re.compile(hook_patterns[0]["pattern"])
-        assert pattern.search("/home/user/.claude/hooks/new_hook.py")
+        assert hook_patterns[0]["pattern"].search("/home/user/.claude/hooks/new_hook.py")
 
     def test_suggest_skill_detects_agent_pattern(self):
         """Should recognize agent file patterns."""
-        from hooks.suggestions.skill_suggester import SKILL_SUGGESTIONS
-        agent_patterns = [s for s in SKILL_SUGGESTIONS if s["skill"] == "agent-creator"]
+        skill_suggestions = SuggestionPatterns.get_skill_suggestions()
+        agent_patterns = [s for s in skill_suggestions if s["skill"] == "agent-creator"]
         assert len(agent_patterns) > 0
-        import re
-        pattern = re.compile(agent_patterns[0]["pattern"])
-        assert pattern.search("/home/user/.claude/agents/new_agent.md")
+        assert agent_patterns[0]["pattern"].search("/home/user/.claude/agents/new_agent.md")
 
     def test_suggest_skill_detects_command_pattern(self):
         """Should recognize command file patterns."""
-        from hooks.suggestions.skill_suggester import SKILL_SUGGESTIONS
-        cmd_patterns = [s for s in SKILL_SUGGESTIONS if s["skill"] == "command-creator"]
+        skill_suggestions = SuggestionPatterns.get_skill_suggestions()
+        cmd_patterns = [s for s in skill_suggestions if s["skill"] == "command-creator"]
         assert len(cmd_patterns) > 0
-        import re
-        pattern = re.compile(cmd_patterns[0]["pattern"])
-        assert pattern.search("/home/user/.claude/commands/my_command.md")
+        assert cmd_patterns[0]["pattern"].search("/home/user/.claude/commands/my_command.md")
 
     def test_suggest_skill_for_regular_file(self):
         """Should return None for regular files."""

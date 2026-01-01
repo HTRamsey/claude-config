@@ -4,13 +4,15 @@ from pathlib import Path
 
 import pytest
 
-from hooks.handlers.context_monitor import (
+from hooks.handlers.context_manager import (
     TOKEN_WARNING_THRESHOLD,
     TOKEN_CRITICAL_THRESHOLD,
-    count_tokens,
+)
+from hooks.handlers.transcript import (
     get_cached_count,
     update_cache,
 )
+from hooks.hook_utils import count_tokens_accurate as count_tokens
 
 
 class TestTokenCounting:
@@ -63,5 +65,5 @@ class TestCaching:
         """update_cache should not raise."""
         test_file = tmp_path / "test.jsonl"
         test_file.write_text('{"test": true}\n')
-        # Should not raise
-        update_cache(str(test_file), 100, 5)
+        # Should not raise (tokens, messages, offset)
+        update_cache(str(test_file), 100, 5, 14)

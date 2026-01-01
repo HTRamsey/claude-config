@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 
 from hooks.config import ProtectedFiles
-from hooks.hook_sdk import Patterns, expand_path
+from hooks.hook_sdk import Patterns
+from hooks.hook_utils import expand_path
 
 
 class TestProtectedPatterns:

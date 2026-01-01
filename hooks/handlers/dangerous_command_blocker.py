@@ -6,14 +6,10 @@ Blocks or warns about commands that could cause irreversible damage.
 
 Uses hook_sdk for typed context and response builders.
 """
-import sys
-from pathlib import Path
-
 from hooks.hook_sdk import (
     PreToolUseContext,
     Response,
     dispatch_handler,
-    run_standalone,
     log_event,
 )
 from hooks.config import DangerousCommands
@@ -83,7 +79,3 @@ def check_dangerous_command(ctx: PreToolUseContext) -> dict | None:
         )
 
     return None
-
-
-if __name__ == "__main__":
-    run_standalone(lambda raw: check_dangerous_command(raw))

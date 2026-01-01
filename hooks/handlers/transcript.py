@@ -1,47 +1,39 @@
-#!/usr/bin/env python3
-# Requires: tiktoken (see ~/.claude/pyproject.toml)
+#!/home/jonglaser/.claude/data/venv/bin/python3
 """
-Context Monitor Hook - Monitors conversation size and suggests compaction.
-Runs on UserPromptSubmit to warn when context is getting large.
+Transcript utilities - token counting, caching, and session analysis.
 
-Uses tiktoken for accurate Claude token counting (cl100k_base encoding).
-At critical thresholds:
-- Automatically backs up transcript (pre-compact safety)
-- Shows a summary of session activity
-
-Uses cachetools TTLCache for in-memory caching between calls.
+Provides:
+- Token counting with incremental caching
+- Transcript size estimation
+- Session activity summary for compaction guidance
 """
 import heapq
+import json
 import os
-import sys
 from pathlib import Path
 from collections import defaultdict
 
 from cachetools import TTLCache
 
-# Import shared utilities for backup
+from hooks.config import Timeouts, Limits, CACHE_DIR
 from hooks.hook_utils import (
-    backup_transcript,
-    log_event,
-    graceful_main,
-    safe_load_json,
     safe_save_json,
+    safe_load_json,
     count_tokens_accurate,
 )
-from hooks.config import Thresholds, Timeouts, Limits, CACHE_DIR
 
-# Configuration (from centralized config)
-TOKEN_WARNING_THRESHOLD = Thresholds.TOKEN_WARNING
-TOKEN_CRITICAL_THRESHOLD = Thresholds.TOKEN_CRITICAL
+# Cache setup
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 CACHE_FILE = CACHE_DIR / "context-cache.json"
 
-# TTL cache for file-based token cache (from centralized config)
+# TTL cache for file-based token cache
 _token_cache: TTLCache = TTLCache(maxsize=Limits.TOKEN_CACHE_MAXSIZE, ttl=Timeouts.TOKEN_CACHE_TTL)
 _TOKEN_CACHE_KEY = "file_cache"
 
-# Alias for backwards compatibility within this module
-count_tokens = count_tokens_accurate
+
+# ==============================================================================
+# Token Counting Cache
+# ==============================================================================
 
 def load_cache():
     """Load token count cache from disk with in-memory caching."""
@@ -51,27 +43,44 @@ def load_cache():
     _token_cache[_TOKEN_CACHE_KEY] = data
     return data
 
+
 def save_cache(cache):
     """Save token count cache to disk and update in-memory cache."""
     _token_cache[_TOKEN_CACHE_KEY] = cache
     safe_save_json(CACHE_FILE, cache)
 
+
 def get_cached_count(transcript_path):
-    """Check cache for valid token count. Returns (tokens, messages) or None."""
+    """Check cache for valid token count.
+
+    Returns:
+        (tokens, messages, offset, can_increment) or None
+        - can_increment: True if we can do incremental scan from offset
+    """
     cache = load_cache()
     cached = cache.get("transcript")
     if not cached or cached.get("path") != transcript_path:
         return None
     try:
         stat = os.stat(transcript_path)
-        if cached.get("mtime") == stat.st_mtime and cached.get("size") == stat.st_size:
-            return cached.get("tokens", 0), cached.get("messages", 0)
+        cached_size = cached.get("size", 0)
+        cached_offset = cached.get("offset", 0)
+
+        # Exact match - file unchanged
+        if cached.get("mtime") == stat.st_mtime and cached_size == stat.st_size:
+            return cached.get("tokens", 0), cached.get("messages", 0), cached_offset, False
+
+        # File grew - can do incremental scan from last offset
+        if stat.st_size > cached_size and cached_offset > 0:
+            return cached.get("tokens", 0), cached.get("messages", 0), cached_offset, True
+
     except OSError:
         pass
     return None
 
-def update_cache(transcript_path, tokens, messages):
-    """Update cache with new token count."""
+
+def update_cache(transcript_path, tokens, messages, offset):
+    """Update cache with new token count and file offset."""
     try:
         stat = os.stat(transcript_path)
         cache = {
@@ -80,22 +89,67 @@ def update_cache(transcript_path, tokens, messages):
                 "mtime": stat.st_mtime,
                 "size": stat.st_size,
                 "tokens": tokens,
-                "messages": messages
+                "messages": messages,
+                "offset": offset
             }
         }
         save_cache(cache)
     except OSError:
         pass
 
+
+# ==============================================================================
+# Token Counting
+# ==============================================================================
+
+def _count_tokens_in_entry(entry: dict) -> int:
+    """Count tokens in a transcript entry."""
+    tokens = 0
+    if 'content' in entry:
+        content = entry['content']
+        if isinstance(content, str):
+            tokens += count_tokens_accurate(content)
+        elif isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict) and 'text' in item:
+                    tokens += count_tokens_accurate(item['text'])
+    return tokens
+
+
 def get_transcript_size(transcript_path):
-    """Read transcript and count tokens accurately, with caching."""
+    """Read transcript and count tokens accurately, with incremental caching."""
     if not transcript_path or not os.path.exists(transcript_path):
         return 0, 0
 
-    # Check cache first (avoids expensive recount if file unchanged)
+    # Check cache first
     cached = get_cached_count(transcript_path)
     if cached:
-        return cached
+        tokens, messages, offset, can_increment = cached
+        if not can_increment:
+            # File unchanged, return cached values
+            return tokens, messages
+
+        # Incremental scan from last offset
+        try:
+            with open(transcript_path, 'r') as f:
+                f.seek(offset)
+                new_tokens = 0
+                new_messages = 0
+                for line in f:
+                    try:
+                        entry = json.loads(line.strip())
+                        new_tokens += _count_tokens_in_entry(entry)
+                        new_messages += 1
+                    except json.JSONDecodeError:
+                        continue
+                new_offset = f.tell()
+
+            total_tokens = tokens + new_tokens
+            total_messages = messages + new_messages
+            update_cache(transcript_path, total_tokens, total_messages, new_offset)
+            return total_tokens, total_messages
+        except (OSError, PermissionError):
+            pass  # Fall through to full scan
 
     # Fast path: check file size first (avoid full scan for small files)
     # ~4 bytes per token on average, 40K tokens ≈ 160KB
@@ -117,24 +171,23 @@ def get_transcript_size(transcript_path):
             for line in f:
                 try:
                     entry = json.loads(line.strip())
-                    if 'content' in entry:
-                        content = entry['content']
-                        if isinstance(content, str):
-                            total_tokens += count_tokens(content)
-                        elif isinstance(content, list):
-                            for item in content:
-                                if isinstance(item, dict) and 'text' in item:
-                                    total_tokens += count_tokens(item['text'])
+                    total_tokens += _count_tokens_in_entry(entry)
                     message_count += 1
                 except json.JSONDecodeError:
                     continue
+            final_offset = f.tell()
     except (OSError, PermissionError):
         return 0, 0
 
-    # Cache the result for next time
-    update_cache(transcript_path, total_tokens, message_count)
+    # Cache the result with file offset for incremental updates
+    update_cache(transcript_path, total_tokens, message_count, final_offset)
 
     return total_tokens, message_count
+
+
+# ==============================================================================
+# Session Activity Summary
+# ==============================================================================
 
 def get_session_summary(transcript_path):
     """Generate brief summary of session activity for compaction guidance."""
@@ -185,48 +238,3 @@ def get_session_summary(transcript_path):
         parts.append(f"Tools: {tools_str}")
 
     return " | ".join(parts) if parts else ""
-
-def check_context(ctx: dict) -> dict | None:
-    """Handler function for dispatcher. Returns message dict or None."""
-    transcript_path = ctx.get('transcript_path', '')
-    token_count, message_count = get_transcript_size(transcript_path)
-
-    if token_count >= TOKEN_CRITICAL_THRESHOLD:
-        # Pre-compact backup (audit trail)
-        if transcript_path:
-            backup_path = backup_transcript(transcript_path, "pre_compact")
-            if backup_path:
-                log_event("context_monitor", "pre_compact_backup", {
-                    "tokens": token_count,
-                    "backup": backup_path
-                })
-
-        summary = get_session_summary(transcript_path)
-        lines = [f"[Context Monitor] CRITICAL: {token_count:,} tokens ({message_count} msgs)"]
-        lines.append("  Transcript backed up automatically.")
-        if summary:
-            lines.append(f"  Session: {summary}")
-        lines.append("  Recommend /compact. Preserve: current task, modified files, errors.")
-        return {"message": "\n".join(lines)}
-
-    elif token_count >= TOKEN_WARNING_THRESHOLD:
-        return {"message": f"[Context Monitor] {token_count:,} tokens. /compact available if needed."}
-
-    return None
-
-
-@graceful_main("context_monitor")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
-    result = check_context(ctx)
-    if result and result.get("message"):
-        print(result["message"])
-
-    sys.exit(0)
-
-if __name__ == "__main__":
-    main()

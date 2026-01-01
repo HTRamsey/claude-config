@@ -326,16 +326,6 @@
             "timeout": 5
           }
         ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/notify_complete_async.sh",
-            "timeout": 15
-          }
-        ]
       }
     ],
     "Stop": [
@@ -365,7 +355,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/handlers/state_saver.py",
+            "command": "$HOME/.claude/hooks/handlers/context_manager.py",
             "timeout": 5
           }
         ]

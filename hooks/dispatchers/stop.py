@@ -10,14 +10,13 @@ Runs on Stop event to handle session ending.
 """
 import json
 import os
-import re
 import subprocess
-import sys
 import time
 from pathlib import Path
 
+from hooks.dispatchers.base import SimpleDispatcher
 from hooks.config import Timeouts, Thresholds, AutoContinue
-from hooks.hook_utils import graceful_main, log_event, read_state, write_state
+from hooks.hook_utils import log_event, read_state, write_state
 
 
 # =============================================================================
@@ -278,38 +277,44 @@ def handle_stop(ctx: dict) -> tuple[list[str], dict | None]:
 
 
 # =============================================================================
-# Main
+# Dispatcher
 # =============================================================================
 
-@graceful_main("stop_handler")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
+class StopDispatcher(SimpleDispatcher):
+    """Stop event dispatcher with special output handling."""
 
-    event_type = ctx.get("event_type", "")
-    if event_type != "Stop":
-        sys.exit(0)
+    DISPATCHER_NAME = "stop_handler"
+    EVENT_TYPE = "Stop"
 
-    messages, continue_result = handle_stop(ctx)
+    def __init__(self):
+        super().__init__()
+        self._continue_result = None
 
-    # Output uncommitted change warnings
-    if messages:
-        print("[Uncommitted Changes] Before ending session:")
-        for msg in messages:
-            print(f"  - {msg}")
-        if any("Uncommitted" in m for m in messages):
-            print("  Consider: git commit -m 'WIP: <description>'")
-        if any("ahead" in m for m in messages):
-            print("  Consider: git push")
+    def handle(self, ctx: dict) -> list[str]:
+        messages, continue_result = handle_stop(ctx)
+        self._continue_result = continue_result
+        return messages
 
-    # Output continue result
-    if continue_result:
-        print(json.dumps(continue_result))
+    def format_output(self, messages: list[str]) -> str | None:
+        """Custom formatting for uncommitted changes + continue result."""
+        output_parts = []
 
-    sys.exit(0)
+        # Format uncommitted change warnings
+        if messages:
+            output_parts.append("[Uncommitted Changes] Before ending session:")
+            for msg in messages:
+                output_parts.append(f"  - {msg}")
+            if any("Uncommitted" in m for m in messages):
+                output_parts.append("  Consider: git commit -m 'WIP: <description>'")
+            if any("ahead" in m for m in messages):
+                output_parts.append("  Consider: git push")
+
+        # Add continue result as JSON
+        if self._continue_result:
+            output_parts.append(json.dumps(self._continue_result))
+
+        return "\n".join(output_parts) if output_parts else None
 
 
 if __name__ == "__main__":
-    main()
+    StopDispatcher().run()

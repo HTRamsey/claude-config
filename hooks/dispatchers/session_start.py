@@ -9,12 +9,12 @@ Handlers:
 import json
 import os
 import subprocess
-import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from hooks.hook_utils import graceful_main, log_event, read_stdin_context
+from hooks.dispatchers.base import SimpleDispatcher
+from hooks.hook_utils import log_event
 
 
 # =============================================================================
@@ -325,31 +325,30 @@ def handle_start_viewer() -> str | None:
 
 
 # =============================================================================
-# Dispatcher Main
+# Dispatcher
 # =============================================================================
 
-@graceful_main("session_start_dispatcher")
-def main():
-    ctx = read_stdin_context()
-    cwd = ctx.get('cwd', os.getcwd())
+class SessionStartDispatcher(SimpleDispatcher):
+    """SessionStart event dispatcher."""
 
-    log_event("session_start_dispatcher", "dispatch", {"cwd": cwd})
+    DISPATCHER_NAME = "session_start_dispatcher"
+    EVENT_TYPE = None  # SessionStart doesn't have event_type in context
 
-    output_parts = ["[Session Start]"]
+    def handle(self, ctx: dict) -> list[str]:
+        cwd = ctx.get('cwd', os.getcwd())
+        output_parts = ["[Session Start]"]
 
-    # Handler 1: Session context (git, usage, project type)
-    context = handle_session_context(cwd)
-    output_parts.extend(context)
+        # Handler 1: Session context (git, usage, project type)
+        context = handle_session_context(cwd)
+        output_parts.extend(context)
 
-    # Handler 2: Start viewer (optional)
-    if viewer_msg := handle_start_viewer():
-        output_parts.append(viewer_msg)
+        # Handler 2: Start viewer (optional)
+        if viewer_msg := handle_start_viewer():
+            output_parts.append(viewer_msg)
 
-    if len(output_parts) > 1:
-        print('\n'.join(output_parts))
-
-    sys.exit(0)
+        # Only return if there's content beyond the header
+        return output_parts if len(output_parts) > 1 else []
 
 
 if __name__ == "__main__":
-    main()
+    SessionStartDispatcher().run()

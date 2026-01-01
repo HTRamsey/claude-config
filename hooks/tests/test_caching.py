@@ -2,7 +2,7 @@
 import pytest
 import time
 from unittest.mock import Mock
-from hooks.hook_utils.caching import TTLCachedLoader
+from hooks.hook_utils.state import TTLCachedLoader
 
 
 def test_ttl_cached_loader_returns_cached_value():

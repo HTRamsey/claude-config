@@ -140,20 +140,6 @@ class TestBaseDispatcher(TestCase):
         result = self.dispatcher.run_handler("handler_a", {})
         self.assertIsNone(result)
 
-    def test_build_result_with_messages(self):
-        """Build result should join messages."""
-        result = self.dispatcher._build_result(["msg1", "msg2"])
-
-        self.assertIsNotNone(result)
-        self.assertEqual(result["hookSpecificOutput"]["hookEventName"], "TestEvent")
-        self.assertIn("msg1", result["hookSpecificOutput"]["message"])
-        self.assertIn("msg2", result["hookSpecificOutput"]["message"])
-
-    def test_build_result_empty_messages(self):
-        """Empty messages should return None."""
-        result = self.dispatcher._build_result([])
-        self.assertIsNone(result)
-
     def test_validate_handlers_logs_failures(self):
         """Validation should log failed handler imports."""
         # Set up a handler that returns None (simulating import failure)
@@ -164,19 +150,6 @@ class TestBaseDispatcher(TestCase):
             # Should have logged something about failed handlers
             output = mock_stderr.getvalue()
             # Note: May or may not produce output depending on actual failures
-
-
-class TestDispatcherTermination(TestCase):
-    """Tests for early termination behavior."""
-
-    def setUp(self):
-        self.dispatcher = MockDispatcher()
-
-    def test_should_terminate_default_false(self):
-        """Default implementation should not terminate."""
-        result = {"hookSpecificOutput": {"message": "test"}}
-        should_stop = self.dispatcher._should_terminate(result, "handler", "Tool")
-        self.assertFalse(should_stop)
 
 
 class TestDispatcherIntegration(TestCase):

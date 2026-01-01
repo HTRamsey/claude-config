@@ -16,6 +16,34 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import Sequence
+
+
+# =============================================================================
+# Pattern Compilation Factory
+# =============================================================================
+
+def _make_pattern_compiler(
+    raw_patterns: Sequence,
+    flags: int = re.IGNORECASE,
+    with_value: bool = False
+):
+    """Create a cached pattern compiler function.
+
+    Args:
+        raw_patterns: List of patterns or (pattern, value) tuples
+        flags: Regex flags (default: re.IGNORECASE)
+        with_value: If True, expects (pattern, value) tuples
+
+    Returns:
+        A cached function that compiles the patterns
+    """
+    @lru_cache(maxsize=1)
+    def compile_patterns():
+        if with_value:
+            return [(re.compile(p, flags), v) for p, v in raw_patterns]
+        return [re.compile(p, flags) for p in raw_patterns]
+    return compile_patterns
 
 # =============================================================================
 # Paths
@@ -86,74 +114,14 @@ class TimeoutConfig:
     def __post_init__(self):
         object.__setattr__(self, 'handler_timeout_s', self.handler_timeout_ms / 1000.0)
 
-    # Backwards compatibility: UPPER_CASE aliases
-    @property
-    def HANDLER_TIMEOUT_MS(self) -> int:
-        return self.handler_timeout_ms
-
-    @property
-    def HANDLER_TIMEOUT_S(self) -> float:
-        return self.handler_timeout_s
-
-    @property
-    def CACHE_TTL(self) -> float:
-        return self.cache_ttl
-
-    @property
-    def HOOK_DISABLED_TTL(self) -> float:
-        return self.hook_disabled_ttl
-
-    @property
-    def HIERARCHY_CACHE_TTL(self) -> float:
-        return self.hierarchy_cache_ttl
-
-    @property
-    def PATTERNS_CACHE_TTL(self) -> float:
-        return self.patterns_cache_ttl
-
-    @property
-    def EXPLORATION_CACHE_TTL(self) -> int:
-        return self.exploration_cache_ttl
-
-    @property
-    def RESEARCH_CACHE_TTL(self) -> int:
-        return self.research_cache_ttl
-
-    @property
-    def STATE_MAX_AGE(self) -> int:
-        return self.state_max_age
-
-    @property
-    def CHECKPOINT_INTERVAL(self) -> int:
-        return self.checkpoint_interval
-
-    @property
-    def CLEANUP_INTERVAL(self) -> int:
-        return self.cleanup_interval
-
-    @property
-    def WARNING_WINDOW(self) -> int:
-        return self.warning_window
-
-    @property
-    def CONTINUE_WINDOW(self) -> int:
-        return self.continue_window
-
-    @property
-    def STALE_TIME_THRESHOLD(self) -> int:
-        return self.stale_time_threshold
-
-    @property
-    def TOOL_TRACKER_MAX_AGE(self) -> int:
-        return self.tool_tracker_max_age
-
-    @property
-    def DAILY_STATS_CACHE_TTL(self) -> int:
-        return self.daily_stats_cache_ttl
-
-    @property
-    def TOKEN_CACHE_TTL(self) -> float:
-        return self.token_cache_ttl
+    def __getattr__(self, name: str):
+        """Support UPPER_CASE aliases for backwards compatibility."""
+        if name.isupper() or ('_' in name and name == name.upper()):
+            try:
+                return object.__getattribute__(self, name.lower())
+            except AttributeError:
+                pass
+        raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'")
 
 
 # Create singleton instance with same name for backwards compatibility
@@ -182,8 +150,8 @@ class ThresholdConfig:
     similarity_threshold: float = 0.8  # Fuzzy pattern matching
 
     # Large file detection
-    large_file_lines: int = 200
-    large_file_bytes: int = 15000
+    large_file_lines: int = 500
+    large_file_bytes: int = 50000
 
     # Batch detection
     batch_similarity_threshold: int = 3  # Suggest after 3 similar ops
@@ -212,98 +180,14 @@ class ThresholdConfig:
     # Tool success tracker
     tool_failure_threshold: int = 2  # Suggest alternative after N failures
 
-    # Backwards compatibility: UPPER_CASE aliases
-    @property
-    def OUTPUT_WARNING(self) -> int:
-        return self.output_warning
-
-    @property
-    def OUTPUT_CRITICAL(self) -> int:
-        return self.output_critical
-
-    @property
-    def TOKEN_WARNING(self) -> int:
-        return self.token_warning
-
-    @property
-    def TOKEN_CRITICAL(self) -> int:
-        return self.token_critical
-
-    @property
-    def DAILY_TOKEN_WARNING(self) -> int:
-        return self.daily_token_warning
-
-    @property
-    def CHARS_PER_TOKEN(self) -> int:
-        return self.chars_per_token
-
-    @property
-    def MAX_READS_TRACKED(self) -> int:
-        return self.max_reads_tracked
-
-    @property
-    def MAX_SEARCHES_TRACKED(self) -> int:
-        return self.max_searches_tracked
-
-    @property
-    def STALE_MESSAGE_THRESHOLD(self) -> int:
-        return self.stale_message_threshold
-
-    @property
-    def SIMILARITY_THRESHOLD(self) -> float:
-        return self.similarity_threshold
-
-    @property
-    def LARGE_FILE_LINES(self) -> int:
-        return self.large_file_lines
-
-    @property
-    def LARGE_FILE_BYTES(self) -> int:
-        return self.large_file_bytes
-
-    @property
-    def BATCH_SIMILARITY_THRESHOLD(self) -> int:
-        return self.batch_similarity_threshold
-
-    @property
-    def TDD_WARNING_THRESHOLD(self) -> int:
-        return self.tdd_warning_threshold
-
-    @property
-    def MIN_LINES_FOR_TDD(self) -> int:
-        return self.min_lines_for_tdd
-
-    @property
-    def MAX_REFLEXION_ENTRIES(self) -> int:
-        return self.max_reflexion_entries
-
-    @property
-    def MAX_ERROR_BACKUPS(self) -> int:
-        return self.max_error_backups
-
-    @property
-    def MAX_CACHE_ENTRIES(self) -> int:
-        return self.max_cache_entries
-
-    @property
-    def MAX_CONTINUATIONS(self) -> int:
-        return self.max_continuations
-
-    @property
-    def MIN_NOTIFY_DURATION(self) -> int:
-        return self.min_notify_duration
-
-    @property
-    def STATS_FLUSH_INTERVAL(self) -> int:
-        return self.stats_flush_interval
-
-    @property
-    def PERMISSION_APPROVAL_THRESHOLD(self) -> int:
-        return self.permission_approval_threshold
-
-    @property
-    def TOOL_FAILURE_THRESHOLD(self) -> int:
-        return self.tool_failure_threshold
+    def __getattr__(self, name: str):
+        """Support UPPER_CASE aliases for backwards compatibility."""
+        if name.isupper() or ('_' in name and name == name.upper()):
+            try:
+                return object.__getattribute__(self, name.lower())
+            except AttributeError:
+                pass
+        raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'")
 
 
 # Create singleton instance with same name for backwards compatibility
@@ -336,30 +220,14 @@ class FilePatternConfig:
     # Large output tools (expect big responses)
     large_output_tools: tuple = ("Task", "WebFetch", "WebSearch")
 
-    # Backwards compatibility: UPPER_CASE aliases
-    @property
-    def CODE_EXTENSIONS(self) -> frozenset:
-        return self.code_extensions
-
-    @property
-    def TEST_PATTERNS(self) -> tuple:
-        return self.test_patterns
-
-    @property
-    def TDD_SKIP_PATTERNS(self) -> tuple:
-        return self.tdd_skip_patterns
-
-    @property
-    def ALWAYS_SUMMARIZE(self) -> frozenset:
-        return self.always_summarize
-
-    @property
-    def SKIP_SUMMARIZE(self) -> frozenset:
-        return self.skip_summarize
-
-    @property
-    def LARGE_OUTPUT_TOOLS(self) -> tuple:
-        return self.large_output_tools
+    def __getattr__(self, name: str):
+        """Support UPPER_CASE aliases for backwards compatibility."""
+        if name.isupper() or ('_' in name and name == name.upper()):
+            try:
+                return object.__getattribute__(self, name.lower())
+            except AttributeError:
+                pass
+        raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'")
 
 
 # Create singleton instance with same name for backwards compatibility
@@ -654,6 +522,213 @@ Build = BuildConfig()
 
 
 # =============================================================================
+# Tool Analytics Configuration
+# =============================================================================
+
+@dataclass(frozen=True)
+class ToolAnalyticsConfig:
+    """Error patterns and alternatives for tool failure detection."""
+
+    # Error patterns with suggestions for tool_analytics handler
+    ERROR_PATTERNS_RAW: dict = None  # Set in __post_init__
+
+    # Tool alternatives for repeated failures
+    TOOL_ALTERNATIVES: dict = None  # Set in __post_init__
+
+    def __post_init__(self):
+        error_patterns = {
+            r"old_string.*not found|not unique|no match": {
+                "tool": "Edit",
+                "suggestion": "Re-read the file to get current content, or use Read tool first",
+                "action": "read_first"
+            },
+            r"file.*not found|no such file": {
+                "tool": "*",
+                "suggestion": "Check file path with: smart-find.sh <pattern> .",
+                "action": "find_file"
+            },
+            r"permission denied|access denied|not permitted": {
+                "tool": "*",
+                "suggestion": "Check file permissions or try Task(subagent_type=Explore) for read-only exploration",
+                "action": "check_perms"
+            },
+            r"no matches|no results|pattern not found": {
+                "tool": "Grep",
+                "suggestion": "Try broader pattern or use Task(subagent_type=Explore) for fuzzy search",
+                "action": "broaden_search"
+            },
+            r"build failed|compilation error|make.*error": {
+                "tool": "Bash",
+                "suggestion": "Pipe through compress.sh --type build to focus on errors",
+                "action": "compress_output"
+            },
+            r"test.*failed|assertion.*error|pytest.*failed": {
+                "tool": "Bash",
+                "suggestion": "Pipe through compress.sh --type tests to focus on failures",
+                "action": "compress_output"
+            },
+            r"conflict|merge.*failed|rebase.*failed": {
+                "tool": "Bash",
+                "suggestion": "Use smart-diff.sh to understand conflicts",
+                "action": "use_diff"
+            },
+            r"timeout|timed out|killed": {
+                "tool": "*",
+                "suggestion": "Command too slow - try limiting scope or using more specific patterns",
+                "action": "reduce_scope"
+            },
+        }
+        object.__setattr__(self, 'ERROR_PATTERNS_RAW', error_patterns)
+
+        tool_alternatives = {
+            "Grep": "Consider Task(subagent_type=Explore) for complex searches",
+            "Glob": "Try smart-find.sh with fd for faster, .gitignore-aware search",
+            "Read": "For large files, use smart-view.sh",
+            "Edit": "If edits keep failing, re-read file or check for concurrent modifications",
+            "Bash": "For build/test commands, pipe through compress-*.sh scripts",
+        }
+        object.__setattr__(self, 'TOOL_ALTERNATIVES', tool_alternatives)
+
+    @staticmethod
+    def get_error_patterns():
+        """Get compiled error patterns for tool failure detection."""
+        return _compile_tool_analytics_patterns()
+
+
+# Create singleton instance
+ToolAnalytics = ToolAnalyticsConfig()
+
+
+# =============================================================================
+# Suggestion Engine Patterns
+# =============================================================================
+
+class SuggestionPatterns:
+    """Patterns for suggestion engine (skill suggestions, agent chaining, optimization)."""
+
+    # Skill file patterns for creator suggestions
+    SKILL_SUGGESTIONS_RAW = [
+        {"pattern": r"\.claude/hooks/.*\.py$", "skill": "hook-creator", "type": "hook"},
+        {"pattern": r"\.claude/agents/.*\.md$", "skill": "agent-creator", "type": "agent"},
+        {"pattern": r"\.claude/commands/.*\.md$", "skill": "command-creator", "type": "command"},
+        {"pattern": r"\.claude/skills/.*/SKILL\.md$", "skill": "skill-creator", "type": "skill"},
+    ]
+
+    # Agent recommendations for subagent suggestions
+    AGENT_RECOMMENDATIONS = {
+        "exploration": ("Explore", "Haiku-powered codebase exploration"),
+        "lookup": ("quick-lookup", "Single fact retrieval (Haiku, 10x cheaper)"),
+    }
+
+    # Bash command alternatives (pattern -> (script, reason))
+    BASH_ALTERNATIVES_RAW = {
+        # Offload scripts (huge token savings)
+        r"^grep\s": ("offload-grep.sh", "97% token savings"),
+        r"^rg\s": ("offload-grep.sh", "97% token savings"),
+        r"^find\s": ("offload-find.sh", "95% token savings"),
+        r"^find\s.*-name": ("offload-find.sh", "uses fd, 10x faster, respects .gitignore"),
+
+        # Compress scripts (build/test output)
+        r"^npm\s+(test|run\s+test)": ("compress.sh --type tests", "pipe output"),
+        r"^pytest": ("compress.sh --type tests", "pipe output"),
+        r"^make\b": ("compress.sh --type build", "pipe for errors only"),
+        r"^cmake\b": ("compress.sh --type build", "pipe for errors only"),
+        r"^cat\s.*\.(log|txt)": ("compress.sh --type logs", "errors/warnings only"),
+
+        # Smart viewers (unified file viewing)
+        r"^cat\s": ("smart/smart-view.sh", "unified viewer with syntax highlighting"),
+        r"^head\s": ("smart/smart-view.sh", "unified viewer with line range"),
+        r"^tail\s": ("smart/smart-view.sh", "unified viewer with line range"),
+
+        # Smart AST (structural code search)
+        r"^grep.*def\s": ("smart-ast.sh", "uses ast-grep, finds function definitions structurally"),
+        r"^grep.*class\s": ("smart-ast.sh", "uses ast-grep, finds class definitions structurally"),
+        r"^grep.*function\s": ("smart-ast.sh", "uses ast-grep, finds function definitions structurally"),
+        r"^grep.*import\s": ("smart-ast.sh", "uses ast-grep, finds imports structurally"),
+
+        # Smart utilities (modern CLI replacements)
+        r"^ls\s+(-la|-l|-a)": ("smart-ls.sh", "uses eza, 87% smaller output"),
+        r"^ls\s*$": ("smart-ls.sh", "uses eza, 87% smaller output"),
+        r"^tree\s": ("smart-tree.sh", "uses eza --tree, respects .gitignore"),
+        r"^du\s": ("smart-du.sh", "uses dust, compact visual output"),
+        r"^sed\s": ("smart-replace.sh", "uses sd, simpler syntax"),
+        r"^diff\s": ("smart-difft.sh", "uses difftastic, structural diff"),
+        r"^git\s+diff": ("smart-diff.sh", "uses delta, 99% savings on large diffs"),
+        r"^git\s+blame": ("smart-blame.sh", "filters formatting commits, adds context"),
+        r"^(cat|less).*\.json\s*\|\s*jq": ("smart-json.sh", "simpler field extraction syntax"),
+    }
+
+    # Agent chaining rules for Task output analysis
+    CHAIN_RULES_RAW = [
+        {
+            "patterns": [
+                r"(?i)(sql injection|xss|csrf|command injection|path traversal)",
+                r"(?i)(hardcoded (credential|secret|password|api.?key))",
+                r"(?i)(authentication|authorization).*(missing|bypass|vulnerable)",
+                r"(?i)(insecure|vulnerable).*(crypto|random|hash)",
+                r"(?i)🔴.*security",
+            ],
+            "agent": "code-reviewer",
+            "reason": "Security vulnerability detected - deep security analysis recommended",
+        },
+        {
+            "patterns": [
+                r"(?i)(n\+1|n \+ 1).*(query|queries)",
+                r"(?i)(memory leak|unbounded|allocation in (hot|loop))",
+                r"(?i)O\(n[²2]\)|O\(n\^2\)",
+                r"(?i)(performance|slow).*(critical|severe|significant)",
+                r"(?i)🟡.*performance",
+            ],
+            "agent": "code-reviewer",
+            "reason": "Performance issue detected - code review with performance focus recommended",
+        },
+        {
+            "patterns": [
+                r"(?i)(accessibility|a11y|wcag|aria).*(missing|issue|violation)",
+                r"(?i)(screen reader|keyboard).*(navigation|focus|trap)",
+                r"(?i)\.(jsx|tsx|vue|svelte|qml):\d+",
+            ],
+            "agent": "code-reviewer",
+            "reason": "UI code or accessibility issue - code review with accessibility focus recommended",
+        },
+        {
+            "patterns": [
+                r"(?i)(no test|missing test|untested|test coverage).*(low|none|missing)",
+                r"(?i)(edge case|boundary|error handling).*(not|missing|untested)",
+            ],
+            "agent": "test-generator",
+            "reason": "Test gaps detected - test generation recommended",
+        },
+        {
+            "patterns": [
+                r"(?i)(unused|dead|orphan).*(function|class|import|variable|code)",
+                r"(?i)(deprecated|obsolete).*(still|found|exists)",
+            ],
+            "agent": "code-reviewer",
+            "reason": "Potential dead code - code review for cleanup recommended",
+        },
+    ]
+
+    # Agents that can be chained from Task output
+    CHAINABLE_AGENTS = {"code-reviewer", "Explore", "error-explainer", "quick-lookup"}
+
+    @staticmethod
+    def get_skill_suggestions():
+        """Get compiled skill suggestion patterns."""
+        return _compile_skill_suggestions()
+
+    @staticmethod
+    def get_bash_alternatives():
+        """Get compiled bash command alternatives."""
+        return _compile_bash_alternatives()
+
+    @staticmethod
+    def get_chain_rules():
+        """Get compiled agent chaining rules."""
+        return _compile_chain_rules()
+
+
+# =============================================================================
 # State Limits (centralized magic numbers)
 # =============================================================================
 
@@ -679,78 +754,14 @@ class LimitConfig:
     daily_stats_cache_maxsize: int = 1  # Single entry for daily stats cache
     token_cache_maxsize: int = 10  # Token cache (context monitor)
 
-    # Backwards compatibility: UPPER_CASE aliases
-    @property
-    def MAX_SUGGESTED_SKILLS(self) -> int:
-        return self.max_suggested_skills
-
-    @property
-    def MAX_RECENT_PATTERNS(self) -> int:
-        return self.max_recent_patterns
-
-    @property
-    def MAX_FUZZY_SEARCH_ENTRIES(self) -> int:
-        return self.max_fuzzy_search_entries
-
-    @property
-    def MAX_CHECKPOINTS(self) -> int:
-        return self.max_checkpoints
-
-    @property
-    def MAX_SEEN_SESSIONS(self) -> int:
-        return self.max_seen_sessions
-
-    @property
-    def MAX_BACKUPS(self) -> int:
-        return self.max_backups
-
-    @property
-    def MAX_CHAIN_RECOMMENDATIONS(self) -> int:
-        return self.max_chain_recommendations
-
-    @property
-    def MAX_MESSAGES_JOINED(self) -> int:
-        return self.max_messages_joined
-
-    @property
-    def CONTENT_TRUNCATE_SUMMARY(self) -> int:
-        return self.content_truncate_summary
-
-    @property
-    def CONTENT_TRUNCATE_CACHE(self) -> int:
-        return self.content_truncate_cache
-
-    @property
-    def CONTENT_TRUNCATE_FULL(self) -> int:
-        return self.content_truncate_full
-
-    @property
-    def PATTERNS_CACHE_MAXSIZE(self) -> int:
-        return self.patterns_cache_maxsize
-
-    @property
-    def HIERARCHY_CACHE_MAXSIZE(self) -> int:
-        return self.hierarchy_cache_maxsize
-
-    @property
-    def PROMPT_TRUNCATE(self) -> int:
-        return self.prompt_truncate
-
-    @property
-    def COMMAND_TRUNCATE(self) -> int:
-        return self.command_truncate
-
-    @property
-    def URL_TRUNCATE(self) -> int:
-        return self.url_truncate
-
-    @property
-    def DAILY_STATS_CACHE_MAXSIZE(self) -> int:
-        return self.daily_stats_cache_maxsize
-
-    @property
-    def TOKEN_CACHE_MAXSIZE(self) -> int:
-        return self.token_cache_maxsize
+    def __getattr__(self, name: str):
+        """Support UPPER_CASE aliases for backwards compatibility."""
+        if name.isupper() or ('_' in name and name == name.upper()):
+            try:
+                return object.__getattribute__(self, name.lower())
+            except AttributeError:
+                pass
+        raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'")
 
 
 # Create singleton instance with same name for backwards compatibility
@@ -780,118 +791,83 @@ def fast_json_dumps(obj: dict) -> bytes:
 
 
 # =============================================================================
-# Compiled Pattern Cache (using lru_cache for thread safety)
+# Compiled Pattern Cache (using factory for consistency)
 # =============================================================================
 
-@lru_cache(maxsize=1)
-def _compile_blocked_patterns():
-    """Compile blocked dangerous command patterns."""
-    return [
-        (re.compile(p, re.IGNORECASE), r)
-        for p, r in DangerousCommands.BLOCKED_PATTERNS_RAW
-    ]
+# Pattern compilers using factory (with_value=True for (pattern, reason) tuples)
+_compile_blocked_patterns = _make_pattern_compiler(
+    DangerousCommands.BLOCKED_PATTERNS_RAW, with_value=True)
+_compile_warning_patterns = _make_pattern_compiler(
+    DangerousCommands.WARNING_PATTERNS_RAW, with_value=True)
 
+# Simple pattern lists (IGNORECASE is default)
+_compile_state_saver_patterns = _make_pattern_compiler(StateSaver.RISKY_PATTERNS_RAW)
+_compile_incomplete_patterns = _make_pattern_compiler(AutoContinue.INCOMPLETE_PATTERNS_RAW)
+_compile_complete_patterns = _make_pattern_compiler(AutoContinue.COMPLETE_PATTERNS_RAW)
+_compile_read_permissions_patterns = _make_pattern_compiler(SmartPermissions.READ_PATTERNS_RAW)
+_compile_write_permissions_patterns = _make_pattern_compiler(SmartPermissions.WRITE_PATTERNS_RAW)
+_compile_never_permissions_patterns = _make_pattern_compiler(SmartPermissions.NEVER_PATTERNS_RAW)
+_compile_build_commands = _make_pattern_compiler(Build.BUILD_COMMANDS_RAW)
 
-@lru_cache(maxsize=1)
-def _compile_warning_patterns():
-    """Compile warning dangerous command patterns."""
-    return [
-        (re.compile(p, re.IGNORECASE), r)
-        for p, r in DangerousCommands.WARNING_PATTERNS_RAW
-    ]
+# Credential patterns (no IGNORECASE, with name tuples)
+_compile_credential_patterns = _make_pattern_compiler(
+    Credentials.sensitive_patterns, flags=0, with_value=True)
 
-
-@lru_cache(maxsize=1)
-def _compile_state_saver_patterns():
-    """Compile risky state saver patterns."""
-    return [
-        re.compile(p, re.IGNORECASE)
-        for p in StateSaver.RISKY_PATTERNS_RAW
-    ]
-
-
-@lru_cache(maxsize=1)
-def _compile_incomplete_patterns():
-    """Compile incomplete auto-continue patterns."""
-    return [
-        re.compile(p, re.IGNORECASE)
-        for p in AutoContinue.INCOMPLETE_PATTERNS_RAW
-    ]
-
-
-@lru_cache(maxsize=1)
-def _compile_complete_patterns():
-    """Compile complete auto-continue patterns."""
-    return [
-        re.compile(p, re.IGNORECASE)
-        for p in AutoContinue.COMPLETE_PATTERNS_RAW
-    ]
-
-
-@lru_cache(maxsize=1)
-def _compile_read_permissions_patterns():
-    """Compile read auto-approval patterns."""
-    return [
-        re.compile(p, re.IGNORECASE)
-        for p in SmartPermissions.READ_PATTERNS_RAW
-    ]
-
-
-@lru_cache(maxsize=1)
-def _compile_write_permissions_patterns():
-    """Compile write auto-approval patterns."""
-    return [
-        re.compile(p, re.IGNORECASE)
-        for p in SmartPermissions.WRITE_PATTERNS_RAW
-    ]
-
-
-@lru_cache(maxsize=1)
-def _compile_never_permissions_patterns():
-    """Compile never-approve patterns."""
-    return [
-        re.compile(p, re.IGNORECASE)
-        for p in SmartPermissions.NEVER_PATTERNS_RAW
-    ]
-
-
-@lru_cache(maxsize=1)
-def _compile_credential_patterns():
-    """Compile credential scanner patterns."""
-    return [
-        (re.compile(p), n)
-        for p, n in Credentials.sensitive_patterns
-    ]
-
-
-@lru_cache(maxsize=1)
-def get_protected_patterns_compiled():
-    """Get compiled protected file patterns."""
-    return [re.compile(p) for p in ProtectedFiles.PROTECTED_PATTERNS]
-
-
-@lru_cache(maxsize=1)
-def get_write_only_patterns_compiled():
-    """Get compiled write-only patterns."""
-    return [re.compile(p) for p in ProtectedFiles.WRITE_ONLY_PATTERNS]
-
-
-@lru_cache(maxsize=1)
-def get_allowed_patterns_compiled():
-    """Get compiled allowed override patterns."""
-    return [re.compile(p) for p in ProtectedFiles.ALLOWED_PATHS]
-
-
-@lru_cache(maxsize=1)
-def _compile_build_commands():
-    """Compile build command patterns."""
-    return [re.compile(p, re.IGNORECASE) for p in Build.BUILD_COMMANDS_RAW]
+# Protected file patterns (no IGNORECASE)
+get_protected_patterns_compiled = _make_pattern_compiler(
+    ProtectedFiles.PROTECTED_PATTERNS, flags=0)
+get_write_only_patterns_compiled = _make_pattern_compiler(
+    ProtectedFiles.WRITE_ONLY_PATTERNS, flags=0)
+get_allowed_patterns_compiled = _make_pattern_compiler(
+    ProtectedFiles.ALLOWED_PATHS, flags=0)
 
 
 @lru_cache(maxsize=1)
 def _compile_error_patterns():
-    """Compile error patterns by tool."""
-    result = {}
-    for tool, patterns in Build.ERROR_PATTERNS_RAW.items():
-        result[tool] = [(re.compile(p), cat) for p, cat in patterns]
-    return result
+    """Compile error patterns by tool (dict structure, kept as-is)."""
+    return {
+        tool: [(re.compile(p), cat) for p, cat in patterns]
+        for tool, patterns in Build.ERROR_PATTERNS_RAW.items()
+    }
+
+
+@lru_cache(maxsize=1)
+def _compile_tool_analytics_patterns():
+    """Compile tool analytics error patterns."""
+    return [(re.compile(p, re.IGNORECASE), info)
+            for p, info in ToolAnalytics.ERROR_PATTERNS_RAW.items()]
+
+
+# =============================================================================
+# Suggestion Engine Pattern Compilers
+# =============================================================================
+
+@lru_cache(maxsize=1)
+def _compile_skill_suggestions():
+    """Compile skill suggestion patterns."""
+    return [
+        {"pattern": re.compile(s["pattern"]), "skill": s["skill"], "type": s["type"]}
+        for s in SuggestionPatterns.SKILL_SUGGESTIONS_RAW
+    ]
+
+
+@lru_cache(maxsize=1)
+def _compile_bash_alternatives():
+    """Compile bash alternative patterns."""
+    return [
+        (re.compile(p, re.IGNORECASE), alt, reason)
+        for p, (alt, reason) in SuggestionPatterns.BASH_ALTERNATIVES_RAW.items()
+    ]
+
+
+@lru_cache(maxsize=1)
+def _compile_chain_rules():
+    """Compile agent chaining rules."""
+    return [
+        {
+            "patterns": [re.compile(p) for p in rule["patterns"]],
+            "agent": rule["agent"],
+            "reason": rule["reason"],
+        }
+        for rule in SuggestionPatterns.CHAIN_RULES_RAW
+    ]

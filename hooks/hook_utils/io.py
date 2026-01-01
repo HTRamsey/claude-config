@@ -1,5 +1,11 @@
 """
 File I/O utilities with locking and graceful error handling.
+
+Includes:
+- File locking (file_lock)
+- JSON I/O (safe_load_json, safe_save_json, atomic_write_json)
+- Safe file operations (safe_stat, safe_mtime, safe_exists)
+- Path utilities (normalize_path, expand_path)
 """
 import fcntl
 import json
@@ -10,6 +16,8 @@ from pathlib import Path
 
 from filelock import FileLock
 from hooks.config import fast_json_loads, fast_json_dumps
+
+PathLike = str | Path
 
 
 @contextmanager
@@ -62,9 +70,10 @@ def safe_load_json(path: Path, default: dict = None) -> dict:
         content = path.read_bytes()
         return fast_json_loads(content)
     except (FileNotFoundError, json.JSONDecodeError, IOError, OSError):
-        pass
-    except Exception:
-        pass
+        pass  # Expected failures, safe to ignore
+    except Exception as e:
+        from hooks.hook_utils.logging import log_event
+        log_event("safe_load_json", "unexpected_error", {"path": str(path), "error": str(e)})
     return default.copy() if isinstance(default, dict) else default
 
 
@@ -83,18 +92,6 @@ def safe_save_json(path: Path, data: dict, indent: int = 2) -> bool:
             with open(path, 'w') as f:
                 with file_lock(f):
                     json.dump(data, f, indent=indent)
-        return True
-    except (IOError, OSError, TypeError):
-        return False
-
-
-def safe_append_jsonl(path: Path, entry: dict) -> bool:
-    """Append entry to JSONL file with graceful error handling and file locking."""
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, 'ab') as f:
-            with file_lock(f):
-                f.write(fast_json_dumps(entry) + b"\n")
         return True
     except (IOError, OSError, TypeError):
         return False
@@ -123,3 +120,49 @@ def atomic_write_json(path: Path, data: dict) -> bool:
             raise
     except Exception:
         return False
+
+
+# =============================================================================
+# Safe File Operations (from file_ops.py)
+# =============================================================================
+
+def safe_stat(path: PathLike) -> os.stat_result | None:
+    """Get file stats safely, return None on error."""
+    try:
+        return os.stat(path)
+    except (FileNotFoundError, PermissionError, OSError):
+        return None
+
+
+def safe_mtime(path: PathLike, default: float = 0.0) -> float:
+    """Get file modification time safely, return default on error."""
+    try:
+        return os.path.getmtime(path)
+    except (FileNotFoundError, PermissionError, OSError):
+        return default
+
+
+def safe_exists(path: PathLike) -> bool:
+    """Check if path exists safely, return False on error."""
+    try:
+        return os.path.exists(path)
+    except (OSError, PermissionError):
+        return False
+
+
+# =============================================================================
+# Path Utilities (from paths.py)
+# =============================================================================
+
+def normalize_path(path: str) -> str:
+    """Normalize path to absolute resolved form."""
+    try:
+        return str(Path(path).resolve())
+    except (OSError, ValueError):
+        return path
+
+
+def expand_path(path: str) -> str:
+    """Expand ~, environment variables, and normalize path."""
+    expanded = os.path.expandvars(os.path.expanduser(path))
+    return os.path.normpath(expanded)

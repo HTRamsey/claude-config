@@ -9,7 +9,6 @@ Set TDD_GUARD_STRICT=1 to always block (no warnings).
 Set TDD_GUARD_WARN_ONLY=1 to never block (warnings only).
 """
 import os
-import sys
 import time
 from pathlib import Path
 
@@ -18,17 +17,17 @@ from hooks.hook_sdk import (
     PreToolUseContext,
     Response,
     dispatch_handler,
-    run_standalone,
     log_event,
-    read_state,
-    write_state,
+    HookState,
 )
 from hooks.config import Timeouts, Thresholds, FilePatterns
 
 # Escalation settings
 WARNING_THRESHOLD = Thresholds.TDD_WARNING_THRESHOLD
 WARNING_WINDOW = Timeouts.WARNING_WINDOW
-WARNING_STATE_KEY = "tdd-warnings"
+
+# State management using HookState (global, not session-scoped)
+_state = HookState("tdd-warnings", use_session=False)
 
 
 def get_test_paths(impl_path: Path) -> list[Path]:
@@ -81,14 +80,13 @@ MIN_LINES_FOR_TDD = Thresholds.MIN_LINES_FOR_TDD
 
 
 def load_warnings() -> dict:
-    """Load warning counts using SDK state management (has built-in caching)."""
-    return read_state(WARNING_STATE_KEY, {"warnings": [], "updated": time.time()})
+    """Load warning counts using HookState."""
+    return _state.load(default={"warnings": [], "updated": time.time()})
 
 
 def save_warnings(data: dict) -> None:
-    """Save warning counts using SDK state management."""
-    data["updated"] = time.time()
-    write_state(WARNING_STATE_KEY, data)
+    """Save warning counts using HookState."""
+    _state.save(data)
 
 
 def count_recent_warnings(data: dict) -> int:
@@ -183,8 +181,3 @@ def check_tdd(ctx: PreToolUseContext) -> dict | None:
             )
 
     return None
-
-
-if __name__ == "__main__":
-    # Standalone mode: read from stdin, write to stdout
-    run_standalone(lambda raw: check_tdd(raw))

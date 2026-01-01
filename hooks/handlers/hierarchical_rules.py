@@ -22,20 +22,16 @@ paths: src/api/**/*.ts
 
 Uses cachetools TTLCache for automatic expiration and LRU eviction.
 """
-import json
 import os
-import sys
-import threading
 from pathlib import Path
 
-from hooks.hook_utils import graceful_main, log_event, TTLCachedLoader
+from hooks.hook_utils import log_event, TTLCachedLoader
 from hooks.hook_sdk import Response, Patterns
 from hooks.config import Timeouts, Limits
 
 # Module-level loaders for directory hierarchy caching
 # (automatic TTL expiration and LRU eviction)
 _hierarchy_loaders: dict = {}
-_hierarchy_loaders_lock = threading.Lock()
 
 
 def parse_frontmatter(content: str) -> tuple[dict, str]:
@@ -86,15 +82,15 @@ def find_claude_files(start_dir: str, stop_at: str = None) -> list[tuple[str, st
     cache_key = f"{start_dir}:{stop_at or '/'}"
 
     # Get or create loader for this cache key
-    with _hierarchy_loaders_lock:
-        if cache_key not in _hierarchy_loaders:
-            _hierarchy_loaders[cache_key] = TTLCachedLoader(
-                load_func=lambda: _load_hierarchy(start_dir, stop_at),
-                cache_key=cache_key,
-                ttl=Timeouts.HIERARCHY_CACHE_TTL,
-                maxsize=Limits.HIERARCHY_CACHE_MAXSIZE
-            )
-        loader = _hierarchy_loaders[cache_key]
+    # (cachetools TTLCache is thread-safe internally)
+    if cache_key not in _hierarchy_loaders:
+        _hierarchy_loaders[cache_key] = TTLCachedLoader(
+            load_func=lambda: _load_hierarchy(start_dir, stop_at),
+            cache_key=cache_key,
+            ttl=Timeouts.HIERARCHY_CACHE_TTL,
+            maxsize=Limits.HIERARCHY_CACHE_MAXSIZE
+        )
+    loader = _hierarchy_loaders[cache_key]
 
     # Use loader to get cached or fresh data
     return loader.get()
@@ -211,14 +207,14 @@ def format_rules_message(rules: list[dict]) -> str:
     return " | ".join(parts)
 
 
-def check_hierarchical_rules(ctx: dict) -> dict | None:
+def check_hierarchical_rules(raw: dict) -> dict | None:
     """
     Handler function for dispatcher.
     Checks for path-specific rules and returns message if found.
     """
-    tool_name = ctx.get("tool_name", "")
-    tool_input = ctx.get("tool_input", {})
-    cwd = ctx.get("cwd", os.getcwd())
+    tool_name = raw.get("tool_name", "")
+    tool_input = raw.get("tool_input", {})
+    cwd = raw.get("cwd", os.getcwd())
 
     # Only apply to file operations
     if tool_name not in ("Read", "Write", "Edit"):
@@ -246,21 +242,3 @@ def check_hierarchical_rules(ctx: dict) -> dict | None:
     })
 
     return Response.allow(f"[Rules] {message}")
-
-
-@graceful_main("hierarchical_rules")
-def main():
-    try:
-        ctx = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-
-    result = check_hierarchical_rules(ctx)
-    if result:
-        print(json.dumps(result))
-
-    sys.exit(0)
-
-
-if __name__ == "__main__":
-    main()

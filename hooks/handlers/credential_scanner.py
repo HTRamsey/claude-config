@@ -4,16 +4,11 @@
 PreToolUse hook for Bash tool - triggers on git commit commands.
 Scans staged content for patterns that look like API keys, passwords, tokens, etc.
 """
-import json
-import re
 import subprocess
-import sys
-from pathlib import Path
 
-# Import shared utilities
-from hooks.hook_utils import graceful_main, log_event
-from hooks.hook_sdk import Response
+from hooks.hook_utils import log_event
 from hooks.config import Credentials
+from hooks.hook_sdk import Response
 
 
 def get_compiled_patterns():
@@ -68,9 +63,9 @@ def get_staged_diff() -> tuple[str, list[str]]:
         return "", []
 
 
-def handle(ctx: dict) -> dict:
+def handle(raw: dict) -> dict:
     """Scan staged changes for credentials before commit."""
-    tool_input = ctx.get("tool_input", {})
+    tool_input = raw.get("tool_input", {})
     command = tool_input.get("command", "")
 
     # Only trigger on git commit commands
@@ -98,38 +93,9 @@ def handle(ctx: dict) -> dict:
             "files": non_allowlisted[:3]
         }, "warning")
 
-        output = {
-            "blocked": True,
-            "reason": f"Potential credentials detected in staged changes: {', '.join(unique_types)}",
-            "files": non_allowlisted[:3],
-            "remediation": "Use environment variables or a secrets manager instead. Review with: git diff --cached"
-        }
-        return output
+        return Response.deny(
+            f"Potential credentials detected: {', '.join(unique_types)}. "
+            f"Files: {', '.join(non_allowlisted[:3])}. Review with: git diff --cached"
+        )
 
     return None
-
-
-def main():
-    """Main entry point for hook."""
-    try:
-        # Read context from stdin
-        ctx_json = sys.stdin.read()
-        ctx = json.loads(ctx_json) if ctx_json else {}
-
-        # Handle the request
-        result = handle(ctx)
-
-        # Output result as JSON
-        if result:
-            print(json.dumps(result))
-            sys.exit(1)  # Fail the operation
-
-        sys.exit(0)  # Success - no credentials found
-
-    except Exception as e:
-        log_event("credential_scanner", "error", {"error": str(e)}, "error")
-        sys.exit(0)  # Don't block on errors
-
-
-if __name__ == "__main__":
-    graceful_main(main)

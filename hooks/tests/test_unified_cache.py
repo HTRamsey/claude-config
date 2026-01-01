@@ -1,21 +1,25 @@
-"""Tests for unified_cache module."""
-import json
-import sys
+"""Tests for unified_cache module (diskcache implementation)."""
 import time
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import pytest
+from diskcache import Cache
 
 from hooks.handlers.unified_cache import (
     find_fuzzy_match,
     get_cache_key,
-    load_cache,
-    save_cache,
+    get_exploration_entry,
+    save_exploration_entry,
+    get_research_entry,
+    save_research_entry,
     handle_exploration_pre,
     handle_exploration_post,
+    handle_research_pre,
+    handle_research_post,
     CacheConfig,
-    CACHES,
+    CACHE_CONFIGS,
+    _caches,
 )
 
 
@@ -46,132 +50,159 @@ class TestCacheKey:
         assert len(key) == 16
 
 
+@pytest.fixture
+def test_cache(tmp_path):
+    """Create a temporary test cache."""
+    cache = Cache(str(tmp_path / "test-cache"))
+    yield cache
+    cache.close()
+
+
+@pytest.fixture
+def exploration_config():
+    """Return exploration cache config."""
+    return CACHE_CONFIGS["exploration"]
+
+
+@pytest.fixture
+def research_config():
+    """Return research cache config."""
+    return CACHE_CONFIGS["research"]
+
+
+@pytest.fixture
+def mock_caches(tmp_path):
+    """Mock the _caches dict with temporary caches."""
+    exploration_cache = Cache(str(tmp_path / "exploration"))
+    research_cache = Cache(str(tmp_path / "research"))
+    stats_cache = Cache(str(tmp_path / "stats"))
+
+    mock_caches = {
+        "exploration": exploration_cache,
+        "research": research_cache,
+        "stats": stats_cache,
+    }
+
+    with patch.dict('hooks.handlers.unified_cache._caches', mock_caches, clear=True):
+        with patch('hooks.handlers.unified_cache._get_cache', side_effect=lambda name: mock_caches.get(name)):
+            with patch('hooks.handlers.unified_cache._get_stats_cache', return_value=stats_cache):
+                yield mock_caches
+
+    exploration_cache.close()
+    research_cache.close()
+    stats_cache.close()
+
+
+class TestExplorationCache:
+    """Tests for exploration cache operations."""
+
+    def test_save_and_get_entry(self, mock_caches, exploration_config):
+        """Should save and retrieve exploration entry."""
+        cache_key = get_cache_key("/project:find files")
+        entry = {
+            "prompt": "find files",
+            "summary": "Found 5 files",
+            "cwd": "/project",
+            "timestamp": time.time(),
+            "subagent": "Explore"
+        }
+        save_exploration_entry(cache_key, entry, exploration_config)
+
+        result = get_exploration_entry(cache_key, exploration_config)
+        assert result is not None
+        assert result["prompt"] == "find files"
+        assert result["summary"] == "Found 5 files"
+
+    def test_get_expired_entry_returns_none(self, mock_caches, exploration_config):
+        """Should not return expired entries."""
+        cache_key = get_cache_key("/project:old query")
+        # Insert with old timestamp
+        entry = {
+            "prompt": "old query",
+            "summary": "old result",
+            "cwd": "/project",
+            "timestamp": time.time() - exploration_config.ttl_seconds - 100,
+            "subagent": "Explore"
+        }
+        mock_caches["exploration"].set(cache_key, entry)
+
+        result = get_exploration_entry(cache_key, exploration_config)
+        assert result is None
+
+
+class TestResearchCache:
+    """Tests for research cache operations."""
+
+    def test_save_and_get_entry(self, mock_caches, research_config):
+        """Should save and retrieve research entry."""
+        url = "https://example.com/docs"
+        cache_key = get_cache_key(url)
+        entry = {
+            "url": url,
+            "summary": "Documentation content",
+            "timestamp": time.time()
+        }
+        save_research_entry(cache_key, entry, research_config)
+
+        result = get_research_entry(cache_key, research_config)
+        assert result is not None
+        assert result["url"] == url
+        assert result["summary"] == "Documentation content"
+
+
 class TestFuzzyMatch:
     """Tests for fuzzy matching."""
 
-    @pytest.fixture
-    def cache_config(self):
-        """Return exploration cache config."""
-        return CACHES["exploration"]
-
-    @pytest.fixture
-    def sample_cache(self):
-        """Return cache with sample entries."""
-        now = time.time()
-        return {
-            "entries": {
-                "key1": {
-                    "prompt": "find config files",
-                    "summary": "Found 5 config files",
-                    "cwd": "/project",
-                    "timestamp": now - 60
-                },
-                "key2": {
-                    "prompt": "search for authentication",
-                    "summary": "Found auth module",
-                    "cwd": "/project",
-                    "timestamp": now - 120
-                },
-                "key3": {
-                    "prompt": "list all files",
-                    "summary": "Listed files",
-                    "cwd": "/other",
-                    "timestamp": now - 30
-                }
-            }
-        }
-
-    def test_fuzzy_match_exact(self, sample_cache, cache_config):
-        """Should find exact match."""
-        result = find_fuzzy_match("find config files", "/project", sample_cache, cache_config)
-        assert result is not None
-        assert result["prompt"] == "find config files"
-
-    def test_fuzzy_match_similar(self, sample_cache, cache_config):
+    def test_fuzzy_match_similar(self, mock_caches, exploration_config):
         """Should find similar match."""
-        result = find_fuzzy_match("find configuration files", "/project", sample_cache, cache_config)
+        now = time.time()
+
+        # Insert test data directly into cache
+        entry = {
+            "prompt": "find config files",
+            "summary": "Found configs",
+            "cwd": "/project",
+            "timestamp": now - 60,
+            "subagent": "Explore"
+        }
+        mock_caches["exploration"].set("key1", entry)
+
+        result = find_fuzzy_match("find configuration files", "/project", exploration_config)
         assert result is not None
         assert "config" in result["prompt"]
 
-    def test_fuzzy_match_respects_cwd(self, sample_cache, cache_config):
+    def test_fuzzy_match_respects_cwd(self, mock_caches, exploration_config):
         """Should only match entries from same cwd."""
-        result = find_fuzzy_match("list all files", "/project", sample_cache, cache_config)
-        # Entry exists but in /other cwd
-        assert result is None
-
-    def test_fuzzy_match_no_match(self, sample_cache, cache_config):
-        """Should return None for no match."""
-        result = find_fuzzy_match("completely different query", "/project", sample_cache, cache_config)
-        assert result is None
-
-    def test_fuzzy_match_expired_entries(self, cache_config):
-        """Should not match expired entries."""
-        expired_cache = {
-            "entries": {
-                "key1": {
-                    "prompt": "find files",
-                    "cwd": "/project",
-                    "timestamp": time.time() - 999999  # Very old
-                }
-            }
-        }
-        result = find_fuzzy_match("find files", "/project", expired_cache, cache_config)
-        assert result is None
-
-
-class TestCacheLoadSave:
-    """Tests for cache load/save operations."""
-
-    def test_load_cache_empty(self, tmp_path):
-        """Should return empty cache for missing file."""
-        cfg = CacheConfig(
-            name="test",
-            file=tmp_path / "test.json",
-            ttl_seconds=3600,
-            max_entries=100
-        )
-        cache = load_cache(cfg)
-        assert cache == {"entries": {}, "stats": {"hits": 0, "misses": 0, "saves": 0}}
-
-    def test_save_load_roundtrip(self, tmp_path):
-        """Cache should roundtrip through save/load."""
-        cfg = CacheConfig(
-            name="test",
-            file=tmp_path / "test.json",
-            ttl_seconds=3600,
-            max_entries=100
-        )
-        cache = {
-            "entries": {"key1": {"prompt": "test", "timestamp": time.time()}},
-            "stats": {"hits": 5, "misses": 3, "saves": 8}
-        }
-        save_cache(cfg, cache)
-        loaded = load_cache(cfg)
-        assert loaded["entries"]["key1"]["prompt"] == "test"
-        assert loaded["stats"]["hits"] == 5
-
-    def test_save_cache_limits_size(self, tmp_path):
-        """Should limit cache to max_entries."""
-        cfg = CacheConfig(
-            name="test",
-            file=tmp_path / "test.json",
-            ttl_seconds=3600,
-            max_entries=2
-        )
         now = time.time()
-        cache = {
-            "entries": {
-                "key1": {"prompt": "old", "timestamp": now - 100},
-                "key2": {"prompt": "medium", "timestamp": now - 50},
-                "key3": {"prompt": "new", "timestamp": now - 10},
-            },
-            "stats": {}
+
+        # Insert entry in different cwd
+        entry = {
+            "prompt": "list all files",
+            "summary": "Listed files",
+            "cwd": "/other",
+            "timestamp": now - 30,
+            "subagent": "Explore"
         }
-        save_cache(cfg, cache)
-        loaded = load_cache(cfg)
-        assert len(loaded["entries"]) == 2
-        # Should keep newest entries
-        assert "key3" in loaded["entries"]
+        mock_caches["exploration"].set("key1", entry)
+
+        result = find_fuzzy_match("list all files", "/project", exploration_config)
+        assert result is None
+
+    def test_fuzzy_match_no_match(self, mock_caches, exploration_config):
+        """Should return None for no match."""
+        now = time.time()
+
+        entry = {
+            "prompt": "find config files",
+            "summary": "Found configs",
+            "cwd": "/project",
+            "timestamp": now - 60,
+            "subagent": "Explore"
+        }
+        mock_caches["exploration"].set("key1", entry)
+
+        result = find_fuzzy_match("completely different query about authentication", "/project", exploration_config)
+        assert result is None
 
 
 class TestExplorationHandlers:
@@ -191,7 +222,64 @@ class TestExplorationHandlers:
         ctx = {
             "tool_name": "Task",
             "tool_input": {"subagent_type": "batch-editor", "prompt": "edit files"},
-            "tool_response": "Edited 3 files"
+            "tool_result": {"content": "Edited 3 files"}
         }
         result = handle_exploration_post(ctx)
         assert result is None
+
+    def test_exploration_pre_ignores_empty_prompt(self):
+        """Should ignore empty prompts."""
+        ctx = {
+            "tool_name": "Task",
+            "tool_input": {"subagent_type": "Explore", "prompt": ""}
+        }
+        result = handle_exploration_pre(ctx)
+        assert result is None
+
+
+class TestResearchHandlers:
+    """Tests for research pre/post handlers."""
+
+    def test_research_pre_ignores_no_url(self):
+        """Should ignore requests without URL."""
+        ctx = {
+            "tool_name": "WebFetch",
+            "tool_input": {}
+        }
+        result = handle_research_pre(ctx)
+        assert result is None
+
+    def test_research_post_ignores_empty_content(self):
+        """Should ignore empty responses."""
+        ctx = {
+            "tool_name": "WebFetch",
+            "tool_input": {"url": "https://example.com"},
+            "tool_result": {"content": ""}
+        }
+        result = handle_research_post(ctx)
+        assert result is None
+
+    def test_research_post_ignores_large_content(self):
+        """Should ignore very large responses."""
+        ctx = {
+            "tool_name": "WebFetch",
+            "tool_input": {"url": "https://example.com"},
+            "tool_result": {"content": "x" * 60000}  # Over 50KB limit
+        }
+        result = handle_research_post(ctx)
+        assert result is None
+
+
+class TestCacheConfig:
+    """Tests for CacheConfig dataclass."""
+
+    def test_exploration_config_has_fuzzy(self):
+        """Exploration cache should have fuzzy matching enabled."""
+        cfg = CACHE_CONFIGS["exploration"]
+        assert cfg.fuzzy_match is True
+        assert cfg.similarity_threshold == 0.6
+
+    def test_research_config_no_fuzzy(self):
+        """Research cache should not have fuzzy matching."""
+        cfg = CACHE_CONFIGS["research"]
+        assert cfg.fuzzy_match is False

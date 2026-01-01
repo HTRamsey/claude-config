@@ -19,14 +19,12 @@ from .logging import (
     log_event,
     graceful_main,
     read_stdin_context,
-    output_message,
 )
 
 from .io import (
     file_lock,
     safe_load_json,
     safe_save_json,
-    safe_append_jsonl,
     atomic_write_json,
 )
 
@@ -35,14 +33,7 @@ from .state import (
     read_state,
     write_state,
     update_state,
-    invalidate_cache,
-    # Batch write API
-    queue_state_write,
     flush_pending_writes,
-    has_pending_writes,
-    update_state_batched,
-    # Pruning utilities
-    prune_by_time,
 )
 
 from .session import (
@@ -50,7 +41,6 @@ from .session import (
     SESSION_STATE_FILE,
     SESSION_STATE_MAX_AGE,
     get_session_id,
-    is_new_session,
     get_session_state,
     read_session_state,
     write_session_state,
@@ -58,26 +48,21 @@ from .session import (
     cleanup_old_sessions,
     load_state_with_expiry,
     save_state_with_timestamp,
+    backup_transcript,
 )
 
 from .hooks import (
     HOOK_DISABLED_TTL,
     is_hook_disabled,
     record_usage,
-    get_usage_stats,
 )
 
-from .backup import (
-    backup_transcript,
-)
-
-from .file_ops import (
-    safe_read_file,
-    safe_read_bytes,
+from .io import (
     safe_stat,
     safe_mtime,
-    safe_size,
     safe_exists,
+    normalize_path,
+    expand_path,
 )
 
 from .metrics import (
@@ -87,23 +72,12 @@ from .metrics import (
     get_timestamp,
 )
 
-from .paths import (
-    normalize_path,
-    expand_path,
-    relative_to,
-    matches_pattern,
-)
-
-from .caching import (
+from .state import (
     TTLCachedLoader,
 )
 
-from .base import (
-    BlockingHook,
-    MonitoringHook,
-    SuggestionHook,
-    StateTrackingHook,
-)
+# Note: BlockingHook is in hook_sdk - import directly from there
+# Not re-exported here to avoid circular imports
 
 # Note: DAILY_TTL and SESSION_TTL removed - use config.py Timeouts instead
 
@@ -161,30 +135,22 @@ __all__ = [
     "log_event",
     "graceful_main",
     "read_stdin_context",
-    "output_message",
     # I/O
     "file_lock",
     "safe_load_json",
     "safe_save_json",
-    "safe_append_jsonl",
     "atomic_write_json",
     # State
     "CACHE_TTL",
     "read_state",
     "write_state",
     "update_state",
-    "invalidate_cache",
-    "queue_state_write",
     "flush_pending_writes",
-    "has_pending_writes",
-    "update_state_batched",
-    "prune_by_time",
     # Session
     "SESSION_STATE_DIR",
     "SESSION_STATE_FILE",
     "SESSION_STATE_MAX_AGE",
     "get_session_id",
-    "is_new_session",
     "get_session_state",
     "read_session_state",
     "write_session_state",
@@ -196,33 +162,22 @@ __all__ = [
     "HOOK_DISABLED_TTL",
     "is_hook_disabled",
     "record_usage",
-    "get_usage_stats",
-    # Backup
+    # Session (includes backup)
     "backup_transcript",
-    # File Operations
-    "safe_read_file",
-    "safe_read_bytes",
+    # File Operations & Paths (from io.py)
     "safe_stat",
     "safe_mtime",
-    "safe_size",
     "safe_exists",
+    "normalize_path",
+    "expand_path",
     # Metrics
     "estimate_tokens",
     "get_content_size",
     "count_tokens_accurate",
     "get_timestamp",
-    # Paths
-    "normalize_path",
-    "expand_path",
-    "relative_to",
-    "matches_pattern",
-    # Caching
+    # State (includes TTLCachedLoader)
     "TTLCachedLoader",
-    # Base Hook Classes
-    "BlockingHook",
-    "MonitoringHook",
-    "SuggestionHook",
-    "StateTrackingHook",
+    # Note: BlockingHook is in hook_sdk, not re-exported here
     # Event detection & utilities
     "detect_event",
     "is_post_tool_use",
