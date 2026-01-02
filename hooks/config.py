@@ -14,9 +14,56 @@ Categories:
 import os
 import re
 from dataclasses import dataclass
+from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import Sequence
+
+
+# =============================================================================
+# Tool Names - Canonical tool identifiers to reduce typos and enable IDE completion
+# =============================================================================
+
+class ToolName(str, Enum):
+    """Claude Code tool names as string enum for type safety."""
+    # File operations
+    READ = "Read"
+    EDIT = "Edit"
+    WRITE = "Write"
+    GLOB = "Glob"
+    GREP = "Grep"
+    # Execution
+    BASH = "Bash"
+    TASK = "Task"
+    SKILL = "Skill"
+    # Web
+    WEB_FETCH = "WebFetch"
+    WEB_SEARCH = "WebSearch"
+    # Other
+    LSP = "LSP"
+    NOTEBOOK_EDIT = "NotebookEdit"
+    TODO_WRITE = "TodoWrite"
+    ASK_USER = "AskUserQuestion"
+    # MCP
+    MCP = "mcp"  # Prefix for MCP tools
+
+    def __str__(self) -> str:
+        return self.value
+
+    @classmethod
+    def is_file_tool(cls, name: str) -> bool:
+        """Check if tool is a file operation tool."""
+        return name in (cls.READ, cls.EDIT, cls.WRITE, cls.GLOB, cls.GREP)
+
+    @classmethod
+    def is_search_tool(cls, name: str) -> bool:
+        """Check if tool is a search operation."""
+        return name in (cls.GREP, cls.GLOB, cls.WEB_SEARCH)
+
+    @classmethod
+    def is_write_tool(cls, name: str) -> bool:
+        """Check if tool modifies files."""
+        return name in (cls.EDIT, cls.WRITE, cls.NOTEBOOK_EDIT)
 
 
 # =============================================================================

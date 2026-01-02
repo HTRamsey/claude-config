@@ -8,6 +8,7 @@ Includes:
 - Path utilities (normalize_path, expand_path)
 """
 import fcntl
+import hashlib
 import json
 import os
 import tempfile
@@ -18,6 +19,25 @@ from filelock import FileLock
 from hooks.config import fast_json_loads, fast_json_dumps
 
 PathLike = str | Path
+
+
+# =============================================================================
+# Hashing Utilities
+# =============================================================================
+
+def stable_hash(text: str, length: int = 12) -> str:
+    """Generate a stable MD5 hash of text, truncated to specified length.
+
+    Used for cache keys, deduplication, and stable identifiers.
+
+    Args:
+        text: Text to hash
+        length: Length of hash to return (default 12, max 32)
+
+    Returns:
+        Lowercase hex string of specified length
+    """
+    return hashlib.md5(text.encode()).hexdigest()[:length]
 
 
 # =============================================================================

@@ -10,8 +10,8 @@ from pathlib import Path
 from unittest import TestCase, main
 from unittest.mock import patch, MagicMock
 
-# Handlers extracted from session dispatchers
-from hooks.handlers.git_context import (
+# Utilities and handlers extracted from session dispatchers
+from hooks.hook_utils.git import (
     run_cmd,
     get_context_summary as get_git_context,
 )

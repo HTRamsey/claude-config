@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch, MagicMock
 import pytest
 
 # Handlers extracted from stop dispatcher
-from hooks.handlers.git_context import get_status as get_git_status
+from hooks.hook_utils.git import get_status as get_git_status
 from hooks.handlers.auto_continue import (
     check_rate_limit,
     record_continuation,
@@ -125,14 +125,14 @@ class TestCheckUncommittedChanges:
 
     def test_non_git_repo(self):
         """Should return empty list for non-git repo."""
-        with patch("hooks.dispatchers.stop.git_context.get_status") as mock_status:
+        with patch("hooks.dispatchers.stop.git.get_status") as mock_status:
             mock_status.return_value = {"is_git_repo": False}
             messages = check_uncommitted_changes({})
             assert messages == []
 
     def test_clean_repo(self):
         """Should return empty list for clean repo."""
-        with patch("hooks.dispatchers.stop.git_context.get_status") as mock_status:
+        with patch("hooks.dispatchers.stop.git.get_status") as mock_status:
             mock_status.return_value = {
                 "is_git_repo": True,
                 "has_staged": False,
@@ -146,7 +146,7 @@ class TestCheckUncommittedChanges:
 
     def test_staged_changes_message(self):
         """Should return message for staged changes."""
-        with patch("hooks.dispatchers.stop.git_context.get_status") as mock_status:
+        with patch("hooks.dispatchers.stop.git.get_status") as mock_status:
             mock_status.return_value = {
                 "is_git_repo": True,
                 "has_staged": True,
@@ -162,7 +162,7 @@ class TestCheckUncommittedChanges:
 
     def test_unstaged_changes_message(self):
         """Should return message for unstaged changes."""
-        with patch("hooks.dispatchers.stop.git_context.get_status") as mock_status:
+        with patch("hooks.dispatchers.stop.git.get_status") as mock_status:
             mock_status.return_value = {
                 "is_git_repo": True,
                 "has_staged": False,
@@ -177,7 +177,7 @@ class TestCheckUncommittedChanges:
 
     def test_both_staged_and_unstaged(self):
         """Should mention both staged and unstaged."""
-        with patch("hooks.dispatchers.stop.git_context.get_status") as mock_status:
+        with patch("hooks.dispatchers.stop.git.get_status") as mock_status:
             mock_status.return_value = {
                 "is_git_repo": True,
                 "has_staged": True,
@@ -192,7 +192,7 @@ class TestCheckUncommittedChanges:
 
     def test_unpushed_commits_message(self):
         """Should return message for unpushed commits."""
-        with patch("hooks.dispatchers.stop.git_context.get_status") as mock_status:
+        with patch("hooks.dispatchers.stop.git.get_status") as mock_status:
             mock_status.return_value = {
                 "is_git_repo": True,
                 "has_staged": False,
@@ -210,7 +210,7 @@ class TestCheckUncommittedChanges:
 
     def test_untracked_files_few(self):
         """Should mention untracked files if <= 10."""
-        with patch("hooks.dispatchers.stop.git_context.get_status") as mock_status:
+        with patch("hooks.dispatchers.stop.git.get_status") as mock_status:
             mock_status.return_value = {
                 "is_git_repo": True,
                 "has_staged": False,
@@ -225,7 +225,7 @@ class TestCheckUncommittedChanges:
 
     def test_untracked_files_many(self):
         """Should not mention untracked files if > 10."""
-        with patch("hooks.dispatchers.stop.git_context.get_status") as mock_status:
+        with patch("hooks.dispatchers.stop.git.get_status") as mock_status:
             mock_status.return_value = {
                 "is_git_repo": True,
                 "has_staged": False,
@@ -239,7 +239,7 @@ class TestCheckUncommittedChanges:
 
     def test_multiple_issues(self):
         """Should return multiple messages for multiple issues."""
-        with patch("hooks.dispatchers.stop.git_context.get_status") as mock_status:
+        with patch("hooks.dispatchers.stop.git.get_status") as mock_status:
             mock_status.return_value = {
                 "is_git_repo": True,
                 "has_staged": True,

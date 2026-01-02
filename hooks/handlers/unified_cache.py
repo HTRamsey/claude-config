@@ -82,7 +82,7 @@ def get_cache_key(content: str) -> str:
     return hashlib.md5(content.lower().encode()).hexdigest()[:16]
 
 
-def _update_stat(cache_name: str, stat_name: str, increment: int = 1):
+def _update_stat(cache_name: str, stat_name: str, increment: int = 1) -> None:
     """Update stats in cache."""
     try:
         stats = _get_stats_cache()
@@ -110,7 +110,7 @@ def get_exploration_entry(cache_key: str, cfg: CacheConfig) -> dict | None:
     return None
 
 
-def save_exploration_entry(cache_key: str, entry: dict, cfg: CacheConfig):
+def save_exploration_entry(cache_key: str, entry: dict, cfg: CacheConfig) -> None:
     """Save exploration cache entry and update cwd index."""
     try:
         cache = _get_cache("exploration")
@@ -139,7 +139,7 @@ def get_research_entry(cache_key: str, cfg: CacheConfig) -> dict | None:
     return None
 
 
-def save_research_entry(cache_key: str, entry: dict, cfg: CacheConfig):
+def save_research_entry(cache_key: str, entry: dict, cfg: CacheConfig) -> None:
     """Save research cache entry."""
     try:
         cache = _get_cache("research")

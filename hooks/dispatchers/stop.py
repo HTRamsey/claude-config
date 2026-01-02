@@ -12,13 +12,14 @@ import json
 import os
 
 from hooks.dispatchers.base import SimpleDispatcher
-from hooks.handlers import git_context, auto_continue
+from hooks.handlers import auto_continue
+from hooks.hook_utils import git
 
 
 def check_uncommitted_changes(ctx: dict) -> list[str]:
     """Check for uncommitted git changes. Returns list of messages."""
     cwd = ctx.get("cwd") or ctx.get("working_directory") or os.getcwd()
-    status = git_context.get_status(cwd)
+    status = git.get_status(cwd)
 
     if not status["is_git_repo"]:
         return []

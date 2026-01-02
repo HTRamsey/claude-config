@@ -34,6 +34,7 @@ from .io import (
     expand_path,
     iter_jsonl,
     count_jsonl_lines,
+    stable_hash,
 )
 
 from .transcript import (
@@ -95,6 +96,15 @@ from .cache import (
 from .notify import (
     send_notification,
     is_notification_available,
+)
+
+from .git import (
+    run_cmd as git_run_cmd,
+    is_git_repo,
+    get_branch as git_get_branch,
+    get_recent_commits,
+    get_status as git_get_status,
+    get_context_summary as git_get_context_summary,
 )
 
 # Note: BlockingHook is in hook_sdk - import directly from there
@@ -195,6 +205,7 @@ __all__ = [
     "expand_path",
     "iter_jsonl",
     "count_jsonl_lines",
+    "stable_hash",
     # Transcript utilities
     "iter_transcript",
     "extract_messages",
@@ -216,6 +227,13 @@ __all__ = [
     # Notifications
     "send_notification",
     "is_notification_available",
+    # Git utilities
+    "git_run_cmd",
+    "is_git_repo",
+    "git_get_branch",
+    "get_recent_commits",
+    "git_get_status",
+    "git_get_context_summary",
     # Note: BlockingHook is in hook_sdk, not re-exported here
     # Event detection & utilities
     "detect_event",

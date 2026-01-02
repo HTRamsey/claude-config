@@ -2,17 +2,16 @@
 """
 SessionStart Dispatcher - Consolidates all SessionStart hooks.
 
-Handlers (now in handlers/):
-- git_context: Git branch, commits, status
-- project_context: Project type, usage stats
-- viewer: Launch claude-code-viewer if not running
+Uses:
+- hook_utils/git: Git branch, commits, status
+- handlers/project_context: Project type, usage stats
+- handlers/viewer: Launch claude-code-viewer if not running
 """
 import os
-import subprocess
-from pathlib import Path
 
 from hooks.dispatchers.base import SimpleDispatcher
-from hooks.handlers import git_context, project_context
+from hooks.handlers import project_context
+from hooks.hook_utils import git
 from hooks.handlers.viewer import maybe_start_viewer
 
 
@@ -27,7 +26,7 @@ class SessionStartDispatcher(SimpleDispatcher):
         output_parts = ["[Session Start]"]
 
         # Git context (branch, commits, status)
-        git_ctx = git_context.get_context_summary(cwd)
+        git_ctx = git.get_context_summary(cwd)
         if git_ctx:
             output_parts.extend(git_ctx)
 

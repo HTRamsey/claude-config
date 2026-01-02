@@ -10,6 +10,7 @@ Also provides PostToolUse handler (smart_permissions_post) for learning.
 Uses cache abstraction for automatic cache expiration.
 """
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -25,13 +26,16 @@ PATTERNS_FILE = DATA_DIR / "permission-patterns.json"
 APPROVAL_THRESHOLD = Thresholds.PERMISSION_APPROVAL_THRESHOLD
 
 # Use lazy-compiled patterns from config
-def get_read_patterns():
+def get_read_patterns() -> list[re.Pattern]:
+    """Get compiled read auto-approve patterns."""
     return SmartPermissions.get_read()
 
-def get_write_patterns():
+def get_write_patterns() -> list[re.Pattern]:
+    """Get compiled write auto-approve patterns."""
     return SmartPermissions.get_write()
 
-def get_never_patterns():
+def get_never_patterns() -> list[re.Pattern]:
+    """Get compiled never-approve patterns."""
     return SmartPermissions.get_never()
 
 
@@ -50,7 +54,7 @@ def load_patterns() -> dict:
     return data
 
 
-def save_patterns(data: dict):
+def save_patterns(data: dict) -> None:
     """Save learned patterns to file and update cache."""
     data["updated"] = get_timestamp()
     if atomic_write_json(PATTERNS_FILE, data):
@@ -81,7 +85,7 @@ def get_pattern_key(tool: str, path: str) -> str:
     return f"{tool}:{directory}:{ext}"
 
 
-def record_approval(tool: str, path: str):
+def record_approval(tool: str, path: str) -> None:
     """Record an approved operation (called from PostToolUse)."""
     if Patterns.matches_compiled(path, get_never_patterns()):
         return  # Never learn sensitive file patterns

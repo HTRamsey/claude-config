@@ -62,7 +62,7 @@ def load_state(session_id: str) -> dict:
     return _hook_state.load(session_id=session_id, default=_DEFAULT_STATE)
 
 
-def save_state(session_id: str, state: dict):
+def save_state(session_id: str, state: dict) -> None:
     """Save unified state with automatic pruning via HookState."""
     _hook_state.save_with_pruning(
         state,
