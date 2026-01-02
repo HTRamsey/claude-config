@@ -139,7 +139,7 @@ class TestPreToolDispatcher:
 
         assert "subagent_lifecycle" in handlers
         assert "unified_cache" in handlers
-        assert "usage_tracker" in handlers
+        # Note: usage_tracker consolidated into subagent_lifecycle
 
     def test_credential_scanner_only_on_git_commit(self):
         """Credential scanner should only run on git commit commands."""
@@ -170,13 +170,14 @@ class TestPreToolDispatcher:
 class TestPostToolDispatcher:
     """Integration tests for PostToolDispatcher."""
 
-    def test_edit_routes_to_batch_detector(self):
-        """Edit tool should route to batch_operation_detector."""
+    def test_edit_routes_to_tool_analytics(self):
+        """Edit tool should route to tool_analytics (includes batch detection)."""
         dispatcher = PostToolDispatcher()
         handlers = dispatcher.TOOL_HANDLERS.get("Edit", [])
 
-        assert "batch_operation_detector" in handlers
+        # batch_operation_detector was consolidated into tool_analytics
         assert "tool_analytics" in handlers
+        assert "smart_permissions" in handlers
 
     def test_bash_routes_to_tool_analytics(self):
         """Bash tool should route to tool_analytics (includes build analysis)."""
@@ -266,7 +267,7 @@ class TestDispatcherEndToEnd:
         assert exc_info.value.code == 0
 
     def test_invalid_json_graceful_exit(self, monkeypatch):
-        """Invalid JSON input should exit gracefully."""
+        """Invalid JSON input should exit with error code (not crash)."""
         monkeypatch.setattr('sys.stdin', StringIO("not valid json"))
 
         dispatcher = PreToolDispatcher()
@@ -275,7 +276,8 @@ class TestDispatcherEndToEnd:
         with pytest.raises(SystemExit) as exc_info:
             dispatcher.run()
 
-        assert exc_info.value.code == 0
+        # Exit code 1 signals parse error (not 0 which would mask failures)
+        assert exc_info.value.code == 1
 
 
 class TestHandlerValidation:
@@ -737,7 +739,7 @@ class TestUserPromptDispatcher:
         assert dispatcher.ALL_HANDLERS is not None
         assert isinstance(dispatcher.ALL_HANDLERS, list)
         assert "context_manager" in dispatcher.ALL_HANDLERS
-        assert "usage_tracker" in dispatcher.ALL_HANDLERS
+        # Note: usage_tracker consolidated into subagent_lifecycle
 
     def test_get_handler_lazy_loads(self):
         """get_handler() lazy-loads handlers."""
@@ -760,16 +762,18 @@ class TestUserPromptDispatcher:
     def test_dispatch_joins_multiple_messages(self):
         """dispatch() joins multiple handler messages."""
         dispatcher = UserPromptDispatcher()
-        with patch.object(dispatcher, 'run_handler') as mock_run:
-            mock_run.side_effect = [
-                {"message": "msg1"},
-                {"message": "msg2"}
-            ]
+        # Mock ALL_HANDLERS to have 2 entries for testing join logic
+        with patch.object(dispatcher, 'ALL_HANDLERS', ["handler1", "handler2"]):
+            with patch.object(dispatcher, 'run_handler') as mock_run:
+                mock_run.side_effect = [
+                    {"message": "msg1"},
+                    {"message": "msg2"}
+                ]
 
-            result = dispatcher.dispatch({})
-            assert result is not None
-            assert "msg1" in result["message"]
-            assert "msg2" in result["message"]
+                result = dispatcher.dispatch({})
+                assert result is not None
+                assert "msg1" in result["message"]
+                assert "msg2" in result["message"]
 
     def test_user_prompt_strategy_never_terminates(self):
         """UserPromptStrategy.should_terminate() always returns False."""

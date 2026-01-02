@@ -84,9 +84,10 @@ def mock_caches(tmp_path):
     }
 
     with patch.dict('hooks.handlers.unified_cache._caches', mock_caches, clear=True):
-        with patch('hooks.handlers.unified_cache._get_cache', side_effect=lambda name: mock_caches.get(name)):
-            with patch('hooks.handlers.unified_cache._get_stats_cache', return_value=stats_cache):
-                yield mock_caches
+        with patch.dict('hooks.handlers.unified_cache._cwd_index', {}, clear=True):
+            with patch('hooks.handlers.unified_cache._get_cache', side_effect=lambda name: mock_caches.get(name)):
+                with patch('hooks.handlers.unified_cache._get_stats_cache', return_value=stats_cache):
+                    yield mock_caches
 
     exploration_cache.close()
     research_cache.close()
@@ -157,7 +158,7 @@ class TestFuzzyMatch:
         """Should find similar match."""
         now = time.time()
 
-        # Insert test data directly into cache
+        # Use save_exploration_entry to properly update cwd index
         entry = {
             "prompt": "find config files",
             "summary": "Found configs",
@@ -165,7 +166,7 @@ class TestFuzzyMatch:
             "timestamp": now - 60,
             "subagent": "Explore"
         }
-        mock_caches["exploration"].set("key1", entry)
+        save_exploration_entry("key1", entry, exploration_config)
 
         result = find_fuzzy_match("find configuration files", "/project", exploration_config)
         assert result is not None
@@ -175,7 +176,7 @@ class TestFuzzyMatch:
         """Should only match entries from same cwd."""
         now = time.time()
 
-        # Insert entry in different cwd
+        # Insert entry in different cwd - use save_exploration_entry
         entry = {
             "prompt": "list all files",
             "summary": "Listed files",
@@ -183,7 +184,7 @@ class TestFuzzyMatch:
             "timestamp": now - 30,
             "subagent": "Explore"
         }
-        mock_caches["exploration"].set("key1", entry)
+        save_exploration_entry("key1", entry, exploration_config)
 
         result = find_fuzzy_match("list all files", "/project", exploration_config)
         assert result is None
@@ -199,7 +200,7 @@ class TestFuzzyMatch:
             "timestamp": now - 60,
             "subagent": "Explore"
         }
-        mock_caches["exploration"].set("key1", entry)
+        save_exploration_entry("key1", entry, exploration_config)
 
         result = find_fuzzy_match("completely different query about authentication", "/project", exploration_config)
         assert result is None

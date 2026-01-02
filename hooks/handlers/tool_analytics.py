@@ -1,15 +1,17 @@
 #!/home/jonglaser/.claude/data/venv/bin/python3
 """
-Tool Analytics - Unified tool tracking, output metrics, failure detection, and build analysis.
+Tool Analytics - Unified tool tracking, output metrics, failure detection, build analysis, and batch detection.
 
 Consolidates:
 - tool_success_tracker: Track tool failures and suggest alternatives
 - output_metrics: Token tracking and output size monitoring
 - build_analyzer: Parse build errors and provide fix suggestions
+- batch_operation_detector: Detect repetitive edit patterns and suggest batching
 
 All share token estimation logic and PostToolUse context processing.
 """
 import heapq
+import os
 import re
 import time
 from datetime import datetime
@@ -24,8 +26,9 @@ from hooks.hook_utils import (
     write_session_state,
     estimate_tokens,
     get_content_size,
+    cleanup_old_sessions,
 )
-from hooks.hook_sdk import PostToolUseContext, Response
+from hooks.hook_sdk import PostToolUseContext, Response, HookState
 from hooks.config import Thresholds, FilePatterns, Timeouts, Limits, TRACKER_DIR, ToolAnalytics, Build
 
 # =============================================================================
@@ -158,10 +161,65 @@ def track_success(ctx: PostToolUseContext) -> list[str]:
 # Token Tracker & Output Size Monitor
 # =============================================================================
 
-# Use TTLCache with centralized config (cache invalidates on date change check anyway)
-from cachetools import TTLCache
-_daily_stats_cache: TTLCache = TTLCache(maxsize=Limits.DAILY_STATS_CACHE_MAXSIZE, ttl=Timeouts.DAILY_STATS_CACHE_TTL)
+# Use cache abstraction with centralized config
+from hooks.hook_utils import create_ttl_cache
+_daily_stats_cache = create_ttl_cache(maxsize=Limits.DAILY_STATS_CACHE_MAXSIZE, ttl=Timeouts.DAILY_STATS_CACHE_TTL)
 _DAILY_STATS_KEY = "daily_stats"
+
+# Token snapshots for load average calculation (like Linux 1m, 5m, 15m)
+TOKEN_SNAPSHOTS_FILE = Path.home() / ".claude" / "data" / "token-snapshots.jsonl"
+_last_snapshot_time = 0
+SNAPSHOT_INTERVAL = 10  # Minimum seconds between snapshots
+
+
+def record_token_snapshot(total_input: int, total_output: int):
+    """Record a token snapshot for load average calculation."""
+    global _last_snapshot_time
+    now = int(time.time())
+
+    # Rate limit snapshots
+    if now - _last_snapshot_time < SNAPSHOT_INTERVAL:
+        return
+    _last_snapshot_time = now
+
+    try:
+        # Append snapshot
+        TOKEN_SNAPSHOTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(TOKEN_SNAPSHOTS_FILE, "a") as f:
+            f.write(f'{{"ts":{now},"in":{total_input},"out":{total_output}}}\n')
+
+        # Prune old entries (keep last 20 minutes) - do this occasionally
+        if now % 60 < SNAPSHOT_INTERVAL:  # ~once per minute
+            prune_token_snapshots(now - 1200)
+    except Exception as e:
+        # Log first occurrence, suppress duplicates
+        from hooks.hook_utils import _log_once
+        _log_once.warning("tool_analytics", "snapshot_error", str(e))
+
+
+def prune_token_snapshots(cutoff: int):
+    """Remove snapshots older than cutoff timestamp."""
+    try:
+        if not TOKEN_SNAPSHOTS_FILE.exists():
+            return
+        lines = TOKEN_SNAPSHOTS_FILE.read_text().strip().split("\n")
+        # Keep lines where ts >= cutoff
+        recent = []
+        for line in lines:
+            if line:
+                try:
+                    # Quick parse - find ts value
+                    ts_start = line.find('"ts":') + 5
+                    ts_end = line.find(",", ts_start)
+                    ts = int(line[ts_start:ts_end])
+                    if ts >= cutoff:
+                        recent.append(line)
+                except (ValueError, IndexError):
+                    pass
+        TOKEN_SNAPSHOTS_FILE.write_text("\n".join(recent) + "\n" if recent else "")
+    except Exception as e:
+        from hooks.hook_utils import _log_once
+        _log_once.warning("tool_analytics", "prune_error", str(e))
 
 
 def get_daily_log_path() -> Path:
@@ -219,6 +277,10 @@ def track_tokens(ctx: PostToolUseContext) -> list[str]:
     stats["tool_calls"] += 1
     stats["by_tool"][tool_name] = stats["by_tool"].get(tool_name, 0) + total_tokens
     save_daily_stats(stats)
+
+    # Record snapshot for load average calculation
+    # Note: output_tokens tracked per-call, total_tokens includes both input and output
+    record_token_snapshot(stats["total_tokens"], output_tokens)
 
     messages = []
     if stats["total_tokens"] >= DAILY_WARNING_THRESHOLD:
@@ -410,11 +472,197 @@ def analyze_build(ctx: PostToolUseContext) -> list[str]:
 
 
 # =============================================================================
+# Batch Operation Detector (consolidated from batch_operation_detector.py)
+# =============================================================================
+
+# Configuration for batch detection
+BATCH_SIMILARITY_THRESHOLD = Thresholds.BATCH_SIMILARITY_THRESHOLD
+BATCH_CLEANUP_INTERVAL = Timeouts.CLEANUP_INTERVAL
+BATCH_MAX_AGE = Timeouts.STATE_MAX_AGE
+
+# Pre-compiled regex for normalize_content
+_BATCH_WHITESPACE_RE = re.compile(r'\s+')
+
+# Rate limiting for cleanup
+_batch_last_cleanup_time = 0
+
+# State management using HookState
+_batch_state = HookState("batch_detector", use_session=True, max_age_secs=BATCH_MAX_AGE)
+
+
+def _batch_load_state(session_id: str) -> dict:
+    """Load edit history state for session using HookState."""
+    return _batch_state.load(session_id, default={"edits": [], "writes": [], "last_update": time.time()})
+
+
+def _batch_save_state(session_id: str, state: dict):
+    """Save edit history state using HookState."""
+    _batch_state.save(state, session_id)
+
+
+def _batch_maybe_cleanup():
+    """Trigger cleanup of old session files (rate-limited)."""
+    global _batch_last_cleanup_time
+    now = time.time()
+    if now - _batch_last_cleanup_time < BATCH_CLEANUP_INTERVAL:
+        return
+    _batch_last_cleanup_time = now
+    cleanup_old_sessions(max_age_secs=BATCH_MAX_AGE)
+
+
+def _batch_normalize_content(content: str) -> str:
+    """Normalize content for comparison (remove whitespace variations)."""
+    return _BATCH_WHITESPACE_RE.sub(' ', content.strip().lower())
+
+
+def _batch_extract_pattern(old_string: str, new_string: str) -> dict:
+    """Extract the transformation pattern from an edit."""
+    return {
+        "old_normalized": _batch_normalize_content(old_string),
+        "new_normalized": _batch_normalize_content(new_string),
+        "old_len": len(old_string),
+        "new_len": len(new_string),
+        "is_rename": old_string.replace(" ", "") != new_string.replace(" ", ""),
+    }
+
+
+def _batch_find_similar_edits(current: dict, history: list) -> list:
+    """Find edits with similar patterns."""
+    similar = []
+    curr_pattern = current.get("pattern", {})
+    curr_old_norm = curr_pattern.get("old_normalized", "")
+    curr_new_norm = curr_pattern.get("new_normalized", "")
+    curr_old_len = curr_pattern.get("old_len", 0)
+    curr_new_len = curr_pattern.get("new_len", 0)
+    curr_is_rename = curr_pattern.get("is_rename")
+
+    for edit in history:
+        hist_pattern = edit.get("pattern", {})
+        if curr_old_norm == hist_pattern.get("old_normalized") or curr_new_norm == hist_pattern.get("new_normalized"):
+            similar.append(edit)
+            continue
+        hist_old_len = hist_pattern.get("old_len", 0)
+        hist_new_len = hist_pattern.get("new_len", 0)
+        hist_is_rename = hist_pattern.get("is_rename")
+        if (abs(curr_old_len - hist_old_len) < 20 and
+            abs(curr_new_len - hist_new_len) < 20 and
+            curr_is_rename == hist_is_rename and
+            curr_old_norm[:30] == hist_pattern.get("old_normalized", "")[:30]):
+            similar.append(edit)
+
+    return similar
+
+
+def _batch_suggest_command(edits: list, current_edit: dict) -> str:
+    """Generate a suggestion for batching similar edits."""
+    all_edits = edits + [current_edit]
+    files = [e["file"] for e in all_edits]
+    extensions = set(Path(f).suffix.lower() for f in files)
+
+    try:
+        common_dir = os.path.commonpath(files)
+    except ValueError:
+        common_dir = "."
+
+    if len(extensions) == 1:
+        ext = list(extensions)[0]
+        glob_pattern = f"{common_dir}/**/*{ext}"
+    else:
+        glob_pattern = f"{common_dir}/**/*"
+
+    old_str = current_edit.get("old_string", "")[:30]
+    new_str = current_edit.get("new_string", "")[:30]
+
+    if old_str and new_str:
+        return f"sd '{old_str}' '{new_str}' '{glob_pattern}'"
+    return f"code-mode batch edit across {glob_pattern}"
+
+
+def detect_batch(ctx: PostToolUseContext) -> list[str]:
+    """Detect repetitive edit patterns. Returns list of messages."""
+    if ctx.tool_name not in ("Edit", "Write"):
+        return []
+
+    session_id = get_session_id(ctx.raw)
+    _batch_maybe_cleanup()
+    state = _batch_load_state(session_id)
+    messages = []
+
+    if ctx.tool_name == "Edit":
+        file_path = ctx.tool_input.file_path
+        old_string = ctx.tool_input.old_string
+        new_string = ctx.tool_input.new_string
+
+        if file_path and old_string and new_string:
+            current_edit = {
+                "file": file_path,
+                "old_string": old_string,
+                "new_string": new_string,
+                "pattern": _batch_extract_pattern(old_string, new_string),
+                "time": time.time()
+            }
+            similar = _batch_find_similar_edits(current_edit, state["edits"])
+
+            if len(similar) >= BATCH_SIMILARITY_THRESHOLD - 1:
+                suggestion = _batch_suggest_command(similar, current_edit)
+                affected_files = [e["file"] for e in similar] + [file_path]
+                unique_files = list(set(Path(f).name for f in affected_files))
+
+                msg = f"[Batch Detector] {len(similar) + 1} similar edits detected"
+                msg += f"\n  Files: {', '.join(unique_files[:5])}"
+                if len(unique_files) > 5:
+                    msg += f" (+{len(unique_files) - 5} more)"
+                msg += f"\n  → Use: Task(batch-editor, '{suggestion}')"
+                msg += f"\n  → Or:  {suggestion}"
+                messages.append(msg)
+
+                log_event("tool_analytics", "batch_suggestion", {"count": len(similar) + 1, "files": len(unique_files)})
+
+            state["edits"].append(current_edit)
+            state["edits"] = state["edits"][-50:]
+
+    elif ctx.tool_name == "Write":
+        file_path = ctx.tool_input.file_path
+        content = ctx.tool_input.content
+
+        if file_path and content:
+            current_write = {
+                "file": file_path,
+                "content_hash": hash(content[:200]),
+                "extension": Path(file_path).suffix.lower(),
+                "size": len(content),
+                "time": time.time()
+            }
+            similar_writes = [
+                w for w in state["writes"]
+                if w["extension"] == current_write["extension"]
+                and abs(w["size"] - current_write["size"]) < 500
+            ]
+
+            if len(similar_writes) >= BATCH_SIMILARITY_THRESHOLD - 1:
+                files = [w["file"] for w in similar_writes] + [file_path]
+                unique_files = list(set(Path(f).name for f in files))
+
+                msg = f"[Batch Detector] {len(similar_writes) + 1} similar file creations"
+                msg += f"\n  Files: {', '.join(unique_files[:5])}"
+                msg += "\n  Consider: code-mode batch write or template generation"
+                messages.append(msg)
+
+                log_event("tool_analytics", "batch_write_suggestion", {"count": len(similar_writes) + 1, "files": len(unique_files)})
+
+            state["writes"].append(current_write)
+            state["writes"] = state["writes"][-50:]
+
+    _batch_save_state(session_id, state)
+    return messages
+
+
+# =============================================================================
 # Combined Handler
 # =============================================================================
 
 def track_tool_analytics(raw: dict) -> dict | None:
-    """Combined handler for tool success tracking, token tracking, output monitoring, and build analysis."""
+    """Combined handler for tool success tracking, token tracking, output monitoring, build analysis, and batch detection."""
     ctx = PostToolUseContext(raw)
     all_messages = []
 
@@ -433,6 +681,10 @@ def track_tool_analytics(raw: dict) -> dict | None:
     # Analyze build failures (for Bash commands)
     build_messages = analyze_build(ctx)
     all_messages.extend(build_messages)
+
+    # Detect batch operations (for Edit/Write)
+    batch_messages = detect_batch(ctx)
+    all_messages.extend(batch_messages)
 
     if all_messages:
         return Response.message(" | ".join(all_messages[:3]), event="PostToolUse")

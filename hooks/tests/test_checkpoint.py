@@ -13,7 +13,7 @@ from datetime import datetime
 from unittest import TestCase, main
 from unittest.mock import patch, MagicMock, mock_open
 
-from hooks.handlers.checkpoint import (
+from hooks.handlers.context_manager import (
     load_state,
     save_state,
     is_risky_operation,
@@ -30,10 +30,10 @@ from hooks.hook_sdk import PreToolUseContext
 class TestLoadSaveState(TestCase):
     """Tests for load_state and save_state functions."""
 
-    @patch("hooks.handlers.checkpoint.read_state")
-    def test_load_state_default(self, mock_read):
+    @patch("hooks.handlers.context_manager._checkpoint_state")
+    def test_load_state_default(self, mock_state):
         """Loading state returns default structure."""
-        mock_read.return_value = {"last_checkpoint": 0, "checkpoints": []}
+        mock_state.load.return_value = {"last_checkpoint": 0, "checkpoints": []}
 
         state = load_state()
 
@@ -41,24 +41,24 @@ class TestLoadSaveState(TestCase):
         self.assertIn("checkpoints", state)
         self.assertEqual(state["last_checkpoint"], 0)
         self.assertEqual(state["checkpoints"], [])
-        mock_read.assert_called_once_with("checkpoint", {"last_checkpoint": 0, "checkpoints": []})
+        mock_state.load.assert_called_once()
 
-    @patch("hooks.handlers.checkpoint.read_state")
-    def test_load_state_existing(self, mock_read):
+    @patch("hooks.handlers.context_manager._checkpoint_state")
+    def test_load_state_existing(self, mock_state):
         """Loading state returns existing data."""
         existing_state = {
             "last_checkpoint": 1234567890.0,
             "checkpoints": [{"file": "test.py", "reason": "large edit"}]
         }
-        mock_read.return_value = existing_state
+        mock_state.load.return_value = existing_state
 
         state = load_state()
 
         self.assertEqual(state["last_checkpoint"], 1234567890.0)
         self.assertEqual(len(state["checkpoints"]), 1)
 
-    @patch("hooks.handlers.checkpoint.write_state")
-    def test_save_state(self, mock_write):
+    @patch("hooks.handlers.context_manager._checkpoint_state")
+    def test_save_state(self, mock_state):
         """Saving state persists to storage."""
         state = {
             "last_checkpoint": time.time(),
@@ -67,7 +67,7 @@ class TestLoadSaveState(TestCase):
 
         save_state(state)
 
-        mock_write.assert_called_once_with("checkpoint", state)
+        mock_state.save.assert_called_once_with(state)
 
 
 class TestIsRiskyOperation(TestCase):
@@ -154,8 +154,8 @@ class TestShouldCheckpoint(TestCase):
 class TestSaveCheckpointEntry(TestCase):
     """Tests for save_checkpoint_entry function."""
 
-    @patch("hooks.handlers.checkpoint.load_state")
-    @patch("hooks.handlers.checkpoint.save_state")
+    @patch("hooks.handlers.context_manager.load_state")
+    @patch("hooks.handlers.context_manager.save_state")
     def test_saves_checkpoint_entry(self, mock_save, mock_load):
         """Saves checkpoint entry with all details."""
         mock_load.return_value = {"last_checkpoint": 0, "checkpoints": []}
@@ -175,8 +175,8 @@ class TestSaveCheckpointEntry(TestCase):
         self.assertEqual(checkpoint["cwd"], "/project")
         self.assertIn("timestamp", checkpoint)
 
-    @patch("hooks.handlers.checkpoint.load_state")
-    @patch("hooks.handlers.checkpoint.save_state")
+    @patch("hooks.handlers.context_manager.load_state")
+    @patch("hooks.handlers.context_manager.save_state")
     def test_updates_last_checkpoint_time(self, mock_save, mock_load):
         """Updates last_checkpoint timestamp in state."""
         mock_load.return_value = {"last_checkpoint": 0, "checkpoints": []}
@@ -197,8 +197,8 @@ class TestSaveCheckpointEntry(TestCase):
         self.assertGreaterEqual(saved_state["last_checkpoint"], before)
         self.assertLessEqual(saved_state["last_checkpoint"], after)
 
-    @patch("hooks.handlers.checkpoint.load_state")
-    @patch("hooks.handlers.checkpoint.save_state")
+    @patch("hooks.handlers.context_manager.load_state")
+    @patch("hooks.handlers.context_manager.save_state")
     def test_limits_checkpoints_to_20(self, mock_save, mock_load):
         """Keeps only last 20 checkpoints."""
         existing_checkpoints = [
@@ -236,7 +236,7 @@ class TestRotateErrorBackups(TestCase):
                 backup = backup_dir / f"error_{i}.json"
                 backup.write_text(json.dumps({"error": i}))
 
-            with patch("hooks.handlers.checkpoint.ERROR_BACKUP_DIR", backup_dir):
+            with patch("hooks.handlers.context_manager.ERROR_BACKUP_DIR", backup_dir):
                 rotate_error_backups()
 
             # All should remain
@@ -255,7 +255,7 @@ class TestRotateErrorBackups(TestCase):
                 # Add small delay to ensure different mtimes
                 time.sleep(0.01)
 
-            with patch("hooks.handlers.checkpoint.ERROR_BACKUP_DIR", backup_dir):
+            with patch("hooks.handlers.context_manager.ERROR_BACKUP_DIR", backup_dir):
                 rotate_error_backups()
 
             # Should only keep MAX_ERROR_BACKUPS
@@ -272,7 +272,7 @@ class TestRotateErrorBackups(TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             nonexistent_dir = Path(tmpdir) / "nonexistent"
 
-            with patch("hooks.handlers.checkpoint.ERROR_BACKUP_DIR", nonexistent_dir):
+            with patch("hooks.handlers.context_manager.ERROR_BACKUP_DIR", nonexistent_dir):
                 # Should not raise exception
                 rotate_error_backups()
 
@@ -291,7 +291,7 @@ class TestRotateErrorBackups(TestCase):
             # Make oldest backup undeletable (simulate permission error)
             oldest = backups[0]
             with patch.object(Path, "unlink", side_effect=PermissionError):
-                with patch("hooks.handlers.checkpoint.ERROR_BACKUP_DIR", backup_dir):
+                with patch("hooks.handlers.context_manager.ERROR_BACKUP_DIR", backup_dir):
                     # Should not raise exception
                     rotate_error_backups()
 
@@ -304,7 +304,7 @@ class TestSaveErrorBackup(TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             backup_dir = Path(tmpdir)
 
-            with patch("hooks.handlers.checkpoint.ERROR_BACKUP_DIR", backup_dir):
+            with patch("hooks.handlers.context_manager.ERROR_BACKUP_DIR", backup_dir):
                 raw = {
                     "session_id": "test-session",
                     "cwd": "/project"
@@ -331,7 +331,7 @@ class TestSaveErrorBackup(TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             backup_dir = Path(tmpdir)
 
-            with patch("hooks.handlers.checkpoint.ERROR_BACKUP_DIR", backup_dir):
+            with patch("hooks.handlers.context_manager.ERROR_BACKUP_DIR", backup_dir):
                 raw = {"session_id": "test", "cwd": "/project"}
                 long_output = "x" * 20000
 
@@ -349,7 +349,7 @@ class TestSaveErrorBackup(TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             backup_dir = Path(tmpdir)
 
-            with patch("hooks.handlers.checkpoint.ERROR_BACKUP_DIR", backup_dir):
+            with patch("hooks.handlers.context_manager.ERROR_BACKUP_DIR", backup_dir):
                 raw = {"session_id": "test", "cwd": "/project"}
                 long_command = "python script.py " + " ".join([f"arg{i}" for i in range(200)])
 
@@ -366,7 +366,7 @@ class TestSaveErrorBackup(TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             backup_dir = Path(tmpdir) / "backups"
 
-            with patch("hooks.handlers.checkpoint.ERROR_BACKUP_DIR", backup_dir):
+            with patch("hooks.handlers.context_manager.ERROR_BACKUP_DIR", backup_dir):
                 raw = {"session_id": "test", "cwd": "/project"}
 
                 result = save_error_backup(raw, "test", 1, "error")
@@ -382,7 +382,7 @@ class TestSaveErrorBackup(TestCase):
             backup_dir.mkdir()
             backup_dir.chmod(0o444)  # Read-only
 
-            with patch("hooks.handlers.checkpoint.ERROR_BACKUP_DIR", backup_dir):
+            with patch("hooks.handlers.context_manager.ERROR_BACKUP_DIR", backup_dir):
                 raw = {"session_id": "test", "cwd": "/project"}
 
                 result = save_error_backup(raw, "test", 1, "error")
@@ -398,7 +398,7 @@ class TestSaveErrorBackup(TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             backup_dir = Path(tmpdir)
 
-            with patch("hooks.handlers.checkpoint.ERROR_BACKUP_DIR", backup_dir):
+            with patch("hooks.handlers.context_manager.ERROR_BACKUP_DIR", backup_dir):
                 raw = {"cwd": "/project"}  # No session_id
 
                 result = save_error_backup(raw, "test", 1, "error")

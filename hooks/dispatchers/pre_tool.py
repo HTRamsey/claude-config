@@ -27,11 +27,12 @@ class PreToolDispatcher(BaseDispatcher):
     ALL_HANDLERS = [
         "file_protection", "tdd_guard", "dangerous_command_blocker",
         "credential_scanner", "suggestion_engine", "file_monitor",
-        "context_manager", "unified_cache", "usage_tracker", "hierarchical_rules",
-        "subagent_lifecycle"
+        "context_manager", "unified_cache", "hierarchical_rules",
+        "subagent_lifecycle", "skill_tracker"
     ]
 
     # Tool-to-handler mapping (order matters - deny hooks first)
+    # Note: subagent_lifecycle now handles Task usage tracking (consolidated from usage_tracker)
     TOOL_HANDLERS = {
         "Read": ["file_protection", "file_monitor", "hierarchical_rules", "suggestion_engine"],
         "Write": ["file_protection", "tdd_guard", "hierarchical_rules", "suggestion_engine", "context_manager"],
@@ -39,8 +40,8 @@ class PreToolDispatcher(BaseDispatcher):
         "Bash": ["dangerous_command_blocker", "credential_scanner", "suggestion_engine"],
         "Grep": ["suggestion_engine"],
         "Glob": ["suggestion_engine"],
-        "Task": ["subagent_lifecycle", "usage_tracker", "unified_cache"],
-        "Skill": ["usage_tracker"],
+        "Task": ["subagent_lifecycle", "unified_cache"],
+        "Skill": ["skill_tracker"],
         "WebFetch": ["unified_cache"],
         "LSP": ["suggestion_engine"],
     }
@@ -60,9 +61,9 @@ class PreToolDispatcher(BaseDispatcher):
         "file_monitor": ("hooks.handlers.file_monitor", "track_file_pre"),
         "context_manager": ("hooks.handlers.context_manager", "handle_pre_tool_use"),
         "unified_cache": ("hooks.handlers.unified_cache", ("handle_exploration_pre", "handle_research_pre")),
-        "usage_tracker": ("hooks.handlers.usage_tracker", "handle"),
         "hierarchical_rules": ("hooks.handlers.hierarchical_rules", "check_hierarchical_rules"),
         "subagent_lifecycle": ("hooks.handlers.subagent_lifecycle", "handle_start"),
+        "skill_tracker": ("hooks.handlers.subagent_lifecycle", "handle_skill"),
     }
 
     def _credential_scanner_executor(self, name: str, handler: Any, ctx: dict) -> dict | None:

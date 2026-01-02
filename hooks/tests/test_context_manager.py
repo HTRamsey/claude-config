@@ -209,7 +209,7 @@ class TestHandlePreToolUse(TestCase):
     @patch("hooks.handlers.context_manager.should_checkpoint")
     def test_checkpoints_risky_write(self, mock_should, mock_risky, mock_load):
         """Creates checkpoint for risky Write operations."""
-        mock_load.return_value = {"last_checkpoint": 0}
+        mock_load.return_value = {"last_checkpoint": 0, "checkpoints": []}
         mock_risky.return_value = (True, "contains 'DROP TABLE' operation")
         mock_should.return_value = True
 

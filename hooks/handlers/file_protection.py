@@ -13,31 +13,37 @@ from hooks.hook_sdk import (
     log_event,
     BlockingHook,
 )
-from hooks.hook_utils import expand_path
-from hooks.config import ProtectedFiles
+from hooks.hook_utils import normalize_path
+from hooks.config import (
+    get_protected_patterns_compiled,
+    get_write_only_patterns_compiled,
+    get_allowed_patterns_compiled,
+)
 
 
 class FileProtectionHook(BlockingHook):
     """Block access to sensitive files."""
 
     def check(self, ctx: PreToolUseContext) -> dict | None:
-        """Check if file operation should be blocked."""
+        """Check if file operation should be blocked.
+
+        Security: Uses normalize_path() which resolves symlinks to prevent
+        symlink-based bypasses (e.g., ln -s .env safe_link && cat safe_link).
+        """
         file_path = ctx.tool_input.file_path
         if not file_path:
             return None
 
-        # Expand and normalize path
-        file_path = expand_path(file_path)
+        # Normalize path and resolve symlinks to prevent bypass attacks
+        file_path = normalize_path(file_path)
         is_write = ctx.is_write or ctx.is_edit
 
         # Check allowlist first (overrides protection)
-        for allowed in ProtectedFiles.ALLOWED_PATHS:
-            allowed_expanded = expand_path(allowed)
-            if file_path == allowed_expanded:
-                return None
+        if Patterns.find_matching_pattern(file_path, get_allowed_patterns_compiled()):
+            return None
 
         # Check protected patterns (block read and write)
-        matched = Patterns.matches_glob(file_path, ProtectedFiles.PROTECTED_PATTERNS)
+        matched = Patterns.find_matching_pattern(file_path, get_protected_patterns_compiled())
         if matched:
             action = "write to" if is_write else "read"
             log_event("file_protection", "blocked", {
@@ -51,7 +57,7 @@ class FileProtectionHook(BlockingHook):
 
         # Check write-only patterns (only block write/edit, allow read)
         if is_write:
-            matched = Patterns.matches_glob(file_path, ProtectedFiles.WRITE_ONLY_PATTERNS)
+            matched = Patterns.find_matching_pattern(file_path, get_write_only_patterns_compiled())
             if matched:
                 log_event("file_protection", "blocked", {
                     "file": file_path,

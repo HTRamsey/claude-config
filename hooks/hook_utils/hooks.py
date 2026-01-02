@@ -1,13 +1,12 @@
 """
 Hook configuration and utilities.
 
-Uses cachetools TTLCache for automatic expiration.
+Uses cache abstraction for automatic expiration.
 """
 import os
 from datetime import datetime
 
-from cachetools import TTLCache
-
+from .cache import create_ttl_cache
 from .io import safe_load_json
 from .state import read_state, update_state
 from .session import get_session_id
@@ -21,7 +20,7 @@ except ImportError:
     HOOK_DISABLED_TTL = 10.0  # Fallback
 
 # TTL cache for hook disabled status (no lock needed - single-threaded access pattern)
-_hook_disabled_cache: TTLCache = TTLCache(maxsize=50, ttl=HOOK_DISABLED_TTL)
+_hook_disabled_cache = create_ttl_cache(maxsize=50, ttl=HOOK_DISABLED_TTL)
 
 
 def is_hook_disabled(name: str) -> bool:

@@ -1,7 +1,7 @@
 """
 Session-aware state management and transcript backup.
 
-Uses cachetools for automatic TTL expiration and LRU eviction.
+Uses cache abstraction for automatic TTL expiration and LRU eviction.
 """
 import hashlib
 import json
@@ -12,8 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-from cachetools import TTLCache, LRUCache
-
+from .cache import create_ttl_cache, create_lru_cache
 from .io import safe_load_json, atomic_write_json, file_lock
 from .logging import DATA_DIR, log_event
 from .metrics import get_timestamp
@@ -30,11 +29,11 @@ except ImportError:
     CACHE_TTL = 5.0
 
 # TTL cache for session state (expires after CACHE_TTL seconds)
-_session_cache: TTLCache = TTLCache(maxsize=50, ttl=CACHE_TTL)
+_session_cache = create_ttl_cache(maxsize=50, ttl=CACHE_TTL)
 _session_cache_lock = threading.Lock()
 
 # LRU cache for computed session IDs (no TTL needed - pure function memoization)
-_session_id_cache: LRUCache = LRUCache(maxsize=100)
+_session_id_cache = create_lru_cache(maxsize=100)
 _session_id_lock = threading.Lock()
 
 

@@ -7,16 +7,14 @@ Handlers:
 - Learned patterns: User consistently approves → auto-approve
 
 Also provides PostToolUse handler (smart_permissions_post) for learning.
-Uses cachetools TTLCache for automatic cache expiration.
+Uses cache abstraction for automatic cache expiration.
 """
 import json
 import sys
 from pathlib import Path
 
-from cachetools import TTLCache
-
 # Import shared utilities
-from hooks.hook_utils import graceful_main, log_event, get_timestamp, safe_load_json, atomic_write_json
+from hooks.hook_utils import graceful_main, log_event, get_timestamp, safe_load_json, atomic_write_json, create_ttl_cache
 from hooks.hook_sdk import PostToolUseContext, PreToolUseContext, Response, Patterns
 from hooks.config import DATA_DIR, Thresholds, Timeouts, Limits, SmartPermissions
 
@@ -38,7 +36,7 @@ def get_never_patterns():
 
 
 # TTL cache for learned patterns (from centralized config)
-_patterns_cache: TTLCache = TTLCache(maxsize=Limits.PATTERNS_CACHE_MAXSIZE, ttl=Timeouts.PATTERNS_CACHE_TTL)
+_patterns_cache = create_ttl_cache(maxsize=Limits.PATTERNS_CACHE_MAXSIZE, ttl=Timeouts.PATTERNS_CACHE_TTL)
 _PATTERNS_CACHE_KEY = "patterns"
 
 
@@ -146,8 +144,9 @@ def smart_permissions_post(raw: dict) -> dict | None:
 def main():
     try:
         raw = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
+    except json.JSONDecodeError as e:
+        log_event("smart_permissions", "parse_error", {"error": str(e)})
+        sys.exit(1)  # Exit with error code to make failures detectable
 
     ctx = PreToolUseContext(raw)
     file_path = ctx.tool_input.file_path

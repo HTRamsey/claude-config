@@ -10,19 +10,24 @@ from pathlib import Path
 from unittest import TestCase, main
 from unittest.mock import patch, MagicMock
 
-from hooks.dispatchers.session_start import (
-    detect_project_type,
+# Handlers extracted from session dispatchers
+from hooks.handlers.git_context import (
     run_cmd,
-    get_git_context,
+    get_context_summary as get_git_context,
+)
+from hooks.handlers.project_context import (
+    detect_project_type,
     get_todo_context,
     get_recent_errors,
     get_codebase_map,
     get_usage_summary,
 )
-from hooks.dispatchers.session_end import (
+from hooks.handlers.session_persistence import (
     generate_memory_suggestions,
     cleanup_old_session_files,
     extract_project_info,
+)
+from hooks.handlers.transcript_converter import (
     parse_jsonl,
     extract_messages,
     convert_transcript,

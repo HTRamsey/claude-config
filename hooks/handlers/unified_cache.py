@@ -53,6 +53,9 @@ CACHE_CONFIGS = {
 # Lazy-initialized caches
 _caches: dict[str, Cache] = {}
 
+# In-memory index: cwd -> set of cache keys (for O(1) lookup in find_fuzzy_match)
+_cwd_index: dict[str, set[str]] = {}
+
 
 def _get_cache(name: str) -> Cache:
     """Get or create a cache instance."""
@@ -86,8 +89,10 @@ def _update_stat(cache_name: str, stat_name: str, increment: int = 1):
         key = f"{cache_name}:{stat_name}"
         current = stats.get(key, 0)
         stats.set(key, current + increment)
-    except Exception:
-        pass  # Stats are not critical
+    except Exception as e:
+        # Log first occurrence, suppress duplicates for 5 minutes
+        from hooks.hook_utils import _log_once
+        _log_once.warning("unified_cache", "stats_error", str(e))
 
 
 def get_exploration_entry(cache_key: str, cfg: CacheConfig) -> dict | None:
@@ -106,10 +111,17 @@ def get_exploration_entry(cache_key: str, cfg: CacheConfig) -> dict | None:
 
 
 def save_exploration_entry(cache_key: str, entry: dict, cfg: CacheConfig):
-    """Save exploration cache entry."""
+    """Save exploration cache entry and update cwd index."""
     try:
         cache = _get_cache("exploration")
         cache.set(cache_key, entry, expire=cfg.ttl_seconds)
+
+        # Update cwd index for O(1) fuzzy match lookup
+        cwd = entry.get("cwd")
+        if cwd:
+            if cwd not in _cwd_index:
+                _cwd_index[cwd] = set()
+            _cwd_index[cwd].add(cache_key)
     except Exception as e:
         log_event("unified_cache", "save_error", {"error": str(e)}, "warning")
 
@@ -137,24 +149,35 @@ def save_research_entry(cache_key: str, entry: dict, cfg: CacheConfig):
 
 
 def find_fuzzy_match(prompt: str, cwd: str, cfg: CacheConfig) -> dict | None:
-    """Find similar cached entry using fuzzy matching."""
+    """Find similar cached entry using fuzzy matching.
+
+    Uses cwd index for O(1) key lookup instead of iterating all cache keys.
+    """
     cache = _get_cache("exploration")
     now = time.time()
     cutoff = now - cfg.ttl_seconds
 
-    # Iterate through cache entries for this cwd
+    # Use cwd index for O(1) lookup instead of iterating all keys
+    indexed_keys = _cwd_index.get(cwd, set())
+    if not indexed_keys:
+        return None
+
     candidates = []
     candidate_map = {}
+    expired_keys = []
 
-    for key in cache.iterkeys():
+    for key in indexed_keys:
+        if len(candidates) >= Limits.MAX_FUZZY_SEARCH_ENTRIES:
+            break
+
         entry = cache.get(key)
         if not entry or not isinstance(entry, dict):
+            expired_keys.append(key)
             continue
 
-        # Filter by cwd and TTL
-        if entry.get("cwd") != cwd:
-            continue
+        # Check TTL
         if entry.get("timestamp", 0) < cutoff:
+            expired_keys.append(key)
             continue
 
         cached_prompt = (entry.get("prompt") or "").lower()
@@ -162,8 +185,9 @@ def find_fuzzy_match(prompt: str, cwd: str, cfg: CacheConfig) -> dict | None:
             candidates.append(cached_prompt)
             candidate_map[cached_prompt] = entry
 
-        if len(candidates) >= Limits.MAX_FUZZY_SEARCH_ENTRIES:
-            break
+    # Clean up expired keys from index
+    if expired_keys and cwd in _cwd_index:
+        _cwd_index[cwd] -= set(expired_keys)
 
     if not candidates:
         return None

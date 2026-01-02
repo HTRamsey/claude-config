@@ -15,10 +15,11 @@ Usage:
 from .logging import (
     DATA_DIR,
     LOG_FILE,
-    ensure_data_dir,
     log_event,
     graceful_main,
     read_stdin_context,
+    LogOnce,
+    _log_once,
 )
 
 from .io import (
@@ -26,12 +27,29 @@ from .io import (
     safe_load_json,
     safe_save_json,
     atomic_write_json,
+    safe_stat,
+    safe_mtime,
+    safe_exists,
+    normalize_path,
+    expand_path,
+    iter_jsonl,
+    count_jsonl_lines,
+)
+
+from .transcript import (
+    iter_transcript,
+    extract_messages,
+    get_last_assistant_content,
+    analyze_tool_usage,
+    detect_project_root,
+    count_tool_calls,
 )
 
 from .state import (
     CACHE_TTL,
     read_state,
     write_state,
+    batch_write,
     update_state,
     flush_pending_writes,
 )
@@ -57,14 +75,6 @@ from .hooks import (
     record_usage,
 )
 
-from .io import (
-    safe_stat,
-    safe_mtime,
-    safe_exists,
-    normalize_path,
-    expand_path,
-)
-
 from .metrics import (
     estimate_tokens,
     get_content_size,
@@ -74,6 +84,17 @@ from .metrics import (
 
 from .state import (
     TTLCachedLoader,
+)
+
+from .cache import (
+    create_ttl_cache,
+    create_lru_cache,
+    cached_call,
+)
+
+from .notify import (
+    send_notification,
+    is_notification_available,
 )
 
 # Note: BlockingHook is in hook_sdk - import directly from there
@@ -131,10 +152,11 @@ __all__ = [
     # Logging
     "DATA_DIR",
     "LOG_FILE",
-    "ensure_data_dir",
     "log_event",
     "graceful_main",
     "read_stdin_context",
+    "LogOnce",
+    "_log_once",
     # I/O
     "file_lock",
     "safe_load_json",
@@ -144,6 +166,7 @@ __all__ = [
     "CACHE_TTL",
     "read_state",
     "write_state",
+    "batch_write",
     "update_state",
     "flush_pending_writes",
     # Session
@@ -170,6 +193,15 @@ __all__ = [
     "safe_exists",
     "normalize_path",
     "expand_path",
+    "iter_jsonl",
+    "count_jsonl_lines",
+    # Transcript utilities
+    "iter_transcript",
+    "extract_messages",
+    "get_last_assistant_content",
+    "analyze_tool_usage",
+    "detect_project_root",
+    "count_tool_calls",
     # Metrics
     "estimate_tokens",
     "get_content_size",
@@ -177,6 +209,13 @@ __all__ = [
     "get_timestamp",
     # State (includes TTLCachedLoader)
     "TTLCachedLoader",
+    # Cache
+    "create_ttl_cache",
+    "create_lru_cache",
+    "cached_call",
+    # Notifications
+    "send_notification",
+    "is_notification_available",
     # Note: BlockingHook is in hook_sdk, not re-exported here
     # Event detection & utilities
     "detect_event",

@@ -8,14 +8,18 @@ from unittest.mock import Mock, patch, MagicMock
 
 import pytest
 
-from hooks.dispatchers.stop import (
-    get_git_status,
-    check_uncommitted_changes,
+# Handlers extracted from stop dispatcher
+from hooks.handlers.git_context import get_status as get_git_status
+from hooks.handlers.auto_continue import (
     check_rate_limit,
     record_continuation,
     extract_last_messages,
     heuristic_should_continue,
     check_auto_continue,
+)
+
+from hooks.dispatchers.stop import (
+    check_uncommitted_changes,
     handle_stop,
 )
 
@@ -121,14 +125,14 @@ class TestCheckUncommittedChanges:
 
     def test_non_git_repo(self):
         """Should return empty list for non-git repo."""
-        with patch("hooks.dispatchers.stop.get_git_status") as mock_status:
+        with patch("hooks.dispatchers.stop.git_context.get_status") as mock_status:
             mock_status.return_value = {"is_git_repo": False}
             messages = check_uncommitted_changes({})
             assert messages == []
 
     def test_clean_repo(self):
         """Should return empty list for clean repo."""
-        with patch("hooks.dispatchers.stop.get_git_status") as mock_status:
+        with patch("hooks.dispatchers.stop.git_context.get_status") as mock_status:
             mock_status.return_value = {
                 "is_git_repo": True,
                 "has_staged": False,
@@ -142,7 +146,7 @@ class TestCheckUncommittedChanges:
 
     def test_staged_changes_message(self):
         """Should return message for staged changes."""
-        with patch("hooks.dispatchers.stop.get_git_status") as mock_status:
+        with patch("hooks.dispatchers.stop.git_context.get_status") as mock_status:
             mock_status.return_value = {
                 "is_git_repo": True,
                 "has_staged": True,
@@ -158,7 +162,7 @@ class TestCheckUncommittedChanges:
 
     def test_unstaged_changes_message(self):
         """Should return message for unstaged changes."""
-        with patch("hooks.dispatchers.stop.get_git_status") as mock_status:
+        with patch("hooks.dispatchers.stop.git_context.get_status") as mock_status:
             mock_status.return_value = {
                 "is_git_repo": True,
                 "has_staged": False,
@@ -173,7 +177,7 @@ class TestCheckUncommittedChanges:
 
     def test_both_staged_and_unstaged(self):
         """Should mention both staged and unstaged."""
-        with patch("hooks.dispatchers.stop.get_git_status") as mock_status:
+        with patch("hooks.dispatchers.stop.git_context.get_status") as mock_status:
             mock_status.return_value = {
                 "is_git_repo": True,
                 "has_staged": True,
@@ -188,7 +192,7 @@ class TestCheckUncommittedChanges:
 
     def test_unpushed_commits_message(self):
         """Should return message for unpushed commits."""
-        with patch("hooks.dispatchers.stop.get_git_status") as mock_status:
+        with patch("hooks.dispatchers.stop.git_context.get_status") as mock_status:
             mock_status.return_value = {
                 "is_git_repo": True,
                 "has_staged": False,
@@ -206,7 +210,7 @@ class TestCheckUncommittedChanges:
 
     def test_untracked_files_few(self):
         """Should mention untracked files if <= 10."""
-        with patch("hooks.dispatchers.stop.get_git_status") as mock_status:
+        with patch("hooks.dispatchers.stop.git_context.get_status") as mock_status:
             mock_status.return_value = {
                 "is_git_repo": True,
                 "has_staged": False,
@@ -221,7 +225,7 @@ class TestCheckUncommittedChanges:
 
     def test_untracked_files_many(self):
         """Should not mention untracked files if > 10."""
-        with patch("hooks.dispatchers.stop.get_git_status") as mock_status:
+        with patch("hooks.dispatchers.stop.git_context.get_status") as mock_status:
             mock_status.return_value = {
                 "is_git_repo": True,
                 "has_staged": False,
@@ -235,7 +239,7 @@ class TestCheckUncommittedChanges:
 
     def test_multiple_issues(self):
         """Should return multiple messages for multiple issues."""
-        with patch("hooks.dispatchers.stop.get_git_status") as mock_status:
+        with patch("hooks.dispatchers.stop.git_context.get_status") as mock_status:
             mock_status.return_value = {
                 "is_git_repo": True,
                 "has_staged": True,
@@ -252,13 +256,13 @@ class TestCheckUncommittedChanges:
 class TestCheckRateLimit:
     """Tests for rate limiting."""
 
-    @patch("hooks.dispatchers.stop.load_continue_state")
+    @patch("hooks.handlers.auto_continue.load_continue_state")
     def test_no_recent_continuations(self, mock_load):
         """Should allow when no recent continuations."""
         mock_load.return_value = {"continuations": []}
         assert check_rate_limit() is True
 
-    @patch("hooks.dispatchers.stop.load_continue_state")
+    @patch("hooks.handlers.auto_continue.load_continue_state")
     @patch("time.time")
     def test_within_limit(self, mock_time, mock_load):
         """Should allow when within continuation limit."""
@@ -269,7 +273,7 @@ class TestCheckRateLimit:
         }
         assert check_rate_limit() is True
 
-    @patch("hooks.dispatchers.stop.load_continue_state")
+    @patch("hooks.handlers.auto_continue.load_continue_state")
     @patch("time.time")
     def test_at_limit(self, mock_time, mock_load):
         """Should block when at continuation limit."""
@@ -280,7 +284,7 @@ class TestCheckRateLimit:
         }
         assert check_rate_limit() is False
 
-    @patch("hooks.dispatchers.stop.load_continue_state")
+    @patch("hooks.handlers.auto_continue.load_continue_state")
     @patch("time.time")
     def test_old_continuations_pruned(self, mock_time, mock_load):
         """Should prune old continuations outside window."""
@@ -297,8 +301,8 @@ class TestCheckRateLimit:
 class TestRecordContinuation:
     """Tests for continuation recording."""
 
-    @patch("hooks.dispatchers.stop.load_continue_state")
-    @patch("hooks.dispatchers.stop.save_continue_state")
+    @patch("hooks.handlers.auto_continue.load_continue_state")
+    @patch("hooks.handlers.auto_continue.save_continue_state")
     @patch("time.time")
     def test_records_timestamp(self, mock_time, mock_save, mock_load):
         """Should record current timestamp."""
@@ -311,8 +315,8 @@ class TestRecordContinuation:
         saved_state = mock_save.call_args[0][0]
         assert 1234.5 in saved_state["continuations"]
 
-    @patch("hooks.dispatchers.stop.load_continue_state")
-    @patch("hooks.dispatchers.stop.save_continue_state")
+    @patch("hooks.handlers.auto_continue.load_continue_state")
+    @patch("hooks.handlers.auto_continue.save_continue_state")
     @patch("time.time")
     def test_appends_to_existing(self, mock_time, mock_save, mock_load):
         """Should append to existing continuations."""
@@ -493,16 +497,16 @@ class TestHeuristicShouldContinue:
 class TestCheckAutoContinue:
     """Tests for auto-continue logic."""
 
-    @patch("hooks.dispatchers.stop.check_rate_limit")
+    @patch("hooks.handlers.auto_continue.check_rate_limit")
     def test_rate_limited(self, mock_rate_limit):
         """Should return None when rate limited."""
         mock_rate_limit.return_value = False
         result = check_auto_continue({})
         assert result is None
 
-    @patch("hooks.dispatchers.stop.check_rate_limit")
-    @patch("hooks.dispatchers.stop.extract_last_messages")
-    @patch("hooks.dispatchers.stop.heuristic_should_continue")
+    @patch("hooks.handlers.auto_continue.check_rate_limit")
+    @patch("hooks.handlers.auto_continue.extract_last_messages")
+    @patch("hooks.handlers.auto_continue.heuristic_should_continue")
     def test_should_not_continue(self, mock_heuristic, mock_extract, mock_rate_limit):
         """Should return None when heuristic says no."""
         mock_rate_limit.return_value = True
@@ -512,10 +516,10 @@ class TestCheckAutoContinue:
         result = check_auto_continue({})
         assert result is None
 
-    @patch("hooks.dispatchers.stop.check_rate_limit")
-    @patch("hooks.dispatchers.stop.extract_last_messages")
-    @patch("hooks.dispatchers.stop.heuristic_should_continue")
-    @patch("hooks.dispatchers.stop.record_continuation")
+    @patch("hooks.handlers.auto_continue.check_rate_limit")
+    @patch("hooks.handlers.auto_continue.extract_last_messages")
+    @patch("hooks.handlers.auto_continue.heuristic_should_continue")
+    @patch("hooks.handlers.auto_continue.record_continuation")
     def test_should_continue(
         self, mock_record, mock_heuristic, mock_extract, mock_rate_limit
     ):
@@ -536,7 +540,7 @@ class TestHandleStop:
     """Tests for main stop handler."""
 
     @patch("hooks.dispatchers.stop.check_uncommitted_changes")
-    @patch("hooks.dispatchers.stop.check_auto_continue")
+    @patch("hooks.dispatchers.stop.auto_continue.check_auto_continue")
     def test_clean_stop_no_continue(self, mock_auto, mock_uncommitted):
         """Should return empty results for clean stop."""
         mock_uncommitted.return_value = []
@@ -548,7 +552,7 @@ class TestHandleStop:
         assert continue_result is None
 
     @patch("hooks.dispatchers.stop.check_uncommitted_changes")
-    @patch("hooks.dispatchers.stop.check_auto_continue")
+    @patch("hooks.dispatchers.stop.auto_continue.check_auto_continue")
     def test_uncommitted_changes_no_continue(self, mock_auto, mock_uncommitted):
         """Should return uncommitted messages without continue."""
         mock_uncommitted.return_value = ["Uncommitted changes in 3 files"]
@@ -561,7 +565,7 @@ class TestHandleStop:
         assert continue_result is None
 
     @patch("hooks.dispatchers.stop.check_uncommitted_changes")
-    @patch("hooks.dispatchers.stop.check_auto_continue")
+    @patch("hooks.dispatchers.stop.auto_continue.check_auto_continue")
     def test_clean_but_should_continue(self, mock_auto, mock_uncommitted):
         """Should return continue result even without uncommitted changes."""
         mock_uncommitted.return_value = []
@@ -574,7 +578,7 @@ class TestHandleStop:
         assert continue_result["result"] == "continue"
 
     @patch("hooks.dispatchers.stop.check_uncommitted_changes")
-    @patch("hooks.dispatchers.stop.check_auto_continue")
+    @patch("hooks.dispatchers.stop.auto_continue.check_auto_continue")
     def test_both_uncommitted_and_continue(self, mock_auto, mock_uncommitted):
         """Should return both uncommitted messages and continue result."""
         mock_uncommitted.return_value = [

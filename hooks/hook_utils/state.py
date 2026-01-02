@@ -8,12 +8,11 @@ import threading
 import time
 from typing import Callable, TypeVar, Generic
 
-from cachetools import TTLCache
-
-T = TypeVar('T')
-
+from .cache import create_ttl_cache
 from .io import safe_load_json, atomic_write_json
 from .logging import DATA_DIR
+
+T = TypeVar('T')
 
 # Import centralized config
 try:
@@ -23,7 +22,7 @@ except ImportError:
     CACHE_TTL = 5.0  # Fallback
 
 # Thread-safe TTL cache for state files
-_cache: TTLCache = TTLCache(maxsize=100, ttl=CACHE_TTL)
+_cache = create_ttl_cache(maxsize=100, ttl=CACHE_TTL)
 _cache_lock = threading.Lock()
 
 # Pending writes for batch flushing (reduces disk I/O during dispatch)
@@ -94,9 +93,30 @@ def update_state(name: str, updater: Callable[[dict], dict], default: dict = Non
     return write_state(name, updated)
 
 
+def batch_write(name: str, data: dict) -> None:
+    """
+    Queue state write for batch flushing.
+
+    Use this instead of write_state() during high-frequency operations
+    (e.g., in handler loops) to reduce disk I/O. Call flush_pending_writes()
+    at the end of dispatch to persist all queued writes.
+
+    Args:
+        name: State file name (without .json extension)
+        data: Data to write
+    """
+    with _pending_lock:
+        _pending_writes[name] = data.copy()
+    # Also update cache immediately for read consistency
+    with _cache_lock:
+        _cache[name] = data.copy()
+
+
 def flush_pending_writes() -> int:
     """
     Flush all pending state writes to disk.
+
+    Call at the end of dispatch to persist all batched writes.
 
     Returns:
         Number of files successfully written
@@ -161,7 +181,7 @@ class TTLCachedLoader(Generic[T]):
         """
         self.load_func = load_func
         self.cache_key = cache_key
-        self._cache: TTLCache = TTLCache(maxsize=maxsize, ttl=ttl)
+        self._cache = create_ttl_cache(maxsize=maxsize, ttl=ttl)
         self._lock = threading.Lock()
 
     def get(self) -> T:

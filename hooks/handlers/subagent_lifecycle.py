@@ -1,11 +1,13 @@
 #!/home/jonglaser/.claude/data/venv/bin/python3
 """
-SubagentLifecycle hook - tracks subagent lifecycle for metrics and timing.
+SubagentLifecycle hook - tracks subagent lifecycle for metrics, timing, and usage.
 Called via pre_tool_dispatcher (handle_start) and post_tool_dispatcher (handle_complete)
 for Task tool invocations.
 
 Also maintains Reflexion memory - a log of task outcomes and lessons
 for learning from past subagent executions.
+
+Consolidates usage_tracker functionality for Task and Skill tools.
 """
 import hashlib
 from datetime import datetime
@@ -17,10 +19,12 @@ from hooks.hook_utils import (
     update_session_state,
     safe_load_json,
     atomic_write_json,
+    record_usage,
 )
 from hooks.hook_sdk import PreToolUseContext, PostToolUseContext
 
 REFLEXION_LOG = Path.home() / ".claude/data/reflexion-log.json"
+CONFIDENCE_FILE = Path.home() / ".claude/data/agent-confidence.json"
 MAX_REFLEXION_ENTRIES = 100  # Keep last N entries
 
 
@@ -36,6 +40,61 @@ def save_reflexion_log(entries: list):
     trimmed = entries[-MAX_REFLEXION_ENTRIES:]
     if not atomic_write_json(REFLEXION_LOG, trimmed):
         log_event("subagent_lifecycle", "reflexion_save_error", {"error": "Failed to save reflexion log"})
+
+
+def load_confidence_data() -> dict:
+    """Load confidence tracking data."""
+    return safe_load_json(CONFIDENCE_FILE, {"agents": {}, "updated": None})
+
+
+def save_confidence_data(data: dict):
+    """Save confidence tracking data."""
+    from datetime import datetime
+    data["updated"] = datetime.now().isoformat()
+    atomic_write_json(CONFIDENCE_FILE, data)
+
+
+def update_confidence(subagent_type: str, outcome: str):
+    """Update confidence scores based on outcome.
+
+    Confidence = success_count / usage_count
+    Tracks per-agent success rates for pattern learning.
+    """
+    if outcome == "unknown":
+        return  # Don't count unknown outcomes
+
+    data = load_confidence_data()
+    agents = data.get("agents", {})
+
+    if subagent_type not in agents:
+        agents[subagent_type] = {
+            "usage_count": 0,
+            "success_count": 0,
+            "failure_count": 0,
+            "confidence": 0.0
+        }
+
+    agent = agents[subagent_type]
+    agent["usage_count"] += 1
+
+    if outcome == "success":
+        agent["success_count"] += 1
+    elif outcome == "failure":
+        agent["failure_count"] += 1
+
+    # Calculate confidence (success rate)
+    if agent["usage_count"] > 0:
+        agent["confidence"] = round(agent["success_count"] / agent["usage_count"], 3)
+
+    data["agents"] = agents
+    save_confidence_data(data)
+
+
+def get_agent_confidence(subagent_type: str) -> float:
+    """Get confidence score for an agent type."""
+    data = load_confidence_data()
+    agent = data.get("agents", {}).get(subagent_type, {})
+    return agent.get("confidence", 0.0)
 
 
 def extract_task_summary(raw: dict) -> str:
@@ -103,11 +162,16 @@ def record_reflexion(raw: dict, duration_s: float | None):
     outcome = extract_outcome(raw)
     lessons = extract_lessons(raw, outcome)
 
+    # Update confidence tracking
+    update_confidence(subagent_type, outcome)
+    confidence = get_agent_confidence(subagent_type)
+
     entry = {
         "task_hash": task_hash,
         "subagent_type": subagent_type,
         "task_summary": extract_task_summary(raw),
         "outcome": outcome,
+        "confidence": confidence,
         "lessons": lessons,
         "duration_s": duration_s,
         "timestamp": datetime.now().isoformat()
@@ -122,15 +186,20 @@ def record_reflexion(raw: dict, duration_s: float | None):
         log_event("subagent_lifecycle", "reflexion_recorded", {
             "task_hash": task_hash,
             "outcome": outcome,
+            "confidence": confidence,
             "lesson_count": len(lessons)
         })
 
 
 def handle_start(raw: dict):
-    """Handle Task tool PreToolUse - track spawn time and counts."""
+    """Handle Task tool PreToolUse - track spawn time, counts, and usage."""
     ctx = PreToolUseContext(raw)
     subagent_type = ctx.tool_input.subagent_type or raw.get("subagent_type", "unknown")
     subagent_id = raw.get("subagent_id", ctx.tool_use_id or "")
+
+    # Record usage for stats tracking
+    if subagent_type:
+        record_usage("agents", subagent_type)
 
     state = get_session_state()
 
@@ -155,6 +224,14 @@ def handle_start(raw: dict):
         "subagent_id": subagent_id,
         "spawn_count": spawn_counts[subagent_type]
     })
+
+
+def handle_skill(raw: dict):
+    """Handle Skill tool PreToolUse - track skill usage."""
+    tool_input = raw.get("tool_input", {})
+    skill_name = tool_input.get("skill", "")
+    if skill_name:
+        record_usage("skills", skill_name)
 
 
 def handle_complete(raw: dict):

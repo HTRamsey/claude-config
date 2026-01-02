@@ -1,47 +1,123 @@
 """
 Logging and graceful degradation utilities.
+
+Uses loguru for structured JSON logging with automatic rotation.
+Includes log-once pattern for suppressing duplicate errors.
 """
 import json
 import os
 import sys
+import time
 from functools import wraps
 from pathlib import Path
 from typing import Callable
 
-from .io import file_lock
-from .metrics import get_timestamp
-from hooks.config import fast_json_loads, fast_json_dumps
+from loguru import logger
+
+from hooks.config import fast_json_loads
+
+
+# =============================================================================
+# Log-Once Pattern - Suppress duplicate errors within a time window
+# =============================================================================
+
+class LogOnce:
+    """Rate-limited logging that suppresses duplicates within a time window.
+
+    Usage:
+        _log_once = LogOnce(period_sec=300)
+
+        try:
+            ...
+        except Exception as e:
+            _log_once.error("my_handler", "database_error", str(e))
+    """
+
+    def __init__(self, period_sec: int = 300):
+        self.period_sec = period_sec
+        self._cache: dict[tuple, tuple[float, int]] = {}  # key -> (first_seen, count)
+
+    def _should_log(self, key: tuple) -> tuple[bool, int]:
+        """Check if this message should be logged.
+
+        Returns:
+            (should_log, suppressed_count) - whether to log and how many were suppressed
+        """
+        now = time.time()
+
+        if key in self._cache:
+            first_seen, count = self._cache[key]
+            if now - first_seen < self.period_sec:
+                self._cache[key] = (first_seen, count + 1)
+                return False, 0
+            # Window expired - log with suppression count
+            suppressed = count - 1  # Don't count the first one
+            self._cache[key] = (now, 1)
+            return True, suppressed
+
+        self._cache[key] = (now, 1)
+        return True, 0
+
+    def error(self, hook_name: str, event_type: str, message: str, **extra):
+        """Log an error, suppressing duplicates within the time window."""
+        key = (hook_name, event_type, message)
+        should_log, suppressed = self._should_log(key)
+
+        if should_log:
+            data = {"msg": message, **extra}
+            if suppressed > 0:
+                data["suppressed"] = suppressed
+            log_event(hook_name, event_type, data, "error")
+
+    def warning(self, hook_name: str, event_type: str, message: str, **extra):
+        """Log a warning, suppressing duplicates within the time window."""
+        key = (hook_name, event_type, message)
+        should_log, suppressed = self._should_log(key)
+
+        if should_log:
+            data = {"msg": message, **extra}
+            if suppressed > 0:
+                data["suppressed"] = suppressed
+            log_event(hook_name, event_type, data, "warning")
+
+
+# Global log-once instance (5 minute window)
+_log_once = LogOnce(period_sec=300)
 
 DATA_DIR = Path(os.environ.get("CLAUDE_DATA_DIR", Path.home() / ".claude" / "data"))
 LOG_FILE = DATA_DIR / "hook-events.jsonl"
 
-
-def ensure_data_dir():
-    """Ensure data directory exists."""
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+# Configure loguru: JSON format, 10MB rotation, keep 3 files
+# Remove default stderr handler, add file handler
+logger.remove()
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+logger.add(
+    LOG_FILE,
+    format="{message}",
+    serialize=True,  # JSON output
+    rotation="10 MB",
+    retention=3,
+    compression="gz",
+    enqueue=True,  # Thread-safe
+    catch=True,  # Never raise
+)
 
 
 def log_event(hook_name: str, event_type: str, data: dict = None, level: str = "info"):
     """
-    Append structured JSON log entry with file locking.
+    Log structured event using loguru.
 
-    Uses msgspec for fast serialization.
-    Never raises - always succeeds silently.
+    Args:
+        hook_name: Name of the hook (e.g., "file_protection")
+        event_type: Event type (e.g., "blocked", "error")
+        data: Additional context data
+        level: Log level (debug, info, warning, error)
     """
     try:
-        ensure_data_dir()
-        entry = {
-            "timestamp": get_timestamp(),
-            "hook": hook_name,
-            "event": event_type,
-            "level": level,
-            "data": data or {}
-        }
-        with open(LOG_FILE, 'ab') as f:
-            with file_lock(f):
-                f.write(fast_json_dumps(entry) + b"\n")
+        log_func = getattr(logger, level, logger.info)
+        log_func(event_type, hook=hook_name, **(data or {}))
     except Exception:
-        pass
+        pass  # Never raise
 
 
 def graceful_main(hook_name: str, check_disabled: bool = True):

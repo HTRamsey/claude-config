@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest import TestCase, main
 from unittest.mock import patch, MagicMock
 
-from hooks.handlers.transcript import (
+from hooks.handlers.context_manager import (
     load_cache,
     save_cache,
     get_cached_count,
@@ -27,14 +27,14 @@ from hooks.handlers.transcript import (
 class TestLoadSaveCache(TestCase):
     """Tests for load_cache and save_cache functions."""
 
-    @patch("hooks.handlers.transcript.safe_load_json")
-    @patch("hooks.handlers.transcript.safe_save_json")
+    @patch("hooks.handlers.context_manager.safe_load_json")
+    @patch("hooks.handlers.context_manager.safe_save_json")
     def test_load_cache_from_disk(self, mock_save, mock_load):
         """Load cache reads from disk."""
         mock_load.return_value = {"transcript": {"path": "/test.jsonl", "tokens": 1000}}
 
         # Clear in-memory cache first
-        from hooks.handlers.transcript import _token_cache
+        from hooks.handlers.context_manager import _token_cache
         _token_cache.clear()
 
         result = load_cache()
@@ -42,13 +42,13 @@ class TestLoadSaveCache(TestCase):
         self.assertEqual(result["transcript"]["tokens"], 1000)
         mock_load.assert_called_once()
 
-    @patch("hooks.handlers.transcript.safe_load_json")
+    @patch("hooks.handlers.context_manager.safe_load_json")
     def test_load_cache_uses_memory(self, mock_load):
         """Subsequent loads use in-memory cache."""
         mock_load.return_value = {"test": "data"}
 
         # Clear cache first
-        from hooks.handlers.transcript import _token_cache
+        from hooks.handlers.context_manager import _token_cache
         _token_cache.clear()
 
         # First load
@@ -61,7 +61,7 @@ class TestLoadSaveCache(TestCase):
         self.assertEqual(result["test"], "data")
         mock_load.assert_not_called()
 
-    @patch("hooks.handlers.transcript.safe_save_json")
+    @patch("hooks.handlers.context_manager.safe_save_json")
     def test_save_cache_writes_disk_and_memory(self, mock_save):
         """Save cache updates both disk and memory."""
         cache_data = {"transcript": {"tokens": 2000}}
@@ -70,7 +70,7 @@ class TestLoadSaveCache(TestCase):
 
         mock_save.assert_called_once()
         # Verify in-memory cache updated
-        from hooks.handlers.transcript import _token_cache, _TOKEN_CACHE_KEY
+        from hooks.handlers.context_manager import _token_cache, _TOKEN_CACHE_KEY
         self.assertEqual(_token_cache[_TOKEN_CACHE_KEY], cache_data)
 
 
@@ -83,7 +83,7 @@ class TestGetCachedCount(TestCase):
             path = f.name
 
         try:
-            with patch("hooks.handlers.transcript.load_cache", return_value={}):
+            with patch("hooks.handlers.context_manager.load_cache", return_value={}):
                 result = get_cached_count(path)
                 self.assertIsNone(result)
         finally:
@@ -95,7 +95,7 @@ class TestGetCachedCount(TestCase):
             path = f.name
 
         try:
-            with patch("hooks.handlers.transcript.load_cache") as mock_load:
+            with patch("hooks.handlers.context_manager.load_cache") as mock_load:
                 mock_load.return_value = {
                     "transcript": {"path": "/other/path.jsonl", "tokens": 1000}
                 }
@@ -112,7 +112,7 @@ class TestGetCachedCount(TestCase):
 
         try:
             stat = os.stat(path)
-            with patch("hooks.handlers.transcript.load_cache") as mock_load:
+            with patch("hooks.handlers.context_manager.load_cache") as mock_load:
                 mock_load.return_value = {
                     "transcript": {
                         "path": path,
@@ -150,10 +150,10 @@ class TestGetCachedCount(TestCase):
                 f.write('{"content": "more data"}\n')
 
             # Clear in-memory cache first
-            from hooks.handlers.transcript import _token_cache
+            from hooks.handlers.context_manager import _token_cache
             _token_cache.clear()
 
-            with patch("hooks.handlers.transcript.load_cache") as mock_load:
+            with patch("hooks.handlers.context_manager.load_cache") as mock_load:
                 # Use actual initial size, not arbitrary 50
                 mock_load.return_value = {
                     "transcript": {
@@ -178,7 +178,7 @@ class TestGetCachedCount(TestCase):
 
     def test_handles_missing_file(self):
         """Returns None if file doesn't exist."""
-        with patch("hooks.handlers.transcript.load_cache") as mock_load:
+        with patch("hooks.handlers.context_manager.load_cache") as mock_load:
             mock_load.return_value = {
                 "transcript": {"path": "/nonexistent.jsonl", "tokens": 100}
             }
@@ -189,7 +189,7 @@ class TestGetCachedCount(TestCase):
 class TestUpdateCache(TestCase):
     """Tests for update_cache function."""
 
-    @patch("hooks.handlers.transcript.save_cache")
+    @patch("hooks.handlers.context_manager.save_cache")
     def test_updates_cache_with_new_values(self, mock_save):
         """Updates cache with new token count and file stats."""
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jsonl", mode='w') as f:
@@ -208,7 +208,7 @@ class TestUpdateCache(TestCase):
         finally:
             Path(path).unlink()
 
-    @patch("hooks.handlers.transcript.save_cache")
+    @patch("hooks.handlers.context_manager.save_cache")
     def test_handles_missing_file(self, mock_save):
         """Handles missing file gracefully."""
         update_cache("/nonexistent.jsonl", 100, 5, 50)
@@ -284,7 +284,7 @@ class TestGetTranscriptSize(TestCase):
 
         try:
             stat = os.stat(path)
-            with patch("hooks.handlers.transcript.get_cached_count") as mock_cache:
+            with patch("hooks.handlers.context_manager.get_cached_count") as mock_cache:
                 mock_cache.return_value = (1000, 50, 100, False)  # can_increment=False
 
                 tokens, messages = get_transcript_size(path)
@@ -306,8 +306,8 @@ class TestGetTranscriptSize(TestCase):
             path = f.name
 
         try:
-            with patch("hooks.handlers.transcript.get_cached_count") as mock_cache, \
-                 patch("hooks.handlers.transcript.update_cache") as mock_update:
+            with patch("hooks.handlers.context_manager.get_cached_count") as mock_cache, \
+                 patch("hooks.handlers.context_manager.update_cache") as mock_update:
                 # Simulate cache returning initial count with ability to increment
                 mock_cache.return_value = (10, 1, initial_offset, True)
 
@@ -328,7 +328,7 @@ class TestGetTranscriptSize(TestCase):
             path = f.name
 
         try:
-            with patch("hooks.handlers.transcript.get_cached_count", return_value=None):
+            with patch("hooks.handlers.context_manager.get_cached_count", return_value=None):
                 tokens, messages = get_transcript_size(path)
 
                 # Should estimate without full scan
@@ -347,8 +347,8 @@ class TestGetTranscriptSize(TestCase):
             path = f.name
 
         try:
-            with patch("hooks.handlers.transcript.get_cached_count", return_value=None), \
-                 patch("hooks.handlers.transcript.update_cache") as mock_update:
+            with patch("hooks.handlers.context_manager.get_cached_count", return_value=None), \
+                 patch("hooks.handlers.context_manager.update_cache") as mock_update:
                 tokens, messages = get_transcript_size(path)
 
                 # Should have done full scan
@@ -367,7 +367,7 @@ class TestGetTranscriptSize(TestCase):
             path = f.name
 
         try:
-            with patch("hooks.handlers.transcript.get_cached_count", return_value=None):
+            with patch("hooks.handlers.context_manager.get_cached_count", return_value=None):
                 tokens, messages = get_transcript_size(path)
 
                 # Should count only valid entries
@@ -387,8 +387,8 @@ class TestGetTranscriptSize(TestCase):
             path = f.name
 
         try:
-            with patch("hooks.handlers.transcript.get_cached_count", return_value=None), \
-                 patch("hooks.handlers.transcript.update_cache") as mock_update:
+            with patch("hooks.handlers.context_manager.get_cached_count", return_value=None), \
+                 patch("hooks.handlers.context_manager.update_cache") as mock_update:
                 get_transcript_size(path)
 
                 # Should have cached the result

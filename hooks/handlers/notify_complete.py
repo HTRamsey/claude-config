@@ -3,11 +3,11 @@ Desktop notification for long-running commands.
 
 PostToolUse handler for Bash tool - sends desktop notification
 when commands take >30 seconds to complete.
-"""
-import shutil
-import subprocess
 
+Uses cross-platform notification abstraction (Linux, macOS, Windows).
+"""
 from hooks.config import Thresholds
+from hooks.hook_utils import send_notification, is_notification_available
 
 
 def notify_complete(raw: dict) -> dict | None:
@@ -22,8 +22,8 @@ def notify_complete(raw: dict) -> dict | None:
     if duration_secs < Thresholds.min_notify_duration:
         return None
 
-    # Check if notify-send is available
-    if not shutil.which("notify-send"):
+    # Check if notifications are available
+    if not is_notification_available():
         return None
 
     # Extract command and exit code
@@ -43,19 +43,7 @@ def notify_complete(raw: dict) -> dict | None:
 
     message = f"{command}...\nDuration: {duration_secs}s"
 
-    # Send notification asynchronously (don't block dispatcher)
-    subprocess.Popen(
-        [
-            "notify-send",
-            "--urgency", urgency,
-            "--app-name", "Claude Code",
-            "--icon", "terminal",
-            title,
-            message,
-        ],
-        start_new_session=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    # Send notification (cross-platform)
+    send_notification(title, message, urgency=urgency)
 
     return None

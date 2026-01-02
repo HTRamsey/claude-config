@@ -8,7 +8,7 @@ from hooks.handlers.context_manager import (
     TOKEN_WARNING_THRESHOLD,
     TOKEN_CRITICAL_THRESHOLD,
 )
-from hooks.handlers.transcript import (
+from hooks.handlers.context_manager import (
     get_cached_count,
     update_cache,
 )

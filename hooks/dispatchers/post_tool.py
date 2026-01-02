@@ -23,21 +23,21 @@ class PostToolDispatcher(BaseDispatcher):
     HOOK_EVENT_NAME = "PostToolUse"
 
     ALL_HANDLERS = [
-        "file_monitor", "batch_operation_detector", "tool_analytics",
+        "file_monitor", "tool_analytics",
         "unified_cache", "suggestion_engine",
         "smart_permissions", "context_manager", "subagent_lifecycle",
         "notify_complete"
     ]
 
     # Tool-to-handler mapping
-    # Note: tool_analytics consolidates tool_success_tracker + output_metrics + build_analyzer
+    # Note: tool_analytics consolidates tool_success_tracker + output_metrics + build_analyzer + batch_operation_detector
     TOOL_HANDLERS = {
         "Bash": ["tool_analytics", "context_manager", "notify_complete"],
         "Grep": ["file_monitor", "tool_analytics"],
         "Glob": ["file_monitor", "tool_analytics"],
         "Read": ["file_monitor", "tool_analytics", "smart_permissions"],
-        "Edit": ["batch_operation_detector", "tool_analytics", "smart_permissions"],
-        "Write": ["batch_operation_detector", "tool_analytics", "smart_permissions"],
+        "Edit": ["tool_analytics", "smart_permissions"],
+        "Write": ["tool_analytics", "smart_permissions"],
         "Task": ["subagent_lifecycle", "unified_cache", "suggestion_engine", "tool_analytics"],
         "WebFetch": ["unified_cache"],
         "LSP": ["tool_analytics"],
@@ -51,7 +51,6 @@ class PostToolDispatcher(BaseDispatcher):
     # Format: "handler_name": ("module_name", "function_name") or ("module_name", ("fn1", "fn2", ...))
     HANDLER_IMPORTS = {
         "file_monitor": ("hooks.handlers.file_monitor", "track_file_post"),
-        "batch_operation_detector": ("hooks.handlers.batch_operation_detector", "detect_batch"),
         "tool_analytics": ("hooks.handlers.tool_analytics", "track_tool_analytics"),
         "unified_cache": ("hooks.handlers.unified_cache", ("handle_exploration_post", "handle_research_post")),
         "suggestion_engine": ("hooks.handlers.suggestion_engine", "suggest_chain"),

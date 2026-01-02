@@ -1,16 +1,20 @@
-"""Tests for batch_operation_detector module."""
+"""Tests for batch_operation_detector functionality (now in tool_analytics)."""
 import sys
 from pathlib import Path
 
 import pytest
 
-from hooks.handlers.batch_operation_detector import (
-    normalize_content,
-    extract_pattern,
-    find_similar_edits,
-    get_file_extension,
-    suggest_batch_command,
+from hooks.handlers.tool_analytics import (
+    _batch_normalize_content as normalize_content,
+    _batch_extract_pattern as extract_pattern,
+    _batch_find_similar_edits as find_similar_edits,
+    _batch_suggest_command as suggest_batch_command,
 )
+
+
+def get_file_extension(path: str) -> str:
+    """Helper - get file extension."""
+    return Path(path).suffix.lower()
 
 
 class TestNormalizeContent:

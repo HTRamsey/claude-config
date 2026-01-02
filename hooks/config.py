@@ -271,11 +271,21 @@ class ProtectedFiles:
 # =============================================================================
 
 class DangerousCommands:
-    """Dangerous command patterns."""
+    """Dangerous command patterns.
+
+    Note: These are best-effort guardrails, not security boundaries.
+    Determined attackers can bypass regex-based detection.
+    """
     # (pattern, reason) tuples - will be compiled to regex
+    # Patterns handle: -rf, -fr, -r -f, --recursive --force, etc.
     BLOCKED_PATTERNS_RAW = [
-        (r"rm\s+-rf?\s+[/~]", "Recursive delete from root or home"),
+        # rm variants targeting root/home - catches -rf, -fr, -r -f, --recursive, etc.
+        (r"rm\s+(-[a-z]*r[a-z]*\s+)*(-[a-z]*f[a-z]*\s+)*[/~]", "Recursive delete from root or home"),
+        (r"rm\s+(-[a-z]*f[a-z]*\s+)*(-[a-z]*r[a-z]*\s+)*[/~]", "Recursive delete from root or home"),
+        (r"rm\s+--recursive\s+.*[/~]", "Recursive delete from root or home"),
+        (r"rm\s+--force\s+--recursive\s+.*[/~]", "Recursive delete from root or home"),
         (r"rm\s+-rf?\s+\*", "Recursive delete with wildcard"),
+        (r"rm\s+-fr\s+\*", "Recursive delete with wildcard"),
         (r":\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:", "Fork bomb"),
         (r">\s*/dev/sd[a-z]", "Direct disk write"),
         (r"mkfs\.", "Filesystem format"),
@@ -287,7 +297,10 @@ class DangerousCommands:
     ]
 
     WARNING_PATTERNS_RAW = [
-        (r"rm\s+-rf", "Recursive force delete"),
+        # Warn on any recursive delete (catches -rf, -fr, -r -f, --recursive)
+        (r"rm\s+(-[a-z]*[rf][a-z]*\s*)+", "Recursive or force delete"),
+        (r"rm\s+--recursive", "Recursive delete"),
+        (r"rm\s+--force", "Force delete"),
         (r"git\s+push.*--force", "Force push"),
         (r"git\s+reset\s+--hard", "Hard reset"),
         (r"DROP\s+(TABLE|DATABASE)", "SQL DROP statement"),

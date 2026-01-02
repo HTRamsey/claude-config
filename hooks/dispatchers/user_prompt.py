@@ -9,7 +9,8 @@ Benefits:
 
 Dispatches to:
 - context_manager: Check context size, warn/backup at thresholds
-- usage_tracker: Track slash command usage
+
+Note: Slash command usage tracked via Skill tool in subagent_lifecycle.
 
 Extends BaseDispatcher for shared handler loading, timeout protection, and profiling.
 """
@@ -42,7 +43,7 @@ class UserPromptDispatcher(BaseDispatcher):
     HOOK_EVENT_NAME = "UserPromptSubmit"
 
     # All handlers run for every user prompt (no tool-based routing)
-    ALL_HANDLERS = ["context_manager", "usage_tracker"]
+    ALL_HANDLERS = ["context_manager"]
 
     # No tool-based routing for UserPromptSubmit
     TOOL_HANDLERS = {}
@@ -50,7 +51,6 @@ class UserPromptDispatcher(BaseDispatcher):
     # Handler imports
     HANDLER_IMPORTS = {
         "context_manager": ("hooks.handlers.context_manager", "check_context"),
-        "usage_tracker": ("hooks.handlers.usage_tracker", "handle"),
     }
 
     def _create_result_strategy(self) -> ResultStrategy:

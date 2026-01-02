@@ -11,7 +11,7 @@ from unittest.mock import patch, MagicMock
 from datetime import datetime
 
 # Add parent directory to path for imports
-from hooks.handlers.checkpoint import (
+from hooks.handlers.context_manager import (
     is_risky_operation,
     should_checkpoint,
     save_checkpoint_entry,
@@ -128,8 +128,8 @@ class TestSaveCheckpointEntry(TestCase):
         """Clear checkpoint state before each test."""
         save_state({"last_checkpoint": 0, "checkpoints": []})
 
-    @patch('hooks.handlers.checkpoint.save_state')
-    @patch('hooks.handlers.checkpoint.load_state')
+    @patch('hooks.handlers.context_manager.save_state')
+    @patch('hooks.handlers.context_manager.load_state')
     def test_saves_checkpoint_data(self, mock_load, mock_save):
         """Should save checkpoint with correct fields."""
         mock_load.return_value = {"last_checkpoint": 0, "checkpoints": []}
@@ -154,8 +154,8 @@ class TestSaveCheckpointEntry(TestCase):
         saved_state = mock_save.call_args[0][0]
         self.assertEqual(len(saved_state["checkpoints"]), 1)
 
-    @patch('hooks.handlers.checkpoint.save_state')
-    @patch('hooks.handlers.checkpoint.load_state')
+    @patch('hooks.handlers.context_manager.save_state')
+    @patch('hooks.handlers.context_manager.load_state')
     def test_limits_checkpoint_history(self, mock_load, mock_save):
         """Should keep only last 20 checkpoints."""
         # Create 25 old checkpoints
@@ -177,8 +177,8 @@ class TestSaveCheckpointEntry(TestCase):
         saved_state = mock_save.call_args[0][0]
         self.assertEqual(len(saved_state["checkpoints"]), 20)
 
-    @patch('hooks.handlers.checkpoint.save_state')
-    @patch('hooks.handlers.checkpoint.load_state')
+    @patch('hooks.handlers.context_manager.save_state')
+    @patch('hooks.handlers.context_manager.load_state')
     def test_updates_last_checkpoint_time(self, mock_load, mock_save):
         """Should update last_checkpoint timestamp."""
         mock_load.return_value = {"last_checkpoint": 0, "checkpoints": []}
@@ -434,7 +434,7 @@ class TestSaveErrorBackup(TestCase):
 
         self.assertEqual(len(data["command"]), 500)
 
-    @patch('hooks.handlers.checkpoint.rotate_error_backups')
+    @patch('hooks.handlers.context_manager.rotate_error_backups')
     def test_rotates_backups(self, mock_rotate):
         """Should call rotate_error_backups after saving."""
         ctx = {"session_id": "test123", "cwd": "/test"}

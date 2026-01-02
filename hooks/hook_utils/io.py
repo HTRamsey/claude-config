@@ -20,6 +20,81 @@ from hooks.config import fast_json_loads, fast_json_dumps
 PathLike = str | Path
 
 
+# =============================================================================
+# JSONL Utilities
+# =============================================================================
+
+def iter_jsonl(
+    path: PathLike,
+    tail: int | None = None,
+    skip_errors: bool = True
+):
+    """Iterate over JSONL file, yielding parsed dict per line.
+
+    Consolidates repeated JSONL parsing pattern across handlers.
+
+    Args:
+        path: Path to JSONL file
+        tail: If set, only yield last N lines (like tail -n)
+        skip_errors: If True (default), skip lines with JSON parse errors.
+                     If False, raises JSONDecodeError on invalid lines.
+
+    Yields:
+        Parsed dict for each valid line
+
+    Example:
+        for entry in iter_jsonl(transcript_path, tail=100):
+            if entry.get("type") == "assistant":
+                process(entry)
+    """
+    path = Path(path)
+    if not path.exists():
+        return
+
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            if tail is not None:
+                # Read all lines and take last N
+                lines = f.readlines()
+                lines = lines[-tail:] if tail else lines
+            else:
+                lines = f
+
+            for line_num, line in enumerate(lines, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    yield json.loads(line)
+                except json.JSONDecodeError:
+                    if not skip_errors:
+                        raise
+                    # Log first few errors, then suppress
+                    from hooks.hook_utils.logging import log_event
+                    if line_num <= 3:
+                        log_event("iter_jsonl", "parse_error", {
+                            "path": str(path),
+                            "line": line_num
+                        })
+    except (OSError, IOError):
+        return
+
+
+def count_jsonl_lines(path: PathLike) -> int:
+    """Count valid JSON lines in a JSONL file.
+
+    Args:
+        path: Path to JSONL file
+
+    Returns:
+        Count of valid JSON lines
+    """
+    count = 0
+    for _ in iter_jsonl(path, skip_errors=True):
+        count += 1
+    return count
+
+
 @contextmanager
 def file_lock(path_or_handle, timeout: float = 10.0):
     """

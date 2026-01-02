@@ -24,6 +24,7 @@ import atexit
 import importlib
 import json
 import os
+import signal
 import sys
 import time
 from abc import ABC, abstractmethod
@@ -35,12 +36,37 @@ from typing import Any, Callable
 _PROFILE_MODE = os.environ.get("HOOK_PROFILE", "0") == "1"
 
 # Handler timeout in seconds (default 1s, configurable via HANDLER_TIMEOUT env var in ms)
-_HANDLER_TIMEOUT = float(os.environ.get("HANDLER_TIMEOUT", "1000")) / 1000.0
+# Wrapped in try/except to handle invalid env var values gracefully
+try:
+    _HANDLER_TIMEOUT = float(os.environ.get("HANDLER_TIMEOUT", "1000")) / 1000.0
+except (ValueError, TypeError):
+    _HANDLER_TIMEOUT = 1.0  # Default to 1 second on invalid input
+
+# Fast handlers that bypass thread pool (sub-10ms execution, simple logic)
+_FAST_HANDLERS = frozenset({
+    "file_protection",
+    "dangerous_command_blocker",
+})
 
 # Thread pool for timeout-protected handler execution (shared across dispatchers)
-_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="hook")
+# 4 workers allows I/O-bound handlers to run concurrently without blocking
+_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="hook")
 
-# Register cleanup on exit to prevent resource leaks
+
+def _shutdown_handler(signum: int, frame) -> None:
+    """Handle SIGTERM/SIGINT for clean shutdown.
+
+    atexit handlers don't run on signals, so we need explicit signal handling.
+    """
+    _executor.shutdown(wait=False, cancel_futures=True)
+    sys.exit(128 + signum)
+
+
+# Register signal handlers for clean shutdown
+signal.signal(signal.SIGTERM, _shutdown_handler)
+signal.signal(signal.SIGINT, _shutdown_handler)
+
+# Register cleanup on exit to prevent resource leaks (for normal exit)
 atexit.register(_executor.shutdown, wait=False)
 
 # Import shared utilities
@@ -157,12 +183,11 @@ class ResultStrategy(ABC):
         pass
 
     @abstractmethod
-    def build_result(self, messages: list[str], terminated_by: str = None) -> dict | None:
+    def build_result(self, messages: list[str]) -> dict | None:
         """Build final result from collected messages.
 
         Args:
             messages: List of collected messages from handlers
-            terminated_by: Name of handler that terminated early (if any)
 
         Returns:
             Final result dict or None if no result to return
@@ -202,12 +227,11 @@ class PreToolStrategy(ResultStrategy):
         """
         return hook_output.get("permissionDecisionReason")
 
-    def build_result(self, messages: list[str], terminated_by: str = None) -> dict | None:
+    def build_result(self, messages: list[str]) -> dict | None:
         """Build PreToolUse result with allow decision.
 
         Args:
             messages: List of permission decision reasons
-            terminated_by: Unused for PreToolUse
 
         Returns:
             Result dict with permissionDecision: allow, or None if no messages
@@ -243,12 +267,11 @@ class PostToolStrategy(ResultStrategy):
         """
         return hook_output.get("message")
 
-    def build_result(self, messages: list[str], terminated_by: str = None) -> dict | None:
+    def build_result(self, messages: list[str]) -> dict | None:
         """Build PostToolUse result from collected messages.
 
         Args:
             messages: List of collected messages
-            terminated_by: Unused for PostToolUse
 
         Returns:
             Result dict with messages joined, or None if no messages
@@ -284,12 +307,11 @@ class NonToolStrategy(ResultStrategy):
         """
         return None
 
-    def build_result(self, messages: list[str], terminated_by: str = None) -> dict | None:
+    def build_result(self, messages: list[str]) -> dict | None:
         """Non-tool events don't return hookSpecificOutput.
 
         Args:
             messages: Unused - handled by format_output()
-            terminated_by: Unused
 
         Returns:
             Always None - format_output() is used instead
@@ -309,8 +331,8 @@ class BaseDispatcher(ABC):
     HANDLER_IMPORTS: dict[str, tuple] = {}
 
     def __init__(self):
-        self._handlers: dict[str, Any] = {}
         self._validated = False
+        self._handlers: dict[str, Any] = {}
         self._profile_timings: dict[str, list[float]] = {}
         self._handler_registry = HandlerRegistry()
         self._result_strategy: ResultStrategy | None = None
@@ -422,7 +444,10 @@ class BaseDispatcher(ABC):
                   file=sys.stderr)
 
     def run_handler(self, name: str, ctx: dict) -> dict | None:
-        """Run a single handler with timeout protection."""
+        """Run a single handler with timeout protection.
+
+        Fast handlers (in _FAST_HANDLERS) bypass the thread pool for lower latency.
+        """
         if is_hook_disabled(name):
             log_event(self.DISPATCHER_NAME, "handler_skipped", {"handler": name, "reason": "disabled"})
             return None
@@ -436,8 +461,12 @@ class BaseDispatcher(ABC):
         error = None
 
         try:
-            future = _executor.submit(self._execute_handler, name, handler, ctx)
-            result = future.result(timeout=_HANDLER_TIMEOUT)
+            # Fast handlers bypass thread pool (sub-10ms, no timeout risk)
+            if name in _FAST_HANDLERS:
+                result = self._execute_handler(name, handler, ctx)
+            else:
+                future = _executor.submit(self._execute_handler, name, handler, ctx)
+                result = future.result(timeout=_HANDLER_TIMEOUT)
         except FuturesTimeoutError:
             error = f"timeout after {_HANDLER_TIMEOUT:.1f}s"
             log_event(self.DISPATCHER_NAME, "handler_timeout", {"handler": name, "timeout_s": _HANDLER_TIMEOUT})
@@ -485,7 +514,6 @@ class BaseDispatcher(ABC):
                 return None
 
         messages = []
-        terminated_by = None
 
         for handler_name in handlers:
             result = self.run_handler(handler_name, ctx)
@@ -514,7 +542,7 @@ class BaseDispatcher(ABC):
                   file=sys.stderr)
 
         # Build final result using strategy
-        return self._result_strategy.build_result(messages, terminated_by)
+        return self._result_strategy.build_result(messages)
 
     def run(self) -> None:
         """Main entry point - read stdin, dispatch, output result."""
@@ -525,8 +553,12 @@ class BaseDispatcher(ABC):
         try:
             stdin_data = sys.stdin.read()
             ctx = fast_json_loads(stdin_data) if stdin_data else {}
-        except Exception:
-            sys.exit(0)
+        except Exception as e:
+            # Log parse errors (always, not just in profile mode) and exit with error code
+            log_event(self.DISPATCHER_NAME, "parse_error", {"error": str(e)})
+            if _PROFILE_MODE:
+                print(f"[{self.DISPATCHER_NAME}] stdin parse error: {e}", file=sys.stderr)
+            sys.exit(1)  # Exit with error code to make failures detectable
 
         result = self.dispatch(ctx)
         if result:
@@ -599,7 +631,9 @@ class SimpleDispatcher(ABC):
         try:
             stdin_data = sys.stdin.read()
             return fast_json_loads(stdin_data) if stdin_data else {}
-        except Exception:
+        except Exception as e:
+            if _PROFILE_MODE:
+                print(f"[{self.DISPATCHER_NAME}] stdin parse error: {e}", file=sys.stderr)
             return {}
 
     @graceful_main("simple_dispatcher")

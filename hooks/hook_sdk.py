@@ -549,6 +549,29 @@ class Patterns:
         return any(p.search(value_lower) for p in compiled_patterns)
 
     @staticmethod
+    def find_matching_pattern(value: str, compiled_patterns: list) -> str | None:
+        """
+        Find the first matching compiled regex pattern.
+
+        Args:
+            value: String to match
+            compiled_patterns: List of compiled regex patterns (re.Pattern objects)
+
+        Returns:
+            Pattern string that matched, or None if no match
+
+        Example:
+            patterns = get_protected_patterns_compiled()
+            matched = Patterns.find_matching_pattern(file_path, patterns)
+            if matched:
+                deny(f"Blocked: matches {matched}")
+        """
+        for p in compiled_patterns:
+            if p.search(value):
+                return p.pattern
+        return None
+
+    @staticmethod
     @lru_cache(maxsize=256)
     def compile_pattern(pattern: str) -> re.Pattern:
         """
