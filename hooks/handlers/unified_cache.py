@@ -8,6 +8,9 @@ Runs on:
 - PreToolUse (Task, WebFetch): Check cache before execution
 - PostToolUse (Task, WebFetch): Save results to cache
 """
+# Handler metadata for dispatcher auto-discovery
+APPLIES_TO_PRE = ["Task", "WebFetch"]
+APPLIES_TO_POST = ["Task", "WebFetch"]
 import hashlib
 import time
 from dataclasses import dataclass

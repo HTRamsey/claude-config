@@ -4,9 +4,13 @@ Project context handler - project detection and usage statistics.
 Provides project type detection, codebase mapping, and usage summaries
 for session_start dispatcher.
 """
+import os
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
+
+from hooks.hook_utils import git
+from hooks.handlers.viewer import maybe_start_viewer
 
 
 # Project type indicators
@@ -194,3 +198,36 @@ def get_usage_summary() -> str:
             pass
 
     return ", ".join(parts) if parts else ""
+
+
+def handle_session_start(ctx: dict) -> list[str]:
+    """Unified SessionStart handler - assembles all session start output.
+
+    Args:
+        ctx: Context with 'cwd' key
+
+    Returns:
+        List of output message lines
+    """
+    cwd = ctx.get('cwd', os.getcwd())
+    output_parts = ["[Session Start]"]
+
+    # Git context (branch, commits, status)
+    git_ctx = git.get_context_summary(cwd)
+    if git_ctx:
+        output_parts.extend(git_ctx)
+
+    # Usage summary (sessions, agents, skills)
+    if usage := get_usage_summary():
+        output_parts.append(usage)
+
+    # Project type detection
+    if ptype := detect_project_type(cwd):
+        output_parts.append(ptype)
+
+    # Start viewer if not running
+    if viewer_msg := maybe_start_viewer():
+        output_parts.append(viewer_msg)
+
+    # Only return if there's content beyond the header
+    return output_parts if len(output_parts) > 1 else []

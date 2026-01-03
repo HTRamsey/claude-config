@@ -6,13 +6,15 @@ for session_end dispatcher.
 """
 import heapq
 import json
+import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from hooks.hook_utils import log_event
+from hooks.hook_utils import get_session_id, log_event
 from hooks.hook_utils.transcript import analyze_tool_usage, detect_project_root
+from hooks.handlers import transcript_converter
 
 
 def extract_project_info(transcript_path: str) -> dict[str, Any]:
@@ -188,5 +190,69 @@ def format_memory_suggestions(suggestions: dict) -> list[str]:
     messages.append("")
     messages.append("  To persist, use memory MCP:")
     messages.append("    mcp__memory__add_observations or mcp__memory__create_entities")
+
+    return messages
+
+
+def update_usage_cache() -> None:
+    """Update usage cache for statusline."""
+    usage_script = Path.home() / ".claude/scripts/diagnostics/usage-stats.py"
+    if usage_script.exists():
+        try:
+            subprocess.run(
+                [str(usage_script), "--update-cache"],
+                capture_output=True,
+                timeout=10
+            )
+        except subprocess.TimeoutExpired:
+            log_event("session_persistence", "usage_cache_timeout", {
+                "script": str(usage_script)
+            }, "warning")
+        except OSError as e:
+            log_event("session_persistence", "usage_cache_error", {
+                "script": str(usage_script),
+                "error": str(e)
+            }, "warning")
+
+
+def handle_session_end(ctx: dict) -> list[str]:
+    """Unified SessionEnd handler - handles all session end tasks.
+
+    Args:
+        ctx: Context with 'transcript_path' key
+
+    Returns:
+        List of output message lines
+    """
+    messages = []
+
+    # Clean up old session files
+    cleaned = cleanup_old_session_files(max_age_hours=24)
+    if cleaned > 0:
+        messages.append(f"[Session Cleanup] Removed {cleaned} old session files")
+
+    transcript_path = ctx.get("transcript_path", "")
+    session_id = get_session_id(ctx)
+
+    # Extract information from transcript
+    info = extract_project_info(transcript_path)
+
+    # Save session metadata for better resumption
+    save_session_metadata(session_id, info, transcript_path)
+
+    # Skip memory suggestions if minimal activity
+    total_tool_uses = sum(info.get("tools_used", {}).values())
+    if total_tool_uses >= 5:
+        suggestions = generate_memory_suggestions(info)
+        if suggestions.get("entities"):
+            messages.extend(format_memory_suggestions(suggestions))
+
+    # Run transcript converter if enabled
+    converted = transcript_converter.run_converter()
+    if converted:
+        messages.append(f"[Transcript Converter] Converted {len(converted)} transcript(s)")
+
+    # Update usage cache for statusline
+    update_usage_cache()
 
     return messages

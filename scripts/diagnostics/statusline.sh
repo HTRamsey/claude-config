@@ -2,7 +2,7 @@
 set -euo pipefail
 # Claude Code Status Line (v2.0.70+)
 #
-# Format: v2.0.76 | path | branch[•N] | Model | terse | 45% ⚡99% ⚠️ | +50/-10 | 79K↓ 68K↑ 5K/m | 10m API:15% | ⏱4h32m
+# Format: v2.0.76 | path | branch[•N] | Model | terse | 45% ⚡99% ⚠️ | +50/-10 | 79K↓ 68K↑ 5K,8K,6K | 10m
 #
 # Sections (logically grouped):
 #   1. Version: v2.0.76 - Claude Code version
@@ -12,13 +12,11 @@ set -euo pipefail
 #   5. Style:   terse - output style
 #   6. Context: 45% ⚡99% ⚠️ - usage %, cache % of context, 200K warning
 #   7. Output:  +50/-10 - lines added/removed
-#   8. Tokens:  79K↓ 68K↑ 5K/m - input↓, output↑, rate per minute
-#   9. Time:    10m API:15% - duration + API latency %
-#  10. Block:   ⏱4h32m - 5-hour billing block time remaining
+#   8. Tokens:  79K↓ 68K↑ 5K,8K,6K - input↓, output↑, load avg (1m,5m,15m tok/min)
+#   9. Time:    10m - session duration
 #
 # Git indicators: +staged ~unstaged-modified -unstaged-deleted •untracked
 # Colors: green <40%, yellow 40-79%, red ≥80%
-# Block colors: green >2h, yellow 30m-2h, red <30m
 
 # Read JSON input from stdin
 input=$(cat)
@@ -35,7 +33,6 @@ input=$(cat)
     read -r context_size
     read -r exceeds_200k
     read -r duration_ms
-    read -r api_duration_ms
     read -r lines_added
     read -r lines_removed
     read -r cache_read
@@ -53,7 +50,6 @@ input=$(cat)
     .context_window.context_window_size // 200000,
     .exceeds_200k_tokens // false,
     .cost.total_duration_ms // 0,
-    .cost.total_api_duration_ms // 0,
     .cost.total_lines_added // 0,
     .cost.total_lines_removed // 0,
     .context_window.current_usage.cache_read_input_tokens // 0,
@@ -77,16 +73,6 @@ fi
 # Cap at 100%
 [[ "$usage_pct" -gt 100 ]] && usage_pct=100
 
-# API latency percentage
-api_pct_display=""
-if [[ "$duration_ms" -gt 0 && "$api_duration_ms" -gt 0 ]]; then
-    api_pct=$((api_duration_ms * 100 / duration_ms))
-    [[ "$api_pct" -gt 100 ]] && api_pct=100
-    if [[ "$api_pct" -gt 0 ]]; then
-        api_pct_display="API:${api_pct}%"
-    fi
-fi
-
 # 200K warning
 warning_display=""
 if [[ "$exceeds_200k" == "true" ]]; then
@@ -109,47 +95,6 @@ if [[ "$duration_ms" -gt 0 ]]; then
     fi
 fi
 
-# 5-hour block timer
-block_state_file="/tmp/claude_block_start"
-now=$(date +%s)
-block_duration=$((5 * 60 * 60))  # 5 hours in seconds
-
-# Read or initialize block start time
-if [[ -f "$block_state_file" ]]; then
-    block_start=$(cat "$block_state_file")
-    elapsed=$((now - block_start))
-    if [[ "$elapsed" -ge "$block_duration" ]]; then
-        # Block expired, start new one
-        block_start=$now
-        echo "$block_start" > "$block_state_file"
-    fi
-else
-    block_start=$now
-    echo "$block_start" > "$block_state_file"
-fi
-
-# Calculate time remaining
-elapsed=$((now - block_start))
-remaining=$((block_duration - elapsed))
-remaining_hrs=$((remaining / 3600))
-remaining_mins=$(((remaining % 3600) / 60))
-
-# Format block timer display
-if [[ "$remaining_hrs" -gt 0 ]]; then
-    block_display="⏱${remaining_hrs}h${remaining_mins}m"
-else
-    block_display="⏱${remaining_mins}m"
-fi
-
-# Block timer color (green >2h, yellow 30m-2h, red <30m)
-if [[ "$remaining" -gt 7200 ]]; then
-    block_color="\033[2;32m"  # dim green
-elif [[ "$remaining" -gt 1800 ]]; then
-    block_color="\033[2;33m"  # dim yellow
-else
-    block_color="\033[2;31m"  # dim red
-fi
-
 # Cache % of context (how much context is from cache)
 cache_display=""
 if [[ "$context_used" -gt 0 && "$cache_read" -gt 1000 ]]; then
@@ -164,15 +109,17 @@ if [[ "$lines_added" -gt 0 || "$lines_removed" -gt 0 ]]; then
 fi
 
 # Shell prompt info - show relative path if in project subdirectory
+# Use explicit home path in case $HOME isn't set in subshell
+home_dir="${HOME:-/home/$USER}"
 if [[ "$cwd" == "$project_dir" ]]; then
     # At project root
-    path="${cwd/#$HOME/~}"
+    path="${cwd/#$home_dir/\~}"
 elif [[ "$cwd" == "$project_dir"/* ]]; then
     # In subdirectory - show relative path
     path="${cwd#$project_dir/}"
 else
     # Different directory
-    path="${cwd/#$HOME/~}"
+    path="${cwd/#$home_dir/\~}"
 fi
 
 # Git information (single git call)
@@ -257,25 +204,100 @@ if [[ "$total_tokens" -gt 0 ]]; then
         out_display="${total_output}"
     fi
 
-    # Calculate tokens per minute (if session > 1 min)
+    # Calculate token rates like Linux load averages (1m, 5m, 15m)
+    # Read from hook-generated snapshots file
     tok_rate_display=""
-    if [[ "$duration_ms" -gt 60000 ]]; then
-        tok_per_min=$(awk -v tt="$total_tokens" -v dm="$duration_ms" 'BEGIN {printf "%.0f", (tt / dm) * 60000}')
-        if [[ "$tok_per_min" -ge 1000 ]]; then
-            tok_rate_display=" $((tok_per_min / 1000))K/m"
-        elif [[ "$tok_per_min" -gt 0 ]]; then
-            tok_rate_display=" ${tok_per_min}/m"
+    snapshot_file="$HOME/.claude/data/token-snapshots.jsonl"
+    now=$(date +%s)
+
+    if [[ -f "$snapshot_file" ]]; then
+        # Calculate rates from snapshots using awk
+        tok_rate_display=$(awk -v now="$now" -v total="$total_tokens" '
+            BEGIN {
+                FS = "[,:}]"
+                # Target times for 1m, 5m, 15m ago
+                t1 = now - 60; t5 = now - 300; t15 = now - 900
+                # Closest entries
+                ts1 = 0; tok1 = 0; diff1 = 99999
+                ts5 = 0; tok5 = 0; diff5 = 99999
+                ts15 = 0; tok15 = 0; diff15 = 99999
+            }
+            {
+                # Parse: {"ts":123,"in":456,"out":789}
+                ts = 0; tok = 0
+                for (i = 1; i <= NF; i++) {
+                    if ($i ~ /ts/) ts = $(i+1)
+                    if ($i ~ /in/) tok = $(i+1)
+                }
+                if (ts == 0) next
+
+                # Find closest to each target
+                d1 = (ts > t1) ? ts - t1 : t1 - ts
+                if (d1 < diff1) { diff1 = d1; ts1 = ts; tok1 = tok }
+
+                d5 = (ts > t5) ? ts - t5 : t5 - ts
+                if (d5 < diff5) { diff5 = d5; ts5 = ts; tok5 = tok }
+
+                d15 = (ts > t15) ? ts - t15 : t15 - ts
+                if (d15 < diff15) { diff15 = d15; ts15 = ts; tok15 = tok }
+            }
+            END {
+                # Calculate rates (tokens per minute)
+                r1 = r5 = r15 = 0
+                if (ts1 > 0 && now - ts1 > 30) {
+                    elapsed = now - ts1
+                    delta = total - tok1
+                    r1 = int(delta * 60 / elapsed)
+                }
+                if (ts5 > 0 && now - ts5 > 30) {
+                    elapsed = now - ts5
+                    delta = total - tok5
+                    r5 = int(delta * 60 / elapsed)
+                }
+                if (ts15 > 0 && now - ts15 > 30) {
+                    elapsed = now - ts15
+                    delta = total - tok15
+                    r15 = int(delta * 60 / elapsed)
+                }
+
+                # Format rates
+                if (r1 > 0 || r5 > 0 || r15 > 0) {
+                    # Format each rate
+                    if (r1 >= 1000000) s1 = int(r1/1000000) "M"
+                    else if (r1 >= 1000) s1 = int(r1/1000) "K"
+                    else s1 = r1
+
+                    if (r5 >= 1000000) s5 = int(r5/1000000) "M"
+                    else if (r5 >= 1000) s5 = int(r5/1000) "K"
+                    else s5 = r5
+
+                    if (r15 >= 1000000) s15 = int(r15/1000000) "M"
+                    else if (r15 >= 1000) s15 = int(r15/1000) "K"
+                    else s15 = r15
+
+                    printf " %s,%s,%s", s1, s5, s15
+                }
+            }
+        ' "$snapshot_file")
+    fi
+
+    # Fallback to session average if no snapshot data
+    if [[ -z "$tok_rate_display" && "$duration_ms" -gt 60000 ]]; then
+        avg_rate=$(awk -v tt="$total_tokens" -v dm="$duration_ms" 'BEGIN {printf "%.0f", (tt / dm) * 60000}')
+        if [[ "$avg_rate" -ge 1000 ]]; then
+            r="$((avg_rate / 1000))K"
+        else
+            r="$avg_rate"
         fi
+        tok_rate_display=" ${r},${r},${r}"
     fi
 
     token_section=" | \033[2;33m${in_display}↓ ${out_display}↑${tok_rate_display}\033[0m"
 fi
 
-# 9. Time section (duration + API%)
+# 9. Time section (duration)
 time_section=""
-if [[ -n "$duration_display" && -n "$api_pct_display" ]]; then
-    time_section=" | \033[2;37m${duration_display} ${api_pct_display}\033[0m"
-elif [[ -n "$duration_display" ]]; then
+if [[ -n "$duration_display" ]]; then
     time_section=" | \033[2;37m${duration_display}\033[0m"
 fi
 
@@ -287,11 +309,8 @@ style_section=""
 output_section=""
 [[ -n "$lines_display" ]] && output_section=" | \033[2;32m${lines_display}\033[0m"
 
-# 10. Block timer section
-block_section=" | ${block_color}${block_display}\033[0m"
-
 # Build the complete status line
-# Format: v2.0.76 | path | branch[status] | Model | terse | 45% ⚡99% ⚠️ | +N/-M | 79K↓ 68K↑ | 10m API:15%
+# Format: v2.0.76 | path | branch[status] | Model | terse | 45% ⚡99% ⚠️ | +N/-M | 79K↓ 68K↑ | 10m
 version_prefix=""
 [[ -n "$version" ]] && version_prefix="\033[2;90mv${version}\033[0m | "
-echo -e "${version_prefix}${path_section} | ${git_section}${model_section}${style_section} | ${context_section}${output_section}${token_section}${time_section}${block_section}"
+echo -e "${version_prefix}${path_section} | ${git_section}${model_section}${style_section} | ${context_section}${output_section}${token_section}${time_section}"

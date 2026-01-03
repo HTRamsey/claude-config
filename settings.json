@@ -5,7 +5,8 @@
     "DISABLE_PROMPT_CACHING": "0",
     "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-    "MAX_MCP_OUTPUT_TOKENS": "50000",
+    "MAX_MCP_OUTPUT_TOKENS": "40000",
+    "BASH_MAX_OUTPUT_LENGTH": "30000",
     "MCP_TIMEOUT": "10000",
     "MCP_TOOL_TIMEOUT": "120000",
     "BASH_DEFAULT_TIMEOUT_MS": "120000",
@@ -47,6 +48,10 @@
       "Bash(git cherry-pick:*)",
       "Bash(git revert:*)",
       "Bash(git -C:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git check-ignore:*)",
+      "Bash(git rm:*)",
+      "Bash(git mv:*)",
       "Bash(make:*)",
       "Bash(cmake:*)",
       "Bash(ninja:*)",
@@ -73,6 +78,9 @@
       "Bash(flake8:*)",
       "Bash(pylint:*)",
       "Bash(bandit:*)",
+      "Bash(pip-audit:*)",
+      "Bash(coverage:*)",
+      "Bash(safety:*)",
       "Bash(gh pr:*)",
       "Bash(gh run:*)",
       "Bash(gh api:*)",
@@ -203,7 +211,6 @@
       "Bash([:*)",
       "Bash(source:*)",
       "Bash(.:*)",
-      "Bash(claude-flow:*)",
       "Bash(claude mcp:*)",
       "Bash(lychee:*)",
       "Bash(actionlint:*)",
@@ -232,7 +239,37 @@
       "WebFetch(domain:docs.rs)",
       "WebFetch(domain:pkg.go.dev)",
       "WebFetch(domain:npmjs.com)",
-      "WebFetch(domain:crates.io)"
+      "WebFetch(domain:crates.io)",
+      "Bash(PYTHONPATH=\"$HOME/.claude/hooks\" ~/.claude/data/venv/bin/python3 -m pytest:*)",
+      "Bash(PYTHONPATH=\"$HOME/.claude/hooks\" ~/.claude/data/venv/bin/python3:*)",
+      "Skill(multi-llm)",
+      "Bash(~/.claude/scripts/diagnostics/llm-status.sh:*)",
+      "Bash(gemini:*)",
+      "Bash(codex:*)",
+      "Bash(copilot:*)",
+      "Read(~/.claude/hooks/**)",
+      "Read(~/.claude/rules/*)",
+      "Read(~/.claude/skills/**)",
+      "Read(~/.claude/agents/*)",
+      "Read(~/.claude/commands/*)",
+      "Read(/tmp/**)",
+      "mcp__memory__*",
+      "mcp__grep-app__*",
+      "Skill(pdf)",
+      "Bash(dpkg:*)",
+      "Bash(apt list:*)",
+      "Bash(apt show:*)",
+      "Bash(apt search:*)",
+      "Bash(pdfinfo:*)",
+      "Bash(pdftotext:*)",
+      "Bash(~/.local/bin/codex:*)",
+      "Bash(nvm:*)",
+      "Bash(ollama:*)",
+      "WebFetch(domain:forum.opnsense.org)",
+      "WebFetch(domain:docs.opnsense.org)",
+      "WebFetch(domain:www.zenarmor.com)",
+      "WebFetch(domain:ollama.ai)",
+      "WebFetch(domain:openrouter.ai)"
     ],
     "deny": [
       "Read(.env)",
@@ -255,18 +292,8 @@
   },
   "enableAllProjectMcpServers": false,
   "allowedMcpServers": [
-    {
-      "serverName": "memory"
-    },
-    {
-      "serverName": "github"
-    },
-    {
-      "serverName": "puppeteer"
-    },
-    {
-      "serverName": "grep-app"
-    }
+    {"serverName": "memory"},
+    {"serverName": "grep-app"}
   ],
   "deniedMcpServers": [],
   "hooks": {
@@ -357,6 +384,51 @@
             "type": "command",
             "command": "$HOME/.claude/hooks/handlers/context_manager.py",
             "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/dispatchers/subagent_stop.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/dispatchers/notification.py",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/dispatchers/subagent_start.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash|Read|Write|Edit|Grep|Glob|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/dispatchers/post_tool_failure.py",
+            "timeout": 2
           }
         ]
       }

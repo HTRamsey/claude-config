@@ -5,22 +5,47 @@ description: Browser automation via Puppeteer MCP for JS-rendered content
 
 # Browser Automation
 
-Use Puppeteer MCP for browser automation when WebFetch isn't sufficient.
+Use Playwright or Puppeteer MCP for browser automation when WebFetch isn't sufficient.
 
 ## Overview
 
-Puppeteer MCP provides headless browser control for:
+Browser automation provides headless browser control for:
 - JS-rendered content extraction
 - Screenshot capture
 - Form filling and submission
 - Interactive testing
 - Auth-protected page access
 
-## MCP Server
+## MCP Servers
+
+### Playwright (Recommended)
+
+Multi-browser support: Firefox, Chrome, WebKit. Same API across all browsers.
+
+**Package:** `@anthropic/mcp-server-playwright`
+**Transport:** stdio
+**Install:** `claude mcp add playwright -- npx -y @anthropic/mcp-server-playwright`
+
+```bash
+# Also install browser binaries
+npx playwright install firefox chromium webkit
+```
+
+### Puppeteer (Chrome Only)
 
 **Package:** `puppeteer-mcp-server`
 **Transport:** stdio
 **Install:** `claude mcp add puppeteer -- npx -y puppeteer-mcp-server`
+
+### Comparison
+
+| Feature | Playwright | Puppeteer |
+|---------|------------|-----------|
+| Firefox | ✓ | ✗ |
+| Chrome/Chromium | ✓ | ✓ |
+| WebKit/Safari | ✓ | ✗ |
+| API | Same across browsers | Chrome-specific |
+| Maintenance | Microsoft (active) | Google |
 
 ## Available Tools
 
@@ -151,14 +176,16 @@ If page takes too long:
 
 ## Comparison with WebFetch
 
-| Feature | WebFetch | Puppeteer |
-|---------|----------|-----------|
-| Speed | Fast | Slower |
-| JS execution | No | Yes |
-| Screenshots | No | Yes |
-| Form filling | No | Yes |
-| Session/cookies | No | Yes |
-| Resource usage | Low | Higher |
+| Feature | WebFetch | Playwright | Puppeteer |
+|---------|----------|------------|-----------|
+| Speed | Fast | Slower | Slower |
+| JS execution | No | Yes | Yes |
+| Screenshots | No | Yes | Yes |
+| Form filling | No | Yes | Yes |
+| Session/cookies | No | Yes | Yes |
+| Resource usage | Low | Higher | Higher |
+| Firefox | N/A | Yes | No |
+| WebKit/Safari | N/A | Yes | No |
 
 ## Best Practices
 

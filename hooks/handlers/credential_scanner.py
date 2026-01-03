@@ -4,6 +4,8 @@
 PreToolUse hook for Bash tool - triggers on git commit commands.
 Scans staged content for patterns that look like API keys, passwords, tokens, etc.
 """
+# Handler metadata for dispatcher auto-discovery
+APPLIES_TO = ["Bash"]
 import subprocess
 
 from hooks.hook_utils import log_event

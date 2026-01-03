@@ -28,6 +28,7 @@ import re
 import sys
 import threading
 import time
+from pathlib import Path
 from dataclasses import dataclass, field
 from functools import lru_cache, wraps
 from typing import Any, Callable, Literal
@@ -176,7 +177,7 @@ class BaseContext:
 
     @property
     def cwd(self) -> str:
-        return self.raw.get("cwd", os.getcwd())
+        return self.raw.get("cwd", str(Path.cwd()))
 
     @property
     def transcript_path(self) -> str:
@@ -495,6 +496,225 @@ class BlockingHook:
 
 
 # =============================================================================
+# HookHandler - Base Class for All Handlers (P5.11)
+# =============================================================================
+
+class HookHandler:
+    """Base class for hook handlers with applies/handle pattern.
+
+    Provides a clean interface for dispatcher routing. Subclasses implement:
+    - applies(ctx) -> bool: Whether this handler should run
+    - handle(ctx) -> dict | None: Process and return response
+
+    Example:
+        class MyHandler(HookHandler):
+            name = "my_handler"
+            tools = ["Bash", "Read"]  # Only run for these tools
+
+            def handle(self, ctx: PreToolUseContext) -> dict | None:
+                if "dangerous" in ctx.tool_input.command:
+                    return self.deny("Dangerous command blocked")
+                return None
+
+        # Usage in dispatcher
+        handler = MyHandler()
+        if handler.applies(ctx):
+            result = handler.handle(ctx)
+    """
+
+    # Class attributes (override in subclasses)
+    name: str = "base_handler"
+    tools: list[str] | None = None  # Filter by tool name (None = all tools)
+    event: EventType = "PreToolUse"  # Event type this handler processes
+
+    def applies(self, ctx) -> bool:
+        """Check if this handler should run for the given context.
+
+        Override for custom filtering logic. Default checks tool name.
+
+        Args:
+            ctx: Context object (PreToolUseContext, PostToolUseContext, etc.)
+
+        Returns:
+            True if handler should run, False to skip
+        """
+        if self.tools is not None:
+            tool_name = getattr(ctx, 'tool_name', None)
+            if tool_name and tool_name not in self.tools:
+                return False
+        return True
+
+    def handle(self, ctx) -> dict | None:
+        """Process the context and return a response.
+
+        Override this method in subclasses.
+
+        Args:
+            ctx: Context object
+
+        Returns:
+            Response dict or None to continue without message
+        """
+        raise NotImplementedError("Subclasses must implement handle()")
+
+    def _create_context(self, raw: dict):
+        """Create appropriate context object from raw dict."""
+        if self.event == "PreToolUse":
+            return PreToolUseContext(raw)
+        elif self.event == "PostToolUse":
+            return PostToolUseContext(raw)
+        else:
+            return BaseContext(raw)
+
+    def __call__(self, raw: dict) -> dict | None:
+        """Entry point - creates context, checks applies, calls handle.
+
+        Args:
+            raw: Raw hook input dict
+
+        Returns:
+            Response dict or None
+        """
+        try:
+            ctx = self._create_context(raw)
+            if not self.applies(ctx):
+                return None
+            return self.handle(ctx)
+        except Exception as e:
+            log_event(self.name, "error", {"error": str(e)}, "error")
+            return None
+
+    # Convenience methods for building responses
+    def allow(self, reason: str = "") -> dict:
+        """Allow with optional message (PreToolUse)."""
+        return Response.allow(reason)
+
+    def deny(self, reason: str) -> dict:
+        """Deny the operation (PreToolUse)."""
+        return Response.deny(reason)
+
+    def message(self, text: str) -> dict:
+        """Return a message to Claude."""
+        return Response.message(text, self.event)
+
+
+# =============================================================================
+# StatefulHandler - Base Class for Stateful Handlers (P5.12)
+# =============================================================================
+
+class StatefulHandler(HookHandler):
+    """Base class for handlers that maintain session state.
+
+    Provides automatic state loading/saving with TTL expiration and pruning.
+    Subclasses implement process() instead of handle().
+
+    Example:
+        class FileTracker(StatefulHandler):
+            name = "file_tracker"
+            namespace = "file_tracker"
+            tools = ["Read", "Edit"]
+            event = "PreToolUse"
+            default_state = {"files": {}, "count": 0}
+            max_entries = 100
+            items_key = "files"
+
+            def process(self, ctx, state: dict) -> dict | None:
+                file_path = ctx.tool_input.file_path
+                state["files"][file_path] = {"time": time.time()}
+                state["count"] += 1
+                if state["count"] > 50:
+                    return self.message(f"Accessed {state['count']} files")
+                return None
+
+        # Usage
+        handler = FileTracker()
+        result = handler(raw)  # Automatically loads/saves state
+    """
+
+    # Class attributes (override in subclasses)
+    namespace: str = "stateful_handler"  # State namespace for storage
+    default_state: dict = None  # Default state structure
+    max_age_secs: int = 86400  # State expires after 24 hours
+    max_entries: int | None = None  # Max items to keep (None = no limit)
+    items_key: str | None = None  # Key containing items to prune
+    time_key: str = "_time"  # Timestamp key in items (for pruning order)
+
+    def __init__(self):
+        """Initialize stateful handler with HookState instance."""
+        self._hook_state = HookState(
+            self.namespace,
+            use_session=True,
+            max_age_secs=self.max_age_secs
+        )
+
+    def _get_default_state(self) -> dict:
+        """Get default state, ensuring fresh copy."""
+        if self.default_state is None:
+            return {}
+        return self.default_state.copy()
+
+    def load_state(self, session_id: str) -> dict:
+        """Load state for session.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            State dict (loaded or default copy)
+        """
+        return self._hook_state.load(
+            session_id=session_id,
+            default=self._get_default_state()
+        )
+
+    def save_state(self, session_id: str, state: dict) -> bool:
+        """Save state with optional pruning.
+
+        Args:
+            session_id: Session identifier
+            state: State dict to save
+
+        Returns:
+            True on success
+        """
+        if self.max_entries and self.items_key:
+            return self._hook_state.save_with_pruning(
+                state,
+                session_id=session_id,
+                max_entries=self.max_entries,
+                items_key=self.items_key,
+                time_key=self.time_key
+            )
+        return self._hook_state.save(state, session_id)
+
+    def handle(self, ctx) -> dict | None:
+        """Handle with automatic state loading/saving.
+
+        Loads state, calls process(), saves state.
+        Override process() instead of this method.
+        """
+        session_id = ctx.session_id
+        state = self.load_state(session_id)
+        result = self.process(ctx, state)
+        self.save_state(session_id, state)
+        return result
+
+    def process(self, ctx, state: dict) -> dict | None:
+        """Process the context with access to state.
+
+        Override this method in subclasses. Modify state dict in place.
+
+        Args:
+            ctx: Context object
+            state: Mutable state dict
+
+        Returns:
+            Response dict or None
+        """
+        raise NotImplementedError("Subclasses must implement process()")
+
+
+# =============================================================================
 # Pattern Matching Utilities
 # =============================================================================
 
@@ -514,8 +734,9 @@ class Patterns:
         Check if path matches any glob pattern.
         Returns matching pattern or None.
         """
+        # os.path.normpath needed to collapse .. sequences (Path doesn't do this)
         path = os.path.normpath(path)
-        filename = os.path.basename(path)
+        filename = Path(path).name
 
         for pattern in patterns:
             if fnmatch.fnmatch(path, pattern):
@@ -763,6 +984,8 @@ __all__ = [
     "HookState",
     # Base classes
     "BlockingHook",
+    "HookHandler",
+    "StatefulHandler",
     # Pattern matching
     "Patterns",
     # Rate limiting

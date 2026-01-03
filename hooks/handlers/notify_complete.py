@@ -6,6 +6,8 @@ when commands take >30 seconds to complete.
 
 Uses cross-platform notification abstraction (Linux, macOS, Windows).
 """
+# Handler metadata for dispatcher auto-discovery
+APPLIES_TO = ["Bash"]
 from hooks.config import Thresholds
 from hooks.hook_utils import send_notification, is_notification_available
 

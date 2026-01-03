@@ -7,6 +7,11 @@ Provides:
 - suggest_optimization: Suggests better tool alternatives (PreToolUse: Bash, Grep, Read)
 - suggest_chain: Suggests follow-up specialists after Task (PostToolUse: Task)
 """
+# Handler metadata for dispatcher auto-discovery
+# PreToolUse handlers (suggest_skill, suggest_subagent, suggest_optimization)
+APPLIES_TO_PRE = ["Write", "Edit", "Grep", "Glob", "Read", "Bash", "LSP"]
+# PostToolUse handlers (suggest_chain)
+APPLIES_TO_POST = ["Task"]
 from pathlib import Path
 
 from hooks.config import Limits, SuggestionPatterns
@@ -43,6 +48,34 @@ def update_state(updates: dict, save: bool = False):
     _cached_state = state
     if save:
         _hook_state.save(state)
+
+
+# =============================================================================
+# Unified PreToolUse Entry Point
+# =============================================================================
+
+
+def handle_pre_tool(raw: dict) -> dict | None:
+    """Unified PreToolUse handler - routes to appropriate suggestion function.
+
+    Args:
+        raw: Raw context dict from dispatcher
+
+    Returns:
+        Response dict or None
+    """
+    tool_name = raw.get("tool_name", "")
+
+    if tool_name in ("Write", "Edit"):
+        return suggest_skill(raw)
+    elif tool_name in ("Grep", "Glob", "Read"):
+        return suggest_subagent(raw) or suggest_optimization(raw)
+    elif tool_name == "Bash":
+        return suggest_optimization(raw)
+    elif tool_name == "LSP":
+        return suggest_optimization(raw)
+
+    return None
 
 
 # =============================================================================

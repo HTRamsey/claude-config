@@ -6,6 +6,8 @@ Enforces protection that glob patterns in settings.json can't provide on Linux.
 
 Uses BlockingHook base class for cleaner code.
 """
+# Handler metadata for dispatcher auto-discovery
+APPLIES_TO = ["Read", "Write", "Edit"]
 from hooks.hook_sdk import (
     PreToolUseContext,
     Patterns,

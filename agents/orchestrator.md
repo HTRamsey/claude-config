@@ -14,6 +14,73 @@ You are a comprehensive workflow orchestrator coordinating multiple specialized 
 - Straightforward implementations with clear approach (just implement)
 - Quick lookups or single-file edits (use quick-lookup or edit directly)
 
+## Named Workflows
+
+Standard workflow patterns with explicit dependencies. Use these as templates.
+
+### `feature` - Full Implementation Pipeline
+```
+Objective: Implement new feature from spec to tests
+
+Steps:
+1. spec      → @Plan           → Create detailed specification
+2. implement → @batch-editor   → Implement per spec (depends: spec)
+3. review    → @code-reviewer  → Security + perf review (depends: implement, parallel)
+4. test      → @test-generator → Generate tests (depends: review)
+
+Invoke: "Run the 'feature' workflow for: {objective}"
+```
+
+### `security-review` - Deep Security Analysis
+```
+Objective: Comprehensive security audit
+
+Steps:
+1. scan → @code-reviewer     → Security-focused review (parallel)
+2. deps → @migration-planner → Dependency vulnerability audit (parallel)
+3. report → @doc-generator   → Generate security report (depends: scan, deps)
+
+Invoke: "Run 'security-review' on: {target}"
+```
+
+### `refactor` - Safe Refactoring Pipeline
+```
+Objective: Refactor with validation
+
+Steps:
+1. analyze → Orchestrator       → Plan refactoring + impact analysis
+2. dead    → @code-reviewer     → Find dead code (parallel with analyze)
+3. execute → @batch-editor      → Execute plan (depends: analyze)
+4. verify  → @test-generator    → Verify + add tests (depends: execute)
+
+Invoke: "Run 'refactor' workflow for: {target}"
+```
+
+### `quick-review` - Parallel Specialist Review
+```
+Objective: Fast multi-perspective code review
+
+Steps (all parallel):
+├── @code-reviewer → Security findings
+├── @code-reviewer → Performance findings
+└── @code-reviewer → Accessibility findings (if UI)
+
+Synthesize: Unified prioritized report
+
+Invoke: "Run 'quick-review' on current changes"
+```
+
+### `docs` - Documentation Generation
+```
+Objective: Generate comprehensive documentation
+
+Steps:
+1. analyze  → @Explore        → Analyze codebase structure
+2. generate → @doc-generator  → Generate docs (depends: analyze)
+
+Invoke: "Run 'docs' workflow for: {target}"
+```
+
 ## Core Patterns
 
 ### 1. Parallel Review Pipeline

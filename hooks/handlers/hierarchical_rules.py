@@ -22,6 +22,8 @@ paths: src/api/**/*.ts
 
 Uses cachetools TTLCache for automatic expiration and LRU eviction.
 """
+# Handler metadata for dispatcher auto-discovery
+APPLIES_TO = ["Read", "Write", "Edit"]
 import os
 from pathlib import Path
 
@@ -148,12 +150,13 @@ def get_applicable_rules(file_path: str, cwd: str) -> list[dict]:
         return []
 
     # Resolve file path
-    if not os.path.isabs(file_path):
-        file_path = os.path.join(cwd, file_path)
-    file_path = os.path.normpath(file_path)
+    path = Path(file_path)
+    if not path.is_absolute():
+        path = Path(cwd) / file_path
+    file_path = str(path.resolve())
 
     # Get directory of the file
-    file_dir = os.path.dirname(file_path)
+    file_dir = str(path.parent)
 
     # Find CLAUDE.md files
     claude_files = find_claude_files(file_dir, cwd)
@@ -167,7 +170,7 @@ def get_applicable_rules(file_path: str, cwd: str) -> list[dict]:
         if paths_pattern:
             # Make file path relative to source dir for matching
             try:
-                rel_path = os.path.relpath(file_path, source_dir)
+                rel_path = str(Path(file_path).relative_to(source_dir))
             except ValueError:
                 continue
 

@@ -1,18 +1,17 @@
 #!/home/jonglaser/.claude/data/venv/bin/python3
 """
-SessionStart Dispatcher - Consolidates all SessionStart hooks.
+SessionStart Dispatcher - Handle session start events.
 
-Uses:
-- hook_utils/git: Git branch, commits, status
-- handlers/project_context: Project type, usage stats
-- handlers/viewer: Launch claude-code-viewer if not running
+Delegates to handlers/project_context.py for:
+- Git context (branch, commits, status)
+- Usage summary (sessions, agents, skills)
+- Project type detection
+- Viewer daemon startup
+
+Runs on SessionStart event when a new session begins.
 """
-import os
-
 from hooks.dispatchers.base import SimpleDispatcher
-from hooks.handlers import project_context
-from hooks.hook_utils import git
-from hooks.handlers.viewer import maybe_start_viewer
+from hooks.handlers.project_context import handle_session_start
 
 
 class SessionStartDispatcher(SimpleDispatcher):
@@ -22,28 +21,7 @@ class SessionStartDispatcher(SimpleDispatcher):
     EVENT_TYPE = None  # SessionStart doesn't have event_type in context
 
     def handle(self, ctx: dict) -> list[str]:
-        cwd = ctx.get('cwd', os.getcwd())
-        output_parts = ["[Session Start]"]
-
-        # Git context (branch, commits, status)
-        git_ctx = git.get_context_summary(cwd)
-        if git_ctx:
-            output_parts.extend(git_ctx)
-
-        # Usage summary (sessions, agents, skills)
-        if usage := project_context.get_usage_summary():
-            output_parts.append(usage)
-
-        # Project type detection
-        if ptype := project_context.detect_project_type(cwd):
-            output_parts.append(ptype)
-
-        # Start viewer if not running
-        if viewer_msg := maybe_start_viewer():
-            output_parts.append(viewer_msg)
-
-        # Only return if there's content beyond the header
-        return output_parts if len(output_parts) > 1 else []
+        return handle_session_start(ctx)
 
 
 if __name__ == "__main__":

@@ -241,7 +241,7 @@ def backup_transcript(transcript_path: str, reason: str = "manual", ctx: dict = 
         Path to backup file, or empty string on failure
     """
     try:
-        if not transcript_path or not os.path.exists(transcript_path):
+        if not transcript_path or not Path(transcript_path).exists():
             return ""
 
         DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -261,7 +261,7 @@ def backup_transcript(transcript_path: str, reason: str = "manual", ctx: dict = 
         log_event("backup", "success", {
             "reason": reason,
             "path": str(backup_path),
-            "size": os.path.getsize(backup_path)
+            "size": backup_path.stat().st_size
         })
 
         # Clean old backups (keep last 20)

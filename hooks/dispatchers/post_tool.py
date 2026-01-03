@@ -54,7 +54,7 @@ class PostToolDispatcher(BaseDispatcher):
         "tool_analytics": ("hooks.handlers.tool_analytics", "track_tool_analytics"),
         "unified_cache": ("hooks.handlers.unified_cache", ("handle_exploration_post", "handle_research_post")),
         "suggestion_engine": ("hooks.handlers.suggestion_engine", "suggest_chain"),
-        "smart_permissions": ("hooks.dispatchers.permission", "smart_permissions_post"),
+        "smart_permissions": ("hooks.handlers.smart_permissions", "smart_permissions_post"),
         "context_manager": ("hooks.handlers.context_manager", "handle_post_tool_use"),
         "subagent_lifecycle": ("hooks.handlers.subagent_lifecycle", "handle_complete"),
         "notify_complete": ("hooks.handlers.notify_complete", "notify_complete"),

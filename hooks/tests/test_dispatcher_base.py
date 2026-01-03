@@ -185,5 +185,161 @@ class TestDispatcherIntegration(TestCase):
         self.assertTrue("from a" in message or "from b" in message)
 
 
+class TestAutoDiscoverRouting(TestCase):
+    """Tests for AUTO_DISCOVER_ROUTING functionality."""
+
+    def test_auto_discover_disabled_by_default(self):
+        """AUTO_DISCOVER_ROUTING should be False by default."""
+        dispatcher = MockDispatcher()
+        self.assertFalse(dispatcher.AUTO_DISCOVER_ROUTING)
+
+    def test_explicit_tool_handlers_takes_precedence(self):
+        """Explicit TOOL_HANDLERS should be used when defined."""
+        dispatcher = MockDispatcher()
+        dispatcher.AUTO_DISCOVER_ROUTING = True
+        # MockDispatcher has explicit TOOL_HANDLERS
+        tool_handlers = dispatcher.get_tool_handlers()
+        self.assertEqual(tool_handlers, {"ToolA": ["handler_a", "handler_b"], "ToolB": ["handler_c"]})
+
+    def test_auto_discover_with_empty_tool_handlers(self):
+        """Auto-discovery works when TOOL_HANDLERS is empty."""
+
+        class AutoDiscoverDispatcher(BaseDispatcher):
+            DISPATCHER_NAME = "auto_discover_test"
+            HOOK_EVENT_NAME = "PreToolUse"
+            ALL_HANDLERS = ["test_handler"]
+            TOOL_HANDLERS = {}  # Empty - triggers auto-discovery
+            AUTO_DISCOVER_ROUTING = True
+
+            HANDLER_IMPORTS = {
+                "test_handler": ("hooks.handlers.file_protection", "check_file_protection"),
+            }
+
+            def _create_result_strategy(self):
+                return PostToolStrategy()
+
+        dispatcher = AutoDiscoverDispatcher()
+        tool_handlers = dispatcher.get_tool_handlers()
+
+        # file_protection has APPLIES_TO = ["Read", "Write", "Edit"]
+        self.assertIn("Read", tool_handlers)
+        self.assertIn("Write", tool_handlers)
+        self.assertIn("Edit", tool_handlers)
+        self.assertIn("test_handler", tool_handlers.get("Read", []))
+
+    def test_auto_discover_pre_vs_post(self):
+        """PreToolUse should use APPLIES_TO_PRE, PostToolUse should use APPLIES_TO_POST."""
+
+        class PreDispatcher(BaseDispatcher):
+            DISPATCHER_NAME = "pre_discover_test"
+            HOOK_EVENT_NAME = "PreToolUse"
+            ALL_HANDLERS = ["file_monitor"]
+            TOOL_HANDLERS = {}
+            AUTO_DISCOVER_ROUTING = True
+            HANDLER_IMPORTS = {
+                "file_monitor": ("hooks.handlers.file_monitor", "track_file_pre"),
+            }
+
+            def _create_result_strategy(self):
+                return PostToolStrategy()
+
+        class PostDispatcher(BaseDispatcher):
+            DISPATCHER_NAME = "post_discover_test"
+            HOOK_EVENT_NAME = "PostToolUse"
+            ALL_HANDLERS = ["file_monitor"]
+            TOOL_HANDLERS = {}
+            AUTO_DISCOVER_ROUTING = True
+            HANDLER_IMPORTS = {
+                "file_monitor": ("hooks.handlers.file_monitor", "track_file_post"),
+            }
+
+            def _create_result_strategy(self):
+                return PostToolStrategy()
+
+        pre_dispatcher = PreDispatcher()
+        post_dispatcher = PostDispatcher()
+
+        pre_handlers = pre_dispatcher.get_tool_handlers()
+        post_handlers = post_dispatcher.get_tool_handlers()
+
+        # file_monitor: APPLIES_TO_PRE = ["Read", "Edit"], APPLIES_TO_POST = ["Grep", "Glob", "Read"]
+        # PreToolUse should see Read, Edit
+        self.assertIn("Read", pre_handlers)
+        self.assertIn("Edit", pre_handlers)
+
+        # PostToolUse should see Grep, Glob, Read
+        self.assertIn("Grep", post_handlers)
+        self.assertIn("Glob", post_handlers)
+        self.assertIn("Read", post_handlers)
+
+    def test_auto_discover_falls_back_to_applies_to(self):
+        """Falls back to APPLIES_TO when APPLIES_TO_PRE/POST not defined."""
+
+        class FallbackDispatcher(BaseDispatcher):
+            DISPATCHER_NAME = "fallback_test"
+            HOOK_EVENT_NAME = "PreToolUse"
+            ALL_HANDLERS = ["tdd_guard"]
+            TOOL_HANDLERS = {}
+            AUTO_DISCOVER_ROUTING = True
+            HANDLER_IMPORTS = {
+                "tdd_guard": ("hooks.handlers.tdd_guard", "check_tdd"),
+            }
+
+            def _create_result_strategy(self):
+                return PostToolStrategy()
+
+        dispatcher = FallbackDispatcher()
+        tool_handlers = dispatcher.get_tool_handlers()
+
+        # tdd_guard has APPLIES_TO = ["Write", "Edit"] (no PRE/POST variants)
+        self.assertIn("Write", tool_handlers)
+        self.assertIn("Edit", tool_handlers)
+        self.assertIn("tdd_guard", tool_handlers.get("Write", []))
+
+    def test_auto_discover_caches_result(self):
+        """Auto-discovered handlers should be cached."""
+
+        class CachingDispatcher(BaseDispatcher):
+            DISPATCHER_NAME = "cache_test"
+            HOOK_EVENT_NAME = "PreToolUse"
+            ALL_HANDLERS = ["file_protection"]
+            TOOL_HANDLERS = {}
+            AUTO_DISCOVER_ROUTING = True
+            HANDLER_IMPORTS = {
+                "file_protection": ("hooks.handlers.file_protection", "check_file_protection"),
+            }
+
+            def _create_result_strategy(self):
+                return PostToolStrategy()
+
+        dispatcher = CachingDispatcher()
+
+        # First call
+        handlers1 = dispatcher.get_tool_handlers()
+        # Second call should return same object
+        handlers2 = dispatcher.get_tool_handlers()
+
+        self.assertIs(handlers1, handlers2)
+
+    def test_auto_discover_with_disabled_flag(self):
+        """When AUTO_DISCOVER_ROUTING=False and TOOL_HANDLERS empty, returns empty."""
+
+        class NoDiscoverDispatcher(BaseDispatcher):
+            DISPATCHER_NAME = "no_discover_test"
+            HOOK_EVENT_NAME = "PreToolUse"
+            ALL_HANDLERS = ["file_protection"]
+            TOOL_HANDLERS = {}
+            AUTO_DISCOVER_ROUTING = False  # Disabled
+            HANDLER_IMPORTS = {}
+
+            def _create_result_strategy(self):
+                return PostToolStrategy()
+
+        dispatcher = NoDiscoverDispatcher()
+        tool_handlers = dispatcher.get_tool_handlers()
+
+        self.assertEqual(tool_handlers, {})
+
+
 if __name__ == "__main__":
     main()

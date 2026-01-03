@@ -329,6 +329,8 @@ class BaseDispatcher(ABC):
     TOOL_HANDLERS: dict[str, list[str]] = {}
     # Handler import map: "name" -> ("module", "func") or ("module", ("fn1", "fn2", ...))
     HANDLER_IMPORTS: dict[str, tuple] = {}
+    # Set to True to auto-discover TOOL_HANDLERS from handler APPLIES_TO constants
+    AUTO_DISCOVER_ROUTING: bool = False
 
     def __init__(self):
         self._validated = False
@@ -336,6 +338,7 @@ class BaseDispatcher(ABC):
         self._profile_timings: dict[str, list[float]] = {}
         self._handler_registry = HandlerRegistry()
         self._result_strategy: ResultStrategy | None = None
+        self._discovered_tool_handlers: dict[str, list[str]] | None = None
 
     @abstractmethod
     def _create_result_strategy(self) -> ResultStrategy:
@@ -374,6 +377,61 @@ class BaseDispatcher(ABC):
         Override in subclasses to register handlers with routing rules and custom executors.
         """
         pass
+
+    def _discover_tool_handlers(self) -> dict[str, list[str]]:
+        """Auto-discover TOOL_HANDLERS from handler APPLIES_TO constants.
+
+        Scans handler modules for APPLIES_TO, APPLIES_TO_PRE, or APPLIES_TO_POST
+        constants and builds the tool-to-handler mapping.
+
+        For PreToolUse: uses APPLIES_TO or APPLIES_TO_PRE
+        For PostToolUse: uses APPLIES_TO or APPLIES_TO_POST
+
+        Returns:
+            Dict mapping tool names to list of handler names
+        """
+        if self._discovered_tool_handlers is not None:
+            return self._discovered_tool_handlers
+
+        tool_handlers: dict[str, list[str]] = {}
+        is_pre = self.HOOK_EVENT_NAME == "PreToolUse"
+        applies_key = "APPLIES_TO_PRE" if is_pre else "APPLIES_TO_POST"
+
+        for handler_name in self.ALL_HANDLERS:
+            if handler_name not in self.HANDLER_IMPORTS:
+                continue
+
+            module_name, _ = self.HANDLER_IMPORTS[handler_name]
+            try:
+                module = importlib.import_module(module_name)
+                # Check for event-specific APPLIES_TO first, then generic
+                applies_to = getattr(module, applies_key, None) or getattr(module, "APPLIES_TO", None)
+
+                if applies_to:
+                    for tool in applies_to:
+                        if tool not in tool_handlers:
+                            tool_handlers[tool] = []
+                        if handler_name not in tool_handlers[tool]:
+                            tool_handlers[tool].append(handler_name)
+            except ImportError:
+                continue
+
+        self._discovered_tool_handlers = tool_handlers
+        return tool_handlers
+
+    def get_tool_handlers(self) -> dict[str, list[str]]:
+        """Get tool-to-handler mapping.
+
+        If AUTO_DISCOVER_ROUTING is True, auto-discovers from handler metadata.
+        Otherwise returns explicit TOOL_HANDLERS.
+
+        The explicit TOOL_HANDLERS takes precedence if defined (not empty).
+        """
+        if self.TOOL_HANDLERS:
+            return self.TOOL_HANDLERS
+        if self.AUTO_DISCOVER_ROUTING:
+            return self._discover_tool_handlers()
+        return {}
 
     def _execute_handler(self, name: str, handler: Any, ctx: dict) -> dict | None:
         """Execute handler logic. Override for special cases.
@@ -492,8 +550,9 @@ class BaseDispatcher(ABC):
     def dispatch(self, ctx: dict) -> dict | None:
         """Dispatch to appropriate handlers based on tool name.
 
-        If TOOL_HANDLERS is empty, runs all handlers in ALL_HANDLERS (non-tool mode).
-        Otherwise, routes by tool_name using TOOL_HANDLERS mapping.
+        If TOOL_HANDLERS is empty and AUTO_DISCOVER_ROUTING is False,
+        runs all handlers in ALL_HANDLERS (non-tool mode).
+        Otherwise, routes by tool_name using get_tool_handlers() mapping.
         """
         # Initialize strategy on first use
         if self._result_strategy is None:
@@ -501,14 +560,15 @@ class BaseDispatcher(ABC):
 
         dispatch_start = time.perf_counter()
         tool_name = ctx.get("tool_name", "")
+        tool_handlers = self.get_tool_handlers()
 
-        # Non-tool mode: empty TOOL_HANDLERS means run all handlers
-        if not self.TOOL_HANDLERS:
+        # Non-tool mode: empty tool_handlers means run all handlers
+        if not tool_handlers:
             handlers = self.ALL_HANDLERS
             event_name = "non-tool"
         else:
             # Tool mode: route by tool_name
-            handlers = self.TOOL_HANDLERS.get(tool_name, [])
+            handlers = tool_handlers.get(tool_name, [])
             event_name = tool_name
             if not handlers:
                 return None

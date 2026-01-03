@@ -87,13 +87,13 @@ Route tasks to optimal provider. Use `multi-llm` skill for guidance.
 | Default | `claude` | Primary tool |
 
 **Scripts:**
-- `scripts/automation/llm-route.sh` - Manual routing from terminal
-- `scripts/automation/llm-delegate.sh` - Claude delegates via tmux
+- `scripts/automation/llm-route.sh` - Routing decisions
+- `scripts/automation/llm-delegate.sh` - Execute with fallback
 
 **Delegation example:**
 ```bash
-llm-delegate.sh gemini "summarize this 500KB log"
-llm-delegate.sh codex "generate REST endpoints for User"
+~/.claude/scripts/automation/llm-delegate.sh gemini "summarize this 500KB log"
+~/.claude/scripts/automation/llm-route.sh "generate REST endpoints for User"
 ```
 
 ## Task Tool Settings

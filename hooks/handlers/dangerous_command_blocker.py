@@ -6,6 +6,8 @@ Blocks or warns about commands that could cause irreversible damage.
 
 Uses hook_sdk for typed context and response builders.
 """
+# Handler metadata for dispatcher auto-discovery
+APPLIES_TO = ["Bash"]
 from hooks.hook_sdk import (
     PreToolUseContext,
     Response,

@@ -232,7 +232,7 @@ def safe_stat(path: PathLike) -> os.stat_result | None:
 def safe_mtime(path: PathLike, default: float = 0.0) -> float:
     """Get file modification time safely, return default on error."""
     try:
-        return os.path.getmtime(path)
+        return Path(path).stat().st_mtime
     except (FileNotFoundError, PermissionError, OSError):
         return default
 
@@ -240,7 +240,7 @@ def safe_mtime(path: PathLike, default: float = 0.0) -> float:
 def safe_exists(path: PathLike) -> bool:
     """Check if path exists safely, return False on error."""
     try:
-        return os.path.exists(path)
+        return Path(path).exists()
     except (OSError, PermissionError):
         return False
 
@@ -258,6 +258,11 @@ def normalize_path(path: str) -> str:
 
 
 def expand_path(path: str) -> str:
-    """Expand ~, environment variables, and normalize path."""
-    expanded = os.path.expandvars(os.path.expanduser(path))
+    """Expand ~, environment variables, and normalize path.
+
+    Note: Keeps relative paths relative (uses normpath not resolve).
+    """
+    # os.path.expandvars needed - Path doesn't support env var expansion
+    expanded = os.path.expandvars(str(Path(path).expanduser()))
+    # normpath preserves relative paths, resolve() would make them absolute
     return os.path.normpath(expanded)

@@ -1,159 +1,185 @@
 ---
 name: multi-llm
-description: Route tasks to optimal LLM provider (Gemini, Codex, Claude)
+description: Route tasks to optimal LLM provider (Gemini, Codex, Copilot, Claude)
 ---
 
-# Multi-LLM Orchestration
+# Multi-LLM Routing
 
 Route tasks to the optimal LLM provider for cost efficiency and capability matching.
 
-## Overview
+## Quick Reference
 
-Different LLMs excel at different tasks. This skill enables intelligent routing:
-- **Gemini**: 1M+ token context for large file analysis
-- **Codex**: Optimized for code generation, cheaper for boilerplate
-- **Copilot**: IDE-integrated quick edits
-- **Claude**: Best reasoning, architecture, security analysis
+| Trigger | Provider | Why |
+|---------|----------|-----|
+| Input >100KB | Gemini | 1M token context |
+| "entire codebase" | Gemini | Large context |
+| generate/scaffold/CRUD | Codex | Cost-optimized |
+| security/architecture/debug | Claude | Best reasoning |
+| shell/command/CLI | Copilot | Shell expertise |
+| Default | Claude | Primary tool |
 
-## Provider Capabilities
+## Provider Status
 
-### Gemini (`gemini-cli`)
-- **Context**: 1M+ tokens
-- **Best for**: Large file analysis, whole codebase questions, long documents
-- **Cost**: Competitive for large context
-- **Limitations**: Less nuanced reasoning than Claude
+Check installed providers and authentication:
 
-### Codex (`codex-cli`)
-- **Context**: Moderate
-- **Best for**: Code generation, CRUD, boilerplate, templates
-- **Cost**: Lower than Claude for generation tasks
-- **Limitations**: Less architectural understanding
-
-### Copilot (`gh copilot suggest`)
-- **Context**: Limited
-- **Best for**: Quick inline suggestions, IDE integration
-- **Cost**: Included with GitHub subscription
-- **Limitations**: Not designed for complex tasks
-
-### Claude (`claude`)
-- **Context**: 200K tokens (Opus/Sonnet)
-- **Best for**: Architecture, security, debugging, code review, reasoning
-- **Cost**: Premium for complex tasks
-- **Limitations**: Smaller context than Gemini
-
-## Routing Decision Tree
-
-```
-Task received
-    │
-    ├─ Input > 100KB? ─────────────────────────→ gemini
-    │
-    ├─ Whole codebase question? ───────────────→ gemini
-    │
-    ├─ Boilerplate/CRUD/scaffold pattern? ─────→ codex
-    │
-    ├─ Security/architecture/debugging? ───────→ claude
-    │
-    └─ Default ────────────────────────────────→ claude
+```bash
+~/.claude/scripts/diagnostics/llm-status.sh
 ```
 
 ## Scripts
 
-### llm-route.sh - Manual CLI Switching
-
-For users to manually route tasks from terminal:
+### llm-route.sh - Routing Decisions
 
 ```bash
 # Auto-detect best provider
-llm-route.sh "analyze this large log file"
+~/.claude/scripts/automation/llm-route.sh "analyze this large log"
 
 # Force specific provider
-llm-route.sh -p gemini "summarize this"
+~/.claude/scripts/automation/llm-route.sh -p gemini "summarize"
 
-# With file input
-llm-route.sh -f large.log "what errors occurred?"
+# With file input (checks size for routing)
+~/.claude/scripts/automation/llm-route.sh -f large.log "what errors?"
 
-# List available providers
-llm-route.sh --list
+# List providers with auth status
+~/.claude/scripts/automation/llm-route.sh --list
 ```
 
-### llm-delegate.sh - Claude-Initiated Delegation
-
-For Claude to delegate tasks via tmux:
+### llm-delegate.sh - Execute with Fallback
 
 ```bash
-# Basic delegation
-llm-delegate.sh gemini "summarize this 500KB log"
+# Delegate to Gemini (falls back if unavailable)
+~/.claude/scripts/automation/llm-delegate.sh gemini "summarize 500KB log"
 
 # With timeout
-llm-delegate.sh -t 180 gemini "analyze entire codebase"
+~/.claude/scripts/automation/llm-delegate.sh -t 180 gemini "analyze codebase"
 
 # Pipe content
-cat large.log | llm-delegate.sh gemini "summarize errors"
+cat large.log | ~/.claude/scripts/automation/llm-delegate.sh gemini "summarize"
 
-# Keep tmux session for inspection
-llm-delegate.sh -k codex "generate User CRUD"
+# Disable fallback (fail if provider unavailable)
+~/.claude/scripts/automation/llm-delegate.sh --no-fallback codex "generate API"
+
+# Large prompts (>100KB) automatically use temp files to avoid ARG_MAX
+~/.claude/scripts/automation/llm-delegate.sh gemini "$(cat large-codebase.py)"
+
+# Multi-file content: use semicolons (NOT brace groups with newlines)
+cat file1.py file2.py | ~/.claude/scripts/automation/llm-delegate.sh gemini "review"
+
+# Or use command substitution for complex gathering
+~/.claude/scripts/automation/llm-delegate.sh gemini "analyze: $(cat src/*.py)"
 ```
 
-## Configuration
-
-### Environment Variables
+### llm-logging.sh - Routing Analytics
 
 ```bash
-# Default delegation timeout (seconds)
-export LLM_DELEGATE_TIMEOUT=120
+# View recent routing decisions
+~/.claude/scripts/lib/llm-logging.sh recent 10
 
-# Custom tmux session name
-export LLM_DELEGATE_SESSION="llm-delegate"
+# Today's stats by provider
+~/.claude/scripts/lib/llm-logging.sh stats
+
+# Rotate logs if >10MB
+~/.claude/scripts/lib/llm-logging.sh rotate
 ```
 
-### Provider CLI Installation
+## Fallback Chain
+
+When preferred provider fails:
+```
+Best-fit → Claude → Gemini → Codex → Copilot
+```
+
+## Provider Capabilities
+
+### Gemini
+| Attribute | Value |
+|-----------|-------|
+| Binary | `gemini` |
+| Context | 1M tokens (2M coming) |
+| Auth | `GEMINI_API_KEY` or `GOOGLE_API_KEY` |
+| Best for | Large files, whole codebase, long documents |
 
 ```bash
-# Gemini
-pip install google-generativeai
-# or: npm install -g @anthropic/gemini-cli
-
-# Codex
-npm install -g @openai/codex-cli
-# or: pip install openai-codex
-
-# Copilot
-gh extension install github/gh-copilot
-
-# Claude (already installed if using this skill)
-npm install -g @anthropic/claude-code
+gemini "summarize this" --output-format json
+gemini -m gemini-2.5-pro "complex task"
 ```
+
+### Codex
+| Attribute | Value |
+|-----------|-------|
+| Binary | `codex` |
+| Context | 200K tokens |
+| Auth | `OPENAI_API_KEY` |
+| Best for | Code generation, CRUD, boilerplate |
+
+```bash
+codex exec --json "generate REST API"
+codex exec --full-auto -s workspace-write "run tests"
+codex exec -o output.txt "generate code"  # Save last message to file
+```
+
+### Copilot
+| Attribute | Value |
+|-----------|-------|
+| Binary | `copilot` (standalone) |
+| Auth | `GH_TOKEN` or `GITHUB_TOKEN` |
+| Best for | Shell commands, quick explanations |
+
+```bash
+copilot -p "explain find -exec" --allow-all-tools
+copilot -p "how to grep recursively" --allow-all-tools
+copilot -i "interactive session"  # Start interactive with initial prompt
+```
+
+### Claude
+| Attribute | Value |
+|-----------|-------|
+| Binary | `claude` |
+| Context | 200K tokens |
+| Best for | Architecture, security, debugging, review |
+
+```bash
+claude -p "review security" --output-format text
+```
+
+## Cost Comparison
+
+| Provider | Input (per 1M) | Output (per 1M) | Context |
+|----------|----------------|-----------------|---------|
+| Claude Opus | $15 | $75 | 200K |
+| Claude Sonnet | $3 | $15 | 200K |
+| Gemini 2.5 Pro | $1.25 | $5 | 1M |
+| Codex (GPT-5) | ~$2.50 | ~$10 | 200K |
+| Copilot | Subscription | - | Limited |
+
+### Savings Strategy
+
+- Large context → Gemini: **10x cheaper** on input
+- Boilerplate → Codex: Lower per-token cost
+- Reasoning → Claude: Best quality for complex tasks
 
 ## Usage Examples
 
 ### Large Log Analysis
 
 ```bash
-# User has 500KB log file
-# Claude recognizes it's too large for efficient context use
-# Delegates to Gemini:
-
-llm-delegate.sh gemini "Analyze this log file and identify:
-1. Error patterns
-2. Performance bottlenecks
-3. Security concerns
-
+# Gemini handles large context efficiently
+~/.claude/scripts/automation/llm-delegate.sh gemini "Analyze errors in:
 $(cat /path/to/large.log)"
 ```
 
 ### Boilerplate Generation
 
 ```bash
-# User wants REST API endpoints
-# Claude recognizes this is boilerplate
-# Delegates to Codex:
+# Codex optimized for code generation
+~/.claude/scripts/automation/llm-delegate.sh codex "Generate TypeScript REST API for User model with CRUD, validation, OpenAPI docs"
+```
 
-llm-delegate.sh codex "Generate TypeScript REST API endpoints for a User model with:
-- CRUD operations
-- Input validation
-- Error handling
-- OpenAPI documentation"
+### Shell Command Help
+
+```bash
+# Copilot excels at shell explanations
+~/.claude/scripts/automation/llm-delegate.sh copilot "explain: find . -type f -exec grep -l 'TODO' {} +"
 ```
 
 ### Hybrid Approach
@@ -163,88 +189,120 @@ llm-delegate.sh codex "Generate TypeScript REST API endpoints for a User model w
 3. Apply Claude's security insights
 4. Combine for best result
 
-## Tmux Integration
+## Configuration
 
-The delegation script uses tmux for:
-- Running CLIs that need TTY
-- Capturing streaming output
-- Managing multiple concurrent delegations
-
-### Tmux Session Layout
-
-```
-llm-delegate (session)
-├── Window 0: gemini-cli (if active)
-├── Window 1: codex-cli (if active)
-└── Window 2: copilot (if active)
-```
-
-### Debugging Delegations
+### Environment Variables
 
 ```bash
-# Attach to delegation session
-tmux attach -t llm-delegate
+# Delegation timeout (seconds)
+export LLM_DELEGATE_TIMEOUT=120
 
-# List active delegations
-tmux list-windows -t llm-delegate
-
-# Kill stuck delegation
-tmux kill-window -t llm-delegate:0
+# Provider-specific models
+export GEMINI_MODEL="gemini-2.5-pro"
+export CODEX_MODEL="gpt-5.1-codex-max"
 ```
 
-## Cost Optimization
+### Provider Installation
 
-### Estimated Costs (per 1M tokens)
+```bash
+# Gemini (npm)
+npm install -g @google/gemini-cli
 
-| Provider | Input | Output |
-|----------|-------|--------|
-| Claude Opus | $15 | $75 |
-| Claude Sonnet | $3 | $15 |
-| Claude Haiku | $0.25 | $1.25 |
-| Gemini Pro | $1.25 | $5 |
-| Codex | ~$2 | ~$6 |
+# Codex (bun or npm)
+bun install -g @openai/codex
+# or: npm install -g @openai/codex
 
-### Savings Strategy
+# Copilot (standalone binary)
+# Download from: https://github.com/github/copilot-cli/releases
 
-- Route large context to Gemini: 10x savings on input
-- Route boilerplate to Codex: 5x savings
-- Keep reasoning on Claude: best quality where it matters
+# Claude
+npm install -g @anthropic-ai/claude-code
+```
+
+## Log Files
+
+| File | Content |
+|------|---------|
+| `~/.claude/data/logs/llm-routing.jsonl` | Detailed routing decisions |
+| `~/.claude/data/hook-events.jsonl` | Summary events |
+
+### Log Schema
+
+```json
+{
+  "timestamp": "2026-01-01T12:00:00Z",
+  "provider": "gemini",
+  "prompt": "summarize this 500KB log...",
+  "status": "success",
+  "reason": "large_context_512000_bytes",
+  "latency_ms": 3500
+}
+```
 
 ## Troubleshooting
 
 ### Provider Not Found
 
 ```bash
-# Check which providers are installed
-llm-route.sh --list
+# Check all providers
+~/.claude/scripts/diagnostics/llm-status.sh
 
-# Install missing provider
-pip install google-generativeai  # Gemini
-npm install -g @openai/codex-cli  # Codex
+# Verify specific provider
+command -v gemini && gemini --version
+```
+
+### Authentication Failed
+
+```bash
+# Check environment variables
+echo $GEMINI_API_KEY
+echo $OPENAI_API_KEY
+echo $GH_TOKEN
+
+# Or check config files
+cat ~/.gemini/.env
 ```
 
 ### Delegation Timeout
 
 ```bash
-# Increase timeout for large tasks
-llm-delegate.sh -t 300 gemini "analyze entire codebase"
+# Increase timeout
+~/.claude/scripts/automation/llm-delegate.sh -t 300 gemini "large task"
 
-# Or set environment variable
+# Or set globally
 export LLM_DELEGATE_TIMEOUT=300
 ```
 
-### Output Capture Issues
+### View Routing History
 
 ```bash
-# Keep session for manual inspection
-llm-delegate.sh -k gemini "task"
+# Recent decisions
+~/.claude/scripts/lib/llm-logging.sh recent 20
 
-# Then attach and check
-tmux attach -t llm-delegate
+# Today's stats
+~/.claude/scripts/lib/llm-logging.sh stats
 ```
 
-## Integration with Other Skills
+### Shell Syntax Errors
 
-- **using-tmux**: Provides foundation for CLI delegation
-- **batch-operations**: Delegate multiple similar tasks in parallel
+If you see `{: command not found` or similar errors when piping to llm-delegate:
+
+**Problem**: Multi-line brace groups `{ ... }` don't work in Claude's Bash tool.
+
+**Solutions**:
+```bash
+# Use cat with multiple files
+cat file1.py file2.py | llm-delegate.sh gemini "review"
+
+# Use command substitution
+llm-delegate.sh gemini "$(cat file1.py; echo '---'; cat file2.py)"
+
+# Use semicolons for multiple commands
+(echo "Header"; cat file.py; echo "Footer") | llm-delegate.sh gemini "analyze"
+```
+
+## Integration
+
+- **batch-operations**: Delegate multiple tasks in parallel
 - **context-optimizer**: Suggest delegation when context bloated
+- **using-tmux**: Foundation for CLI delegation

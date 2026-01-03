@@ -9,6 +9,9 @@ for learning from past subagent executions.
 
 Consolidates usage_tracker functionality for Task and Skill tools.
 """
+# Handler metadata for dispatcher auto-discovery
+APPLIES_TO_PRE = ["Task", "Skill"]
+APPLIES_TO_POST = ["Task"]
 import hashlib
 from datetime import datetime
 from pathlib import Path
@@ -146,6 +149,114 @@ def extract_lessons(raw: dict, outcome: str) -> list:
             lessons.append("Refactoring completed successfully")
 
     return lessons
+
+
+# =============================================================================
+# Event handlers for SubagentStart/SubagentStop dispatchers
+# =============================================================================
+
+def handle_subagent_start_event(ctx: dict) -> list[str]:
+    """Handle SubagentStart event (native context format).
+
+    Args:
+        ctx: Context with subagent_id, subagent_type, description, prompt
+
+    Returns:
+        List of messages (usually empty - logging only)
+    """
+    subagent_type = ctx.get("subagent_type", "unknown")
+    subagent_id = ctx.get("subagent_id", "")
+
+    # Record usage for stats tracking
+    if subagent_type:
+        record_usage("agents", subagent_type)
+
+    state = get_session_state()
+
+    # Track active subagents with their start times
+    active_subagents = state.get("active_subagents", {})
+    active_subagents[subagent_id] = {
+        "type": subagent_type,
+        "started_at": datetime.now().isoformat()
+    }
+
+    # Track spawn counts per type
+    spawn_counts = state.get("subagent_spawn_counts", {})
+    spawn_counts[subagent_type] = spawn_counts.get(subagent_type, 0) + 1
+
+    update_session_state({
+        "active_subagents": active_subagents,
+        "subagent_spawn_counts": spawn_counts
+    })
+
+    log_event("subagent_start", "success", {
+        "subagent_type": subagent_type,
+        "subagent_id": subagent_id,
+        "spawn_count": spawn_counts[subagent_type]
+    })
+
+    return []
+
+
+def handle_subagent_stop_event(ctx: dict) -> list[str]:
+    """Handle SubagentStop event (native context format).
+
+    Args:
+        ctx: Context with subagent_id, subagent_type, stop_reason, output
+
+    Returns:
+        List of messages (usually empty - logging only)
+    """
+    subagent_type = ctx.get("subagent_type", "unknown")
+    subagent_id = ctx.get("subagent_id", "")
+    stop_reason = ctx.get("stop_reason", "completed")
+    output = ctx.get("output", "")
+
+    state = get_session_state()
+    subagent_stats = state.get("subagent_stats", {})
+
+    if subagent_type not in subagent_stats:
+        subagent_stats[subagent_type] = {"count": 0, "last_run": None, "total_duration_s": 0}
+
+    subagent_stats[subagent_type]["count"] += 1
+    subagent_stats[subagent_type]["last_run"] = datetime.now().isoformat()
+
+    # Calculate duration if we have start time
+    duration_s = None
+    active_subagents = state.get("active_subagents", {})
+    if subagent_id in active_subagents:
+        try:
+            started_at = datetime.fromisoformat(active_subagents[subagent_id]["started_at"])
+            duration_s = (datetime.now() - started_at).total_seconds()
+            subagent_stats[subagent_type]["total_duration_s"] = \
+                subagent_stats[subagent_type].get("total_duration_s", 0) + duration_s
+        except (ValueError, KeyError):
+            pass
+        del active_subagents[subagent_id]
+
+    update_session_state({
+        "subagent_stats": subagent_stats,
+        "active_subagents": active_subagents
+    })
+
+    log_event("subagent_complete", "success", {
+        "subagent_type": subagent_type,
+        "subagent_id": subagent_id,
+        "stop_reason": stop_reason,
+        "duration_s": duration_s,
+        "total_runs": subagent_stats[subagent_type]["count"]
+    })
+
+    # Record to Reflexion memory (build raw dict for compatibility)
+    raw = {
+        "subagent_type": subagent_type,
+        "stop_reason": stop_reason,
+        "output": output,
+        "tool_output": output,
+    }
+    record_reflexion(raw, duration_s)
+
+    return []
 
 
 def record_reflexion(raw: dict, duration_s: float | None):

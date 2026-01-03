@@ -8,6 +8,11 @@ Consolidates:
 
 Uses centralized session state via hook_utils.
 """
+# Handler metadata for dispatcher auto-discovery
+# PreToolUse: track reads, check stale context before edits
+APPLIES_TO_PRE = ["Read", "Edit"]
+# PostToolUse: detect duplicate reads/searches
+APPLIES_TO_POST = ["Grep", "Glob", "Read"]
 import hashlib
 import time
 from pathlib import Path

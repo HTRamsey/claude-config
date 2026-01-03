@@ -55,7 +55,8 @@ mcp call list_directory --params '{"path": "/tmp"}' \
 | Memory | `npx -y @modelcontextprotocol/server-memory` | Knowledge graphs |
 | GitHub | `npx -y @modelcontextprotocol/server-github` | Repo operations |
 | Brave Search | `npx -y @anthropic/mcp-server-brave-search` | Web search |
-| Puppeteer | `npx -y @anthropic/mcp-server-puppeteer` | Browser automation |
+| Playwright | `npx -y @anthropic/mcp-server-playwright` | Browser automation (Firefox, Chrome, WebKit) |
+| Puppeteer | `npx -y @anthropic/mcp-server-puppeteer` | Browser automation (Chrome only) |
 
 ## Aliases (Session Shortcuts)
 

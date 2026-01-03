@@ -152,6 +152,10 @@ Use async for hooks that:
 | `smart_permissions` | PermissionRequest | Context-aware auto-approval with learning |
 | `state_saver` | PreCompact | Backup transcript, preserve CLAUDE.md/todos, learning reminder |
 | `subagent_lifecycle` | PreToolUse/PostToolUse (Task) | Track subagent spawn/completion via dispatchers |
+| `subagent_start_handler` | SubagentStart | Track subagent spawn, usage stats |
+| `subagent_stop_handler` | SubagentStop | Track subagent completion, reflexion memory |
+| `post_tool_failure_handler` | PostToolUseFailure | Track tool failures for analytics |
+| `notification_handler` | Notification | Handle notifications (permission, idle, auth, elicitation) |
 
 **Note**: Some hooks handle multiple events (`suggestion_engine`, `file_monitor`, `state_saver`, `unified_cache`, `smart_permissions`) and appear in multiple tables above.
 

@@ -32,10 +32,8 @@ Skills, agents, and commands quick reference.
 | Save checkpoint | `/checkpoint` |
 | Git worktree | `/worktree` |
 | Task queue | `/queue` |
-| Claude flow | `/flow` |
 
 **Task Queue**: `/queue add "task" --agent TYPE` | `/queue daemon start|stop`
-**Orchestration**: `/flow <workflow> "objective"` (feature, security-review, refactor, quick-review, docs)
 
 ### Built-in Commands
 | Task | Command |

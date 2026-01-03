@@ -10,6 +10,10 @@ Consolidates:
 
 All share token estimation logic and PostToolUse context processing.
 """
+# Handler metadata for dispatcher auto-discovery
+# Runs on all tools for PostToolUse (token tracking, failure detection, output size)
+# Special handling for Bash (build analyzer), Edit/Write (batch detection)
+APPLIES_TO = ["Bash", "Grep", "Glob", "Read", "Edit", "Write", "Task", "LSP"]
 import heapq
 import os
 import re
@@ -560,6 +564,7 @@ def _batch_suggest_command(edits: list, current_edit: dict) -> str:
     extensions = set(Path(f).suffix.lower() for f in files)
 
     try:
+        # os.path.commonpath has no pathlib equivalent
         common_dir = os.path.commonpath(files)
     except ValueError:
         common_dir = "."

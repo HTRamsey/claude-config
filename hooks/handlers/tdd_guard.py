@@ -8,6 +8,8 @@ Warning escalation: After 3 warnings in a session, blocks until test exists.
 Set TDD_GUARD_STRICT=1 to always block (no warnings).
 Set TDD_GUARD_WARN_ONLY=1 to never block (warnings only).
 """
+# Handler metadata for dispatcher auto-discovery
+APPLIES_TO = ["Write", "Edit"]
 import os
 import time
 from pathlib import Path

@@ -10,9 +10,11 @@ Runs on:
 - PreCompact: Backup transcript before compaction, preserve key context
 - UserPromptSubmit: Monitor token count, warn at thresholds, auto-backup at critical
 """
+# Handler metadata for dispatcher auto-discovery
+APPLIES_TO_PRE = ["Edit", "Write"]
+APPLIES_TO_POST = ["Bash"]
 import heapq
 import json
-import os
 import sys
 import time
 from collections import defaultdict
@@ -189,7 +191,7 @@ def get_cached_count(transcript_path):
     if not cached or cached.get("path") != transcript_path:
         return None
     try:
-        stat = os.stat(transcript_path)
+        stat = Path(transcript_path).stat()
         cached_size = cached.get("size", 0)
         cached_offset = cached.get("offset", 0)
 
@@ -209,7 +211,7 @@ def get_cached_count(transcript_path):
 def update_cache(transcript_path, tokens, messages, offset):
     """Update cache with new token count and file offset."""
     try:
-        stat = os.stat(transcript_path)
+        stat = Path(transcript_path).stat()
         cache = {
             "transcript": {
                 "path": transcript_path,
@@ -241,7 +243,7 @@ def _count_tokens_in_entry(entry: dict) -> int:
 
 def get_transcript_size(transcript_path):
     """Read transcript and count tokens accurately, with incremental caching."""
-    if not transcript_path or not os.path.exists(transcript_path):
+    if not transcript_path or not Path(transcript_path).exists():
         return 0, 0
 
     # Check cache first
@@ -277,7 +279,7 @@ def get_transcript_size(transcript_path):
     # Fast path: check file size first (avoid full scan for small files)
     # ~4 bytes per token on average, 40K tokens ≈ 160KB
     try:
-        file_size = os.path.getsize(transcript_path)
+        file_size = Path(transcript_path).stat().st_size
         if file_size < 160 * 1024:  # Under 160KB, estimate without full scan
             estimated_tokens = file_size // 4
             estimated_messages = file_size // 500
@@ -321,7 +323,7 @@ def _get_cached_summary(transcript_path):
     if not cached or cached.get("path") != transcript_path:
         return None
     try:
-        stat = os.stat(transcript_path)
+        stat = Path(transcript_path).stat()
         cached_size = cached.get("size", 0)
         cached_offset = cached.get("offset", 0)
 
@@ -340,7 +342,7 @@ def _get_cached_summary(transcript_path):
 def _update_summary_cache(transcript_path, state, offset):
     """Update cache with session summary state."""
     try:
-        stat = os.stat(transcript_path)
+        stat = Path(transcript_path).stat()
         cache = load_cache()
         cache["summary"] = {
             "path": transcript_path,
@@ -372,7 +374,7 @@ def get_session_summary(transcript_path):
 
     Uses incremental caching - only processes new entries since last call.
     """
-    if not transcript_path or not os.path.exists(transcript_path):
+    if not transcript_path or not Path(transcript_path).exists():
         return ""
 
     # Check cache for incremental processing
@@ -426,7 +428,7 @@ def get_session_summary(transcript_path):
                 if "error" in content.lower() or "failed" in content.lower():
                     error_count += 1
             # Get final offset
-            final_offset = os.path.getsize(transcript_path)
+            final_offset = Path(transcript_path).stat().st_size
     except (OSError, PermissionError):
         return ""
 
